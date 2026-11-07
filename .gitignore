@@ -1,0 +1,6 @@
+/build/
+/out/
+/latest-publish/*
+!/latest-publish/README.md
+.DS_Store
+Thumbs.db
