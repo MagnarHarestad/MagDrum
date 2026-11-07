@@ -26,6 +26,7 @@ target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_
 if(BUILD_TESTING)
  add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp)
  target_include_directories(MagDrumTests PRIVATE src)
+ target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
  target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_core)
  add_test(NAME MagDrumTests COMMAND MagDrumTests)
 endif()
