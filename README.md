@@ -8,7 +8,7 @@ MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Brows
 
 ## Phase 1 foundation
 
-This repository contains a JUCE/CMake desktop app, WAV indexing with SQLite, searchable results and playback, plus roadmap, tests and CI workflows.
+This repository contains a JUCE/CMake desktop app, background WAV scanning with cancellation, a SQLite sample index, searchable results and playback, plus scanner/database tests and CI workflows.
 
 ## Build
 
