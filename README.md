@@ -8,9 +8,9 @@ MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Brows
 
 ## Phase 1 foundation
 
-This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scanning (subject to JUCE decoder support) with cancellation, a version-upgraded SQLite sample index, audio measurements, basic heuristic classification, category correction, user tags, similarity lookup, semantic drum-event and GM MIDI mapping, custom profile persistence/editing, and PPQ MIDI import/export. The desktop app can discover installed audio plugins with JUCE's plugin list and persist the inventory. The MagDrum VST3 loads user-selected audio samples from file or the shared SQLite index onto MIDI notes and saves sample paths with plugin state.
+This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scanning (subject to JUCE decoder support) with cancellation, a version-upgraded SQLite sample index, audio measurements, basic heuristic classification, category correction, user tags, similarity lookup, semantic drum-event and GM MIDI mapping, custom profile persistence/editing, and PPQ MIDI import/export. The desktop app can discover installed audio plugins with JUCE's plugin list and persist the inventory. A testable offline MIDI note renderer scans notes 0–127 at configurable velocities and detects silent output while restoring plugin state. The MagDrum VST3 loads user-selected audio samples from file or the shared SQLite index onto MIDI notes and saves sample paths with plugin state.
 
-The current classifier is an early heuristic and the initial spectral measurement uses one analysis window. It is not a validated tagging model or perceptual fingerprint. Desktop plugin discovery is implemented, while selecting and hosting scanned instruments, kit/note rendering and indexing captured plugin sounds remain in progress. AU/AUv3 and iOS remain roadmap work.
+The current classifier is an early heuristic and the initial spectral measurement uses one analysis window. It is not a validated tagging model or perceptual fingerprint. Desktop plugin discovery and a standalone offline-rendering core are implemented, while selecting/hosting scanned instruments in the UI, analyzing and indexing captures, and isolated scanning remain in progress. AU/AUv3 and iOS remain roadmap work.
 
 ## Build
 

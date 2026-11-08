@@ -3,7 +3,51 @@
 #include "core/AudioClassifier.h"
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
+#include "core/PluginNoteScanner.h"
 #include <iostream>
+#include <cstring>
+
+class SyntheticInstrument final : public juce::AudioProcessor
+{
+public:
+    SyntheticInstrument() : AudioProcessor(BusesProperties().withOutput("Stereo Out", juce::AudioChannelSet::stereo(), true)) {}
+    const juce::String getName() const override { return "Synthetic Test Instrument"; }
+    void prepareToPlay(double rate, int) override { sampleRate = rate; phase = 0.0; }
+    void releaseResources() override {}
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
+    {
+        for (const auto event : midi)
+        {
+            const auto message = event.getMessage();
+            if (message.isNoteOn()) { activeNote = message.getNoteNumber(); amplitude = message.getFloatVelocity() * 0.2f; }
+            else if (message.isNoteOff() && message.getNoteNumber() == activeNote) activeNote = -1;
+        }
+        buffer.clear();
+        if (activeNote == 60) return;
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float value = activeNote >= 0 ? amplitude * static_cast<float>(std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * phase / sampleRate)) : 0.0f;
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) buffer.setSample(channel, i, value);
+            phase += 1.0;
+        }
+    }
+    double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool hasEditor() const override { return false; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    int getNumPrograms() override { return 2; }
+    int getCurrentProgram() override { return program; }
+    void setCurrentProgram(int value) override { program = juce::jlimit(0, 1, value); }
+    const juce::String getProgramName(int) override { return "Synthetic"; }
+    void changeProgramName(int, const juce::String&) override {}
+    void getStateInformation(juce::MemoryBlock& destination) override { destination.reset(); destination.append(&program, sizeof(program)); }
+    void setStateInformation(const void* data, int size) override { if (data != nullptr && size == static_cast<int>(sizeof(program))) std::memcpy(&program, data, sizeof(program)); }
+private:
+    double sampleRate = 44100.0, phase = 0.0;
+    float amplitude = 0.0f;
+    int activeNote = -1, program = 0;
+};
 
 int main()
 {
@@ -87,5 +131,11 @@ int main()
     MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
     if(!midiReport.ok||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2)return 24;
     if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
+    SyntheticInstrument synthetic;synthetic.setCurrentProgram(1);PluginNoteScanSettings scanSettings;scanSettings.sampleRate=8000;scanSettings.blockSize=64;scanSettings.velocityLevels={64,127};scanSettings.noteDurationSeconds=.01;scanSettings.releaseSeconds=.01;
+    int progress=0;auto noteScan=PluginNoteScanner{}.scan(synthetic,scanSettings,{},[&](int done,int total,int,int){if(done<1||done>total)progress=-1000;else ++progress;});
+    if(!noteScan.error.isEmpty()||noteScan.notes.size()!=256||progress!=256||synthetic.getCurrentProgram()!=1)return 39;
+    int silentNotes=0,activeNotes=0;for(const auto&capture:noteScan.notes){if(capture.midiNote==60){if(capture.silent)silentNotes++;}else if(capture.velocity==127&&!capture.silent&&capture.peak>0.1)activeNotes++;}
+    if(silentNotes!=2||activeNotes!=127)return 40;
+    auto cancelledScan=PluginNoteScanner{}.scan(synthetic,scanSettings,[]{return true;});if(!cancelledScan.cancelled||!cancelledScan.notes.empty()||synthetic.getCurrentProgram()!=1)return 41;
     return 0;
 }
