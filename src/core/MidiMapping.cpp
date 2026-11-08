@@ -32,6 +32,20 @@ MidiMappingResult MidiMappingProfile::toMidi(const DrumEvent& event,bool allowFa
     return{};
 }
 
+bool MidiMappingProfile::setMapping(MidiNoteMapping entry)
+{
+    if(entry.note>127)return false;
+    const auto found=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==entry.instrument&&m.articulation==entry.articulation;});
+    if(found!=mappings.end())*found=entry;else mappings.push_back(entry);
+    return true;
+}
+
+bool MidiMappingProfile::removeMapping(DrumInstrument instrument,DrumArticulation articulation)
+{
+    const auto oldSize=mappings.size();mappings.erase(std::remove_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==instrument&&m.articulation==articulation;}),mappings.end());
+    return mappings.size()!=oldSize;
+}
+
 std::optional<DrumEvent> MidiMappingProfile::fromMidi(std::uint8_t note,std::uint8_t velocity,double position,double duration) const
 {
     if(note>127||velocity>127||position<0.0||duration<0.0)return std::nullopt;
