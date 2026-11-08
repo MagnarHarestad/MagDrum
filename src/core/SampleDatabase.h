@@ -34,6 +34,7 @@ public:
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
+    std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     bool upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound);
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;

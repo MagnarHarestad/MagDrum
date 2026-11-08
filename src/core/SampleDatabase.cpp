@@ -107,6 +107,28 @@ std::optional<std::int64_t> SampleDatabase::savePluginKit(const juce::String& pl
     return ok ? result : std::nullopt;
 }
 
+std::optional<juce::MemoryBlock> SampleDatabase::loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const
+{
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT k.plugin_state FROM plugin_kits k JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=?";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return std::nullopt;
+    const auto identifier = pluginIdentifier.trim(), name = kitName.trim();
+    sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    std::optional<juce::MemoryBlock> result;
+    if (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        juce::MemoryBlock state;
+        const auto* data = sqlite3_column_blob(statement, 0);
+        const int size = sqlite3_column_bytes(statement, 0);
+        if (data != nullptr && size > 0) state.append(data, static_cast<size_t>(size));
+        result = std::move(state);
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
 bool SampleDatabase::upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound)
 {
     if (connection == nullptr || kitId <= 0 || sound.midiNote < 0 || sound.midiNote > 127 || sound.velocity < 1 || sound.velocity > 127 || sound.duration < 0.0 || sound.sampleRate < 0.0 || sound.channels < 0 || sound.peak < 0.0 || sound.rms < 0.0 || sound.confidence < 0.0 || sound.confidence > 1.0) return false;

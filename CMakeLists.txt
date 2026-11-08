@@ -25,12 +25,17 @@ target_include_directories(MagDrum PRIVATE src)
 target_compile_definitions(MagDrum PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_PLUGINHOST_VST3=1 JUCE_APPLICATION_NAME_STRING="MagDrum" JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
 target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 
+if(APPLE)
+ set(MAGDRUM_PLUGIN_FORMATS VST3 AU)
+else()
+ set(MAGDRUM_PLUGIN_FORMATS VST3)
+endif()
 juce_add_plugin(MagDrumPlugin
     COMPANY_NAME "Censor Design"
     BUNDLE_ID "com.censordesign.magdrum.plugin"
     PLUGIN_MANUFACTURER_CODE CnDe
     PLUGIN_CODE MgDr
-    FORMATS VST3
+    FORMATS ${MAGDRUM_PLUGIN_FORMATS}
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
     PRODUCT_NAME "MagDrum")
