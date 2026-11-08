@@ -1,0 +1,8 @@
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+MagDrumAudioProcessor::MagDrumAudioProcessor():AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)){}
+void MagDrumAudioProcessor::prepareToPlay(double r,int){sampleRate=r;}
+bool MagDrumAudioProcessor::isBusesLayoutSupported(const BusesLayout& l)const{return l.getMainOutputChannelSet()==juce::AudioChannelSet::mono()||l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
+void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& m){juce::ScopedNoDenormals n;b.clear();for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();auto& v=voices[static_cast<size_t>(note)%voices.size()];v={0,note==36?55.0:(note==38?180.0:1000.0),msg.getFloatVelocity(),note==36?0:(note==38?1:2)};}}for(int i=0;i<b.getNumSamples();++i){float x=0;for(auto&v:voices)if(v.envelope>0.0005f){double t=v.phase;float wave=v.type==0?float(std::sin(2*juce::MathConstants<double>::pi*v.frequency*t)):v.type==1?float((2*std::fmod(v.frequency*t,1.0)-1)*std::exp(-t*18)):float((std::sin(2*juce::MathConstants<double>::pi*v.frequency*t)+.35*std::sin(2*juce::MathConstants<double>::pi*v.frequency*2.71*t))*std::exp(-t*12));x+=wave*v.envelope*.45f;v.phase+=1/sampleRate;v.envelope*=float(std::exp(-1/(sampleRate*(v.type==0?.32:.12))));}for(int c=0;c<b.getNumChannels();++c)b.setSample(c,i,x);}m.clear();}
+juce::AudioProcessorEditor* MagDrumAudioProcessor::createEditor(){return new MagDrumAudioProcessorEditor(*this);}
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new MagDrumAudioProcessor();}
