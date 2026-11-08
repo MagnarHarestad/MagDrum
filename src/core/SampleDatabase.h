@@ -1,6 +1,8 @@
 #pragma once
 #include <juce_core/juce_core.h>
 #include <sqlite3.h>
+#include "MidiMapping.h"
+#include <optional>
 
 struct ScannedSample;
 
@@ -19,6 +21,8 @@ public:
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;
     juce::Array<juce::File> findSimilar(const juce::File& file, int limit = 20) const;
+    bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
+    std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::Array<juce::File> getAllPaths() const;
 private:
     sqlite3* connection = nullptr;

@@ -40,6 +40,8 @@ bool SampleDatabase::open(const juce::File& file)
         sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
     if (sqlite3_exec(connection, "CREATE TABLE IF NOT EXISTS sample_tags(path TEXT NOT NULL,tag TEXT NOT NULL,PRIMARY KEY(path,tag),FOREIGN KEY(path) REFERENCES samples(path) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS sample_tags_tag ON sample_tags(tag)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
+    if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE)",nullptr,nullptr,nullptr)!=SQLITE_OK)
+        return false;
     return true;
 }
 
@@ -116,6 +118,30 @@ juce::Array<juce::File> SampleDatabase::findSimilar(const juce::File& file,int l
     const double d=sqlite3_column_double(source,0),p=sqlite3_column_double(source,1),r=sqlite3_column_double(source,2),c=sqlite3_column_double(source,3),t=sqlite3_column_double(source,4);sqlite3_finalize(source);
     sqlite3_bind_text(q,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_double(q,2,d);sqlite3_bind_double(q,3,d);sqlite3_bind_double(q,4,p);sqlite3_bind_double(q,5,r);sqlite3_bind_double(q,6,r);sqlite3_bind_double(q,7,c);sqlite3_bind_double(q,8,c);sqlite3_bind_double(q,9,t);sqlite3_bind_double(q,10,t);sqlite3_bind_int(q,11,limit);
     while(sqlite3_step(q)==SQLITE_ROW){const auto* v=reinterpret_cast<const char*>(sqlite3_column_text(q,0));if(v)result.add(juce::File(juce::String::fromUTF8(v)));}sqlite3_finalize(q);return result;
+}
+
+bool SampleDatabase::saveMappingProfile(const juce::String& name,const MidiMappingProfile& profile)
+{
+    if(connection==nullptr||name.trim().isEmpty())return false;
+    if(sqlite3_exec(connection,"BEGIN IMMEDIATE",nullptr,nullptr,nullptr)!=SQLITE_OK)return false;
+    sqlite3_stmt* p=nullptr;sqlite3_stmt* remove=nullptr;sqlite3_stmt* add=nullptr;bool ok=true;
+    if(sqlite3_prepare_v2(connection,"INSERT INTO mapping_profiles(name) VALUES(?) ON CONFLICT(name) DO NOTHING",-1,&p,nullptr)!=SQLITE_OK)ok=false;
+    if(ok){auto n=name.trim();sqlite3_bind_text(p,1,n.toRawUTF8(),-1,SQLITE_TRANSIENT);ok=sqlite3_step(p)==SQLITE_DONE;}if(p)sqlite3_finalize(p);
+    if(ok&&sqlite3_prepare_v2(connection,"DELETE FROM mapping_entries WHERE profile_name=?",-1,&remove,nullptr)==SQLITE_OK){auto n=name.trim();sqlite3_bind_text(remove,1,n.toRawUTF8(),-1,SQLITE_TRANSIENT);ok=sqlite3_step(remove)==SQLITE_DONE;}else if(ok)ok=false;if(remove)sqlite3_finalize(remove);
+    if(ok&&sqlite3_prepare_v2(connection,"INSERT INTO mapping_entries(profile_name,instrument,articulation,note) VALUES(?,?,?,?)",-1,&add,nullptr)==SQLITE_OK){
+      const auto n=name.trim();for(const auto& entry:profile.entries()){sqlite3_reset(add);sqlite3_clear_bindings(add);sqlite3_bind_text(add,1,n.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_int(add,2,static_cast<int>(entry.instrument));sqlite3_bind_int(add,3,static_cast<int>(entry.articulation));sqlite3_bind_int(add,4,entry.note);if(sqlite3_step(add)!=SQLITE_DONE){ok=false;break;}}
+    }else if(ok)ok=false;if(add)sqlite3_finalize(add);
+    sqlite3_exec(connection,ok?"COMMIT":"ROLLBACK",nullptr,nullptr,nullptr);return ok;
+}
+
+std::optional<MidiMappingProfile> SampleDatabase::loadMappingProfile(const juce::String& name) const
+{
+    if(connection==nullptr)return std::nullopt;sqlite3_stmt* q=nullptr;
+    if(sqlite3_prepare_v2(connection,"SELECT e.instrument,e.articulation,e.note FROM mapping_profiles p JOIN mapping_entries e ON e.profile_name=p.name WHERE p.name=? ORDER BY e.instrument,e.articulation",-1,&q,nullptr)!=SQLITE_OK)return std::nullopt;
+    const auto n=name.trim();sqlite3_bind_text(q,1,n.toRawUTF8(),-1,SQLITE_TRANSIENT);std::vector<MidiNoteMapping> entries;
+    while(sqlite3_step(q)==SQLITE_ROW){const int i=sqlite3_column_int(q,0),a=sqlite3_column_int(q,1),note=sqlite3_column_int(q,2);if(i<0||i>static_cast<int>(DrumInstrument::Percussion)||a<0||a>static_cast<int>(DrumArticulation::Edge)||note<0||note>127){sqlite3_finalize(q);return std::nullopt;}entries.push_back({static_cast<DrumInstrument>(i),static_cast<DrumArticulation>(a),static_cast<std::uint8_t>(note)});}
+    sqlite3_finalize(q);if(entries.empty())return std::nullopt;
+    try{return MidiMappingProfile(std::move(entries));}catch(...){return std::nullopt;}
 }
 
 bool SampleDatabase::insertSample(const juce::File& file, double duration, int channels, double rate)

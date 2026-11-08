@@ -59,6 +59,9 @@ int main()
     if(gm.toMidi(unsupported,false).note)return 21;
     auto fallback=gm.toMidi(unsupported,true);
     if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
+    if(!db.saveMappingProfile("GM test",gm))return 26;
+    auto storedProfile=db.loadMappingProfile("GM test");
+    if(!storedProfile||storedProfile->toMidi(hat,false).note!=std::optional<std::uint8_t>(42))return 27;
     MidiPattern pattern;pattern.events.push_back(hat);pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::tempoMetaEvent(600000)});pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::timeSignatureMetaEvent(7,8)});
     MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
     if(!midiIO.write(midiFile,pattern,gm,false))return 23;
