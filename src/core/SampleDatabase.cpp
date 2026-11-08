@@ -69,6 +69,14 @@ bool SampleDatabase::setUserCategory(const juce::File& file, const juce::String&
     const bool ok=sqlite3_step(statement)==SQLITE_DONE && sqlite3_changes(connection)>0; sqlite3_finalize(statement); return ok;
 }
 
+juce::String SampleDatabase::getCategory(const juce::File& file) const
+{
+    if(connection==nullptr)return "Unknown";sqlite3_stmt* q=nullptr;
+    if(sqlite3_prepare_v2(connection,"SELECT category FROM samples WHERE path=?",-1,&q,nullptr)!=SQLITE_OK)return "Unknown";
+    const auto path=file.getFullPathName();sqlite3_bind_text(q,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    juce::String value="Unknown";if(sqlite3_step(q)==SQLITE_ROW){const auto* v=reinterpret_cast<const char*>(sqlite3_column_text(q,0));if(v)value=juce::String::fromUTF8(v);}sqlite3_finalize(q);return value;
+}
+
 bool SampleDatabase::setUserTags(const juce::File& file, const juce::StringArray& tags)
 {
     if (connection == nullptr) return false;
