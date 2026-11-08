@@ -75,9 +75,11 @@ PitchEstimate estimateFundamental(const juce::AudioBuffer<float>& buffer, unsign
 }
 }
 
-juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel) const
+juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel,
+                                            ShouldSkipFile shouldSkipFile, Stats* stats) const
 {
     juce::Array<ScannedSample> result;
+    if (stats != nullptr) *stats = {};
     if (!root.isDirectory())
         return result;
 
@@ -86,16 +88,32 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
     for (const auto& entry : juce::RangedDirectoryIterator(root, true, "*", juce::File::findFiles))
     {
         if (shouldCancel && shouldCancel())
+        {
+            if (stats != nullptr) stats->cancelled = true;
             break;
+        }
         const auto file = entry.getFile();
         const auto extension = file.getFileExtension().toLowerCase();
         if (extension != ".wav" && extension != ".wave" && extension != ".aif" && extension != ".aiff" && extension != ".flac")
             continue;
+        const auto fileSizeBytes = static_cast<std::int64_t>(file.getSize());
+        const auto modifiedTimeMillis = file.getLastModificationTime().toMilliseconds();
+        if (stats != nullptr) ++stats->filesConsidered;
+        if (shouldSkipFile && shouldSkipFile(file, fileSizeBytes, modifiedTimeMillis))
+        {
+            if (stats != nullptr) ++stats->filesSkippedUnchanged;
+            continue;
+        }
         std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
         if (reader == nullptr || reader->sampleRate <= 0.0)
+        {
+            if (stats != nullptr) ++stats->errors;
             continue;
+        }
         ScannedSample sample;
         sample.file = file;
+        sample.fileSizeBytes = fileSizeBytes;
+        sample.modifiedTimeMillis = modifiedTimeMillis;
         sample.durationSeconds = reader->lengthInSamples / reader->sampleRate;
         sample.channels = static_cast<int>(reader->numChannels);
         sample.sampleRate = reader->sampleRate;
@@ -119,14 +137,23 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         juce::dsp::FFT fft(fftOrder);
         juce::HeapBlock<float> fftData(static_cast<size_t>(fftSize * 2), true);
         juce::int64 measured = 0;
+        bool cancelledDuringFile = false;
+        bool readFailed = false;
         for (juce::int64 offset = 0; offset < sampleCount; offset += frameCount)
         {
             if (shouldCancel && shouldCancel())
+            {
+                cancelledDuringFile = true;
+                if (stats != nullptr) stats->cancelled = true;
                 break;
+            }
             const int count = static_cast<int>(std::min<juce::int64>(frameCount, sampleCount - offset));
             buffer.clear();
             if (!reader->read(channelData.getData(), static_cast<int>(reader->numChannels), offset, count))
+            {
+                readFailed = true;
                 break;
+            }
             if (!centroidMeasured && count >= fftSize)
             {
                 double sumMagnitude = 0.0, weightedMagnitude = 0.0;
@@ -170,6 +197,18 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             transientMax = juce::jmax(transientMax, juce::jmax(0.0, mean - previousMean));
             previousMean = mean;
         }
+        if (cancelledDuringFile)
+            break;
+        if (readFailed)
+        {
+            if (stats != nullptr) ++stats->errors;
+            continue;
+        }
+        if (measured == 0)
+        {
+            if (stats != nullptr) ++stats->errors;
+            continue;
+        }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
         sample.spectralCentroidHz = centroid;
@@ -178,6 +217,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.category = classification.category;
         sample.classificationConfidence = classification.confidence;
         result.add(std::move(sample));
+        if (stats != nullptr) ++stats->filesAnalyzed;
     }
     return result;
 }

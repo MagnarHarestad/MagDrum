@@ -68,8 +68,10 @@ int main()
     writer.reset();
 
     WavScanner scanner;
-    auto scanned=scanner.scan(root);
+    WavScanner::Stats initialScanStats;
+    auto scanned=scanner.scan(root,{}, {},&initialScanStats);
     if(scanned.size()!=1||scanned.getFirst().file!=waveFile)return 5;
+    if(initialScanStats.filesConsidered!=1||initialScanStats.filesAnalyzed!=1||initialScanStats.errors!=0)return 44;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
     if(scanned.getFirst().fundamentalHz<418.0||scanned.getFirst().fundamentalHz>462.0||scanned.getFirst().pitchConfidence<0.65)return 43;
@@ -96,8 +98,20 @@ int main()
     if(!db.upsertPluginSound(*kitId,generatedSound)||!db.upsertPluginSound(*kitId,generatedSound))return 34;
     generatedSound.midiNote=128;if(db.upsertPluginSound(*kitId,generatedSound))return 35;
     const auto& sample=scanned.getFirst();
-    if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 9;
-    if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 10;
+    if(!db.insertSample(sample))return 9;
+    if(!db.insertSample(sample))return 10;
+    if(!db.isSampleUnchanged(sample.file,sample.fileSizeBytes,sample.modifiedTimeMillis))return 45;
+    WavScanner::Stats incrementalStats;
+    const auto skippedScan=scanner.scan(root,{},[&db](const juce::File& file,std::int64_t size,std::int64_t modified){return db.isSampleUnchanged(file,size,modified);},&incrementalStats);
+    if(!skippedScan.isEmpty()||incrementalStats.filesSkippedUnchanged!=1||incrementalStats.filesAnalyzed!=0)return 46;
+    const auto scanSession=db.beginSampleScan(root);
+    if(!scanSession||!db.finishSampleScan(*scanSession,"completed",1,1,0,0))return 47;
+    const auto scanHistory=db.getRecentSampleScans(5);
+    if(scanHistory.size()!=1||scanHistory.getFirst().status!="completed"||scanHistory.getFirst().filesSkipped!=1)return 48;
+    const auto unfinishedScan=db.beginSampleScan(root);
+    if(!unfinishedScan||db.markRunningSampleScansInterrupted()!=1)return 49;
+    const auto interruptedHistory=db.getRecentSampleScans(5);
+    if(interruptedHistory.size()!=2||interruptedHistory.getFirst().status!="interrupted")return 50;
     auto paths=db.getAllPaths();
     if(paths.size()!=1||paths.getFirst()!=waveFile)return 11;
     if(db.searchPaths("kick",10).size()!=1||!db.searchPaths("missing",10).isEmpty())return 30;

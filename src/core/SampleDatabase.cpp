@@ -20,8 +20,10 @@ bool SampleDatabase::open(const juce::File& file)
         connection = nullptr;
         return false;
     }
-    sqlite3_exec(connection, "PRAGMA foreign_keys=ON", nullptr, nullptr, nullptr);
-    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '')";
+    sqlite3_busy_timeout(connection, 5000);
+    if (sqlite3_exec(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '',size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0)";
     if (sqlite3_exec(connection, schema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     // Upgrade databases created by earlier MagDrum builds without losing indexed paths.
@@ -37,18 +39,20 @@ bool SampleDatabase::open(const juce::File& file)
         "ALTER TABLE samples ADD COLUMN classification_confidence REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN user_category TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE samples ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE samples ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0"
+        "ALTER TABLE samples ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN modified_time_ms INTEGER NOT NULL DEFAULT 0"
     };
     for (const auto* migration : migrations)
         sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
-    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,4) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity)";
+    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,5) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity)";
     if (sqlite3_exec(connection, pluginSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     if (sqlite3_exec(connection, "CREATE TABLE IF NOT EXISTS sample_tags(path TEXT NOT NULL,tag TEXT NOT NULL,PRIMARY KEY(path,tag),FOREIGN KEY(path) REFERENCES samples(path) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS sample_tags_tag ON sample_tags(tag)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE)",nullptr,nullptr,nullptr)!=SQLITE_OK)
+    if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0)",nullptr,nullptr,nullptr)!=SQLITE_OK)
         return false;
     return true;
 }
@@ -155,7 +159,7 @@ bool SampleDatabase::insertSample(const ScannedSample& sample)
 {
     if (connection == nullptr) return false;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN samples.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence";
+    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
     const auto path = sample.file.getFullPathName(); const auto name = sample.file.getFileName();
     sqlite3_bind_text(statement,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,name.toRawUTF8(),-1,SQLITE_TRANSIENT);
@@ -165,7 +169,91 @@ bool SampleDatabase::insertSample(const ScannedSample& sample)
     sqlite3_bind_double(statement,11,sample.transientStrength); sqlite3_bind_double(statement,12,sample.fundamentalHz); sqlite3_bind_double(statement,13,sample.pitchConfidence);
     sqlite3_bind_text(statement,14,sample.fingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
     sqlite3_bind_text(statement,15,sample.category.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_double(statement,16,sample.classificationConfidence);
+    sqlite3_bind_int64(statement,17,sample.fileSizeBytes); sqlite3_bind_int64(statement,18,sample.modifiedTimeMillis);
     const bool ok=sqlite3_step(statement)==SQLITE_DONE; sqlite3_finalize(statement); return ok;
+}
+
+bool SampleDatabase::isSampleUnchanged(const juce::File& file, std::int64_t sizeBytes,
+                                       std::int64_t modifiedTimeMillis) const
+{
+    if (connection == nullptr || sizeBytes <= 0 || modifiedTimeMillis <= 0) return false;
+    sqlite3_stmt* query = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT size_bytes,modified_time_ms FROM samples WHERE path=?", -1, &query, nullptr) != SQLITE_OK)
+        return false;
+    const auto path = file.getFullPathName();
+    sqlite3_bind_text(query, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool unchanged = sqlite3_step(query) == SQLITE_ROW
+        && sqlite3_column_int64(query, 0) == sizeBytes
+        && sqlite3_column_int64(query, 1) == modifiedTimeMillis;
+    sqlite3_finalize(query);
+    return unchanged;
+}
+
+std::optional<std::int64_t> SampleDatabase::beginSampleScan(const juce::File& root)
+{
+    if (connection == nullptr || !root.isDirectory()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "INSERT INTO sample_scan_history(root_path) VALUES(?)", -1, &statement, nullptr) != SQLITE_OK)
+        return std::nullopt;
+    const auto path = root.getFullPathName();
+    sqlite3_bind_text(statement, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    if (!ok) return std::nullopt;
+    return sqlite3_last_insert_rowid(connection);
+}
+
+bool SampleDatabase::finishSampleScan(std::int64_t scanId, const juce::String& status,
+                                      std::int64_t filesConsidered, std::int64_t filesSkipped,
+                                      std::int64_t filesIndexed, std::int64_t errors)
+{
+    if (connection == nullptr || scanId <= 0
+        || (status != "completed" && status != "cancelled" && status != "failed")
+        || filesConsidered < 0 || filesSkipped < 0 || filesIndexed < 0 || errors < 0)
+        return false;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "UPDATE sample_scan_history SET finished_at=CURRENT_TIMESTAMP,status=?,files_considered=?,files_skipped=?,files_indexed=?,errors=? WHERE id=? AND status='running'";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_text(statement, 1, status.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 2, filesConsidered);
+    sqlite3_bind_int64(statement, 3, filesSkipped);
+    sqlite3_bind_int64(statement, 4, filesIndexed);
+    sqlite3_bind_int64(statement, 5, errors);
+    sqlite3_bind_int64(statement, 6, scanId);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE && sqlite3_changes(connection) == 1;
+    sqlite3_finalize(statement);
+    return ok;
+}
+
+std::int64_t SampleDatabase::markRunningSampleScansInterrupted()
+{
+    if (connection == nullptr) return 0;
+    if (sqlite3_exec(connection, "UPDATE sample_scan_history SET status='interrupted',finished_at=CURRENT_TIMESTAMP WHERE status='running'", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return 0;
+    return sqlite3_changes(connection);
+}
+
+juce::Array<SampleScanRecord> SampleDatabase::getRecentSampleScans(int limit) const
+{
+    juce::Array<SampleScanRecord> result;
+    if (connection == nullptr) return result;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT id,root_path,started_at,coalesce(finished_at,''),status,files_considered,files_skipped,files_indexed,errors FROM sample_scan_history ORDER BY id DESC LIMIT ?", -1, &statement, nullptr) != SQLITE_OK)
+        return result;
+    sqlite3_bind_int(statement, 1, juce::jlimit(1, 200, limit));
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto text = [statement](int column)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column));
+            return value != nullptr ? juce::String::fromUTF8(value) : juce::String();
+        };
+        result.add({sqlite3_column_int64(statement, 0), text(1), text(2), text(3), text(4),
+                    sqlite3_column_int64(statement, 5), sqlite3_column_int64(statement, 6),
+                    sqlite3_column_int64(statement, 7), sqlite3_column_int64(statement, 8)});
+    }
+    sqlite3_finalize(statement);
+    return result;
 }
 
 bool SampleDatabase::setUserCategory(const juce::File& file, const juce::String& category)

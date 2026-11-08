@@ -21,6 +21,13 @@ struct PluginSoundRecord
     int channels = 0;
 };
 
+struct SampleScanRecord
+{
+    std::int64_t id = 0;
+    juce::String rootPath, startedAt, finishedAt, status;
+    std::int64_t filesConsidered = 0, filesSkipped = 0, filesIndexed = 0, errors = 0;
+};
+
 class SampleDatabase
 {
 public:
@@ -31,6 +38,13 @@ public:
     bool open(const juce::File& file);
     bool insertSample(const juce::File& file, double durationSeconds, int channels, double sampleRate);
     bool insertSample(const ScannedSample& sample);
+    bool isSampleUnchanged(const juce::File& file, std::int64_t sizeBytes, std::int64_t modifiedTimeMillis) const;
+    std::optional<std::int64_t> beginSampleScan(const juce::File& root);
+    bool finishSampleScan(std::int64_t scanId, const juce::String& status,
+                          std::int64_t filesConsidered, std::int64_t filesSkipped,
+                          std::int64_t filesIndexed, std::int64_t errors);
+    std::int64_t markRunningSampleScansInterrupted();
+    juce::Array<SampleScanRecord> getRecentSampleScans(int limit = 20) const;
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
