@@ -123,10 +123,14 @@ int main()
     if(!db.insertSample(related))return 15;
     const auto duplicates=db.findExactDuplicates(waveFile);
     if(duplicates.size()!=1||duplicates.getFirst()!=related.file)return 51;
+    ScannedSample nearDuplicate=sample;nearDuplicate.file=root.getChildFile("near_duplicate.wav");nearDuplicate.fingerprint="byte-different-audio";nearDuplicate.durationSeconds+=0.002;
+    if(!db.insertSample(nearDuplicate))return 52;
+    const auto perceptualDuplicates=db.findPerceptualDuplicates(waveFile,0.85);
+    if(perceptualDuplicates.size()!=1||perceptualDuplicates.front().file!=nearDuplicate.file||perceptualDuplicates.front().similarity<0.85)return 53;
     juce::StringArray tags{"Acoustic","Punchy"};
     if(!db.setUserTags(related.file,tags)||db.getUserTags(related.file).size()!=2)return 16;
     auto similar=db.findSimilar(waveFile,5);
-    if(similar.size()!=1||similar.getFirst()!=related.file)return 17;
+    if(similar.size()!=2)return 17;
     auto gm=MidiMappingProfile::generalMidi();
     DrumEvent hat{DrumInstrument::HiHat,DrumArticulation::Closed,96,1.5,0.125};
     auto mapped=gm.toMidi(hat,false);

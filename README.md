@@ -12,7 +12,7 @@ This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scan
 
 Sample-folder scans are recorded in history and use saved file size/modification time to skip unchanged files on later scans. An interrupted scan is marked on the next app launch; selecting the same folder again indexes missing or changed files.
 
-The browser shows the selected sample waveform and can compare two selected waveforms side by side. Exact duplicates can be listed by matching file hashes; acoustically similar but byte-different sounds are a separate future feature.
+The browser shows the selected sample waveform and can compare two selected waveforms side by side. Exact duplicates can be listed by matching file hashes. A separate near-duplicate search ranks feature-based candidates using duration, spectrum, crest factor, transient strength and confident pitch where available. It is a heuristic for listening review, not proof that two recordings sound identical.
 
 See [the plugin scanning guide](docs/plugin-scanning.md) for the manual kit capture workflow and its current limits.
 

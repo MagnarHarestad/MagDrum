@@ -1,5 +1,7 @@
 #include "SampleDatabase.h"
 #include "WavScanner.h"
+#include <algorithm>
+#include <cmath>
 
 SampleDatabase::~SampleDatabase()
 {
@@ -333,6 +335,77 @@ juce::Array<juce::File> SampleDatabase::findExactDuplicates(const juce::File& fi
     }
     sqlite3_finalize(query);
     return result;
+}
+
+std::vector<PerceptualDuplicateMatch> SampleDatabase::findPerceptualDuplicates(const juce::File& file,
+                                                                              double minimumSimilarity,
+                                                                              int limit) const
+{
+    std::vector<PerceptualDuplicateMatch> matches;
+    if (connection == nullptr || limit <= 0 || !std::isfinite(minimumSimilarity)) return matches;
+    minimumSimilarity = juce::jlimit(0.0, 1.0, minimumSimilarity);
+    const auto path = file.getFullPathName();
+    sqlite3_stmt* source = nullptr;
+    const char* select = "SELECT duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint FROM samples WHERE path=?";
+    if (sqlite3_prepare_v2(connection, select, -1, &source, nullptr) != SQLITE_OK) return matches;
+    sqlite3_bind_text(source, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(source) != SQLITE_ROW) { sqlite3_finalize(source); return matches; }
+    const double duration = sqlite3_column_double(source, 0);
+    const double peak = sqlite3_column_double(source, 1);
+    const double rms = sqlite3_column_double(source, 2);
+    const double centroid = sqlite3_column_double(source, 3);
+    const double transient = sqlite3_column_double(source, 4);
+    const double pitch = sqlite3_column_double(source, 5);
+    const double pitchConfidence = sqlite3_column_double(source, 6);
+    const auto* fingerprintText = reinterpret_cast<const char*>(sqlite3_column_text(source, 7));
+    const juce::String fingerprint = fingerprintText != nullptr ? juce::String::fromUTF8(fingerprintText) : juce::String();
+    sqlite3_finalize(source);
+    if (duration <= 0.0) return matches;
+
+    struct Candidate { PerceptualDuplicateMatch match; };
+    std::vector<Candidate> candidates;
+    sqlite3_stmt* rows = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT path,duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint FROM samples WHERE path<>?", -1, &rows, nullptr) != SQLITE_OK)
+        return matches;
+    sqlite3_bind_text(rows, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const double sourceCrest = peak > 1.0e-9 ? rms / peak : 0.0;
+    const double sourceTransient = peak > 1.0e-9 ? transient / peak : 0.0;
+    while (sqlite3_step(rows) == SQLITE_ROW)
+    {
+        const auto* candidatePath = reinterpret_cast<const char*>(sqlite3_column_text(rows, 0));
+        const auto candidateDuration = sqlite3_column_double(rows, 1);
+        const auto candidatePeak = sqlite3_column_double(rows, 2);
+        const auto candidateRms = sqlite3_column_double(rows, 3);
+        const auto candidateCentroid = sqlite3_column_double(rows, 4);
+        const auto candidateTransientStrength = sqlite3_column_double(rows, 5);
+        const auto candidatePitch = sqlite3_column_double(rows, 6);
+        const auto candidatePitchConfidence = sqlite3_column_double(rows, 7);
+        const auto* candidateFingerprintText = reinterpret_cast<const char*>(sqlite3_column_text(rows, 8));
+        const juce::String candidateFingerprint = candidateFingerprintText != nullptr ? juce::String::fromUTF8(candidateFingerprintText) : juce::String();
+        if (candidatePath == nullptr || candidateDuration <= 0.0 || (!fingerprint.isEmpty() && fingerprint == candidateFingerprint)) continue;
+        const double durationError = std::abs(candidateDuration - duration) / duration;
+        if (durationError > 0.05) continue;
+        const double candidateCrest = candidatePeak > 1.0e-9 ? candidateRms / candidatePeak : 0.0;
+        const double candidateTransient = candidatePeak > 1.0e-9 ? candidateTransientStrength / candidatePeak : 0.0;
+        const double centroidError = std::abs(candidateCentroid - centroid) / juce::jmax(300.0, std::abs(centroid));
+        const double crestError = std::abs(candidateCrest - sourceCrest);
+        const double transientError = std::abs(candidateTransient - sourceTransient);
+        const bool hasPitch = pitchConfidence >= 0.65 && candidatePitchConfidence >= 0.65 && pitch > 0.0 && candidatePitch > 0.0;
+        const double pitchError = hasPitch ? std::abs(std::log2(candidatePitch / pitch)) : 0.0;
+        if (centroidError > 0.25 || crestError > 0.15 || transientError > 0.20 || (hasPitch && pitchError > 0.08)) continue;
+        const double similarity = juce::jlimit(0.0, 1.0, 1.0 - (0.25 * durationError / 0.05
+            + 0.25 * centroidError / 0.25 + 0.20 * crestError / 0.15
+            + 0.20 * transientError / 0.20 + (hasPitch ? 0.10 * pitchError / 0.08 : 0.0)));
+        if (similarity >= minimumSimilarity)
+            candidates.push_back({{juce::File(juce::String::fromUTF8(candidatePath)), similarity}});
+    }
+    sqlite3_finalize(rows);
+    std::stable_sort(candidates.begin(), candidates.end(), [](const auto& left, const auto& right)
+                     { return left.match.similarity > right.match.similarity; });
+    if (candidates.size() > static_cast<std::size_t>(limit)) candidates.resize(static_cast<std::size_t>(limit));
+    matches.reserve(candidates.size());
+    for (auto& candidate : candidates) matches.push_back(std::move(candidate.match));
+    return matches;
 }
 
 bool SampleDatabase::saveMappingProfile(const juce::String& name,const MidiMappingProfile& profile)

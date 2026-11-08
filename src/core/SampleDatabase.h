@@ -4,6 +4,7 @@
 #include "MidiMapping.h"
 #include <optional>
 #include <cstdint>
+#include <vector>
 
 struct ScannedSample;
 
@@ -26,6 +27,12 @@ struct SampleScanRecord
     std::int64_t id = 0;
     juce::String rootPath, startedAt, finishedAt, status;
     std::int64_t filesConsidered = 0, filesSkipped = 0, filesIndexed = 0, errors = 0;
+};
+
+struct PerceptualDuplicateMatch
+{
+    juce::File file;
+    double similarity = 0.0;
 };
 
 class SampleDatabase
@@ -56,6 +63,9 @@ public:
     juce::StringArray getUserTags(const juce::File& file) const;
     juce::Array<juce::File> findSimilar(const juce::File& file, int limit = 20) const;
     juce::Array<juce::File> findExactDuplicates(const juce::File& file, int limit = 100) const;
+    std::vector<PerceptualDuplicateMatch> findPerceptualDuplicates(const juce::File& file,
+                                                                   double minimumSimilarity = 0.85,
+                                                                   int limit = 100) const;
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::Array<juce::File> getAllPaths() const;
