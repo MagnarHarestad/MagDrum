@@ -2,7 +2,7 @@
 
 MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Browse WAV sample libraries alongside sounds from drum instruments, audition them, and transfer drum patterns through semantic MIDI mappings.
 
-**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments.
+**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. Windows x64 is the current test build; Windows ARM64 is now included in CI/package configuration but remains unverified.
 
 **Website source:** [docs/index.html](docs/index.html). The repository is private and GitHub Pages is not enabled, so this source is not currently hosted.
 
@@ -32,4 +32,4 @@ See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The pro
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
 
-The current locally verified package targets Windows x64 and contains the standalone app and VST3. The tagged workflow is configured for macOS VST3/AU and Linux VST3 archives, but GitHub Actions billing currently prevents those jobs from running. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS and Intel macOS validation are not available yet.
+The current locally verified package targets Windows x64 and contains the standalone app and VST3. The release workflow configures Windows ARM64, separate Intel and Apple Silicon macOS packages with VST3/AU, and Linux x64, but GitHub Actions billing currently prevents hosted jobs from running. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS is not available yet.

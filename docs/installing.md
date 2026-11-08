@@ -4,8 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The currently available archive is Windows x64. The macOS and Linux sections
-describe the intended package layout; those archives are not published yet.
+The currently available archive is Windows x64. Windows ARM64, separate Intel
+and Apple Silicon macOS archives, and Linux x64 are configured in the release
+workflow but are not published until GitHub Actions can start jobs again.
 
 ## Windows x64 and Cubase
 
@@ -15,13 +16,20 @@ from PowerShell. Approve the administrator prompt so it can copy
 in Studio > VST Plug-in Manager. Add MagDrum as an instrument track. The
 archive also contains the standalone sample library app.
 
-## macOS
+## Windows ARM64
 
-Unzip `MagDrum-macOS.zip`. Move `MagDrum.app` to Applications. To install the
+An ARM64 build and archive are configured for the `windows-11-arm` runner.
+That package has not yet been built or verified; use the x64 package only on
+systems that support x64 applications until the ARM64 release is available.
+
+## macOS Intel and Apple Silicon
+
+Unzip `MagDrum-macOS-Intel.zip` on Intel Macs or
+`MagDrum-macOS-AppleSilicon.zip` on Apple Silicon. Move `MagDrum.app` to Applications. To install the
 plugin formats, copy `MagDrum.vst3` to `~/Library/Audio/Plug-Ins/VST3` and
 `MagDrum.component` to `~/Library/Audio/Plug-Ins/Components`, creating those
-folders if needed. Restart the DAW and rescan its plugins. The package is built
-on the current GitHub macOS runner; Intel compatibility has not been verified.
+folders if needed. Restart the DAW and rescan its plugins. Separate native
+architecture builds are configured; neither archive is published yet.
 
 ## Linux x64
 

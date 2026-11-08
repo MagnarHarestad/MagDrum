@@ -8,6 +8,6 @@ The current package is:
 
 The package is intended for testing the VST3 instrument in Cubase Pro 15. Its SHA-256 is `83ad635b4f0704a02da19b447f6aebf2760103fe82bb2b9a21b8cb867f9b6b25`.
 
-macOS and Linux archive jobs are configured in GitHub Actions but cannot run while account billing blocks Actions. Those archives are not yet available. See [installing.md](../docs/installing.md) for host setup instructions.
+Windows ARM64, separate Intel and Apple Silicon macOS, and Linux x64 archive jobs are configured in GitHub Actions but cannot run while account billing blocks Actions. Those archives are not yet available. See [installing.md](../docs/installing.md) for host setup instructions.
 
 Archives generated locally are ignored here; this directory is the in-repository package index.

@@ -10,14 +10,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            name: windows-x64
+            cmake_arch: x64
+          - os: windows-11-arm
+            name: windows-arm64
+            cmake_arch: ARM64
+          - os: macos-15-intel
+            name: macos-intel
+            osx_arch: x86_64
+          - os: macos-latest
+            name: macos-arm64
+            osx_arch: arm64
+          - os: ubuntu-latest
+            name: linux-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev
-      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Configure macOS
+        if: runner.os == 'macOS'
+        run: cmake -S . -B build -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }} -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - run: cmake --build build --config Release --parallel 2
       - run: ctest --test-dir build -C Release --output-on-failure
 
@@ -30,17 +52,37 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
+            cmake_arch: x64
+            archive: MagDrum-Windows-x64.zip
+          - os: windows-11-arm
+            name: windows-arm64
+            cmake_arch: ARM64
+            archive: MagDrum-Windows-ARM64.zip
+          - os: macos-15-intel
+            name: macos-intel
+            osx_arch: x86_64
+            archive: MagDrum-macOS-Intel.zip
           - os: macos-latest
-            name: macos
+            name: macos-arm64
+            osx_arch: arm64
+            archive: MagDrum-macOS-AppleSilicon.zip
           - os: ubuntu-latest
             name: linux-x64
+            archive: MagDrum-Linux-x64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+      - name: Configure macOS
+        if: runner.os == 'macOS'
+        run: cmake -S . -B build -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }} -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+      - name: Configure Linux
+        if: runner.os == 'Linux'
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
       - name: Build desktop app and VST3
         run: cmake --build build --config Release --target MagDrum MagDrumPlugin_VST3 --parallel 2
@@ -55,12 +97,13 @@ jobs:
           if (-not $plugin) { throw 'MagDrum.vst3 bundle was not produced.' }
           $app = Get-ChildItem build -File -Recurse -Filter 'MagDrum.exe' | Select-Object -First 1
           if (-not $app) { throw 'MagDrum.exe was not produced.' }
-          New-Item -ItemType Directory -Force package\windows-x64 | Out-Null
-          Copy-Item $plugin.FullName package\windows-x64\MagDrum.vst3 -Recurse
-          Copy-Item $app.FullName package\windows-x64\
-          Copy-Item installer\Install-MagDrum.ps1 package\windows-x64\
-          Copy-Item installer\README.txt package\windows-x64\
-          Compress-Archive -Path package\windows-x64\* -DestinationPath MagDrum-Windows-x64.zip -Force
+          $directory = 'package/${{ matrix.name }}'
+          New-Item -ItemType Directory -Force $directory | Out-Null
+          Copy-Item $plugin.FullName "$directory/MagDrum.vst3" -Recurse
+          Copy-Item $app.FullName $directory
+          Copy-Item installer/Install-MagDrum.ps1 $directory
+          Copy-Item installer/README.txt "$directory/README.txt"
+          Compress-Archive -Path "$directory/*" -DestinationPath '${{ matrix.archive }}' -Force
       - name: Stage macOS package
         if: runner.os == 'macOS'
         shell: bash
@@ -75,7 +118,7 @@ jobs:
           ditto "$vst" package/macos/MagDrum.vst3
           ditto "$au" package/macos/MagDrum.component
           cp installer/README.txt package/macos/README.txt
-          ditto -c -k --sequesterRsrc --keepParent package/macos MagDrum-macOS.zip
+          ditto -c -k --sequesterRsrc --keepParent package/macos '${{ matrix.archive }}'
       - name: Stage Linux package
         if: runner.os == 'Linux'
         shell: bash
@@ -87,14 +130,11 @@ jobs:
           test -n "$app" && test -n "$vst"
           cp "$app" package/linux-x64/MagDrum
           cp -a "$vst" package/linux-x64/MagDrum.vst3
-          tar -C package -czf MagDrum-Linux-x64.tar.gz linux-x64
+          tar -C package -czf '${{ matrix.archive }}' linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: MagDrum-${{ matrix.name }}
-          path: |
-            MagDrum-Windows-x64.zip
-            MagDrum-macOS.zip
-            MagDrum-Linux-x64.tar.gz
+          path: ${{ matrix.archive }}
           if-no-files-found: error
 
   release:
