@@ -30,7 +30,7 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-When an archive has been built and reviewed on each host, collect all five in `latest-publish` and publish them from a local machine with GitHub CLI. The workflow now listens to pushes on `main`, not version tags, so creating the release tag does not launch the hosted build matrix:
+When an archive has been built and reviewed on each host, collect all five in `latest-publish` and publish them from a local machine with GitHub CLI. The workflow is now manual-only, so local commits and release tags do not launch the hosted build matrix:
 
 ```powershell
 $tag = 'v0.1.1-test.N' # Replace N with the next unused test number.
