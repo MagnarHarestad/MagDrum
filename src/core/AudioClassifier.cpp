@@ -10,17 +10,59 @@ public:
 DrumClassification classify(const ScannedSample& sample) const override
 {
     DrumClassification out;
+    const auto name = sample.file.getFileNameWithoutExtension().toLowerCase();
+    const auto has = [&name](std::initializer_list<const char*> words)
+    {
+        return std::any_of(words.begin(), words.end(), [&name](const char* word) { return name.contains(juce::String(word)); });
+    };
+    const auto addTag = [&out](const char* tag) { if (!out.tags.contains(tag)) out.tags.add(tag); };
+    if (has({"808"})) { addTag("Electronic"); addTag("808"); }
+    if (has({"909"})) { addTag("Electronic"); addTag("909"); }
+    if (has({"electronic", "synth", "drum machine"})) addTag("Electronic");
+    if (has({"acoustic", "brush", "live kit"})) addTag("Acoustic");
+    if (has({"deep", "sub"})) addTag("Deep");
+    if (has({"bright", "crisp"})) addTag("Bright");
+    if (has({"dark", "muted"})) addTag("Dark");
+    if (has({"distort", "saturat", "fuzz", "overdrive"})) addTag("Distorted");
+
     if (sample.durationSeconds <= 0.0 || sample.rms <= 0.00001 || sample.peak <= 0.0001)
         return out;
 
     const double crest = sample.peak / juce::jmax(sample.rms, 0.00001);
     const double transientRatio = sample.transientStrength / juce::jmax(sample.rms, 0.00001);
-    if (sample.durationSeconds < 0.24 && sample.rms < 0.12 && sample.bitDepth > 0)
-        out.tags.add("Short");
-    if (sample.durationSeconds > 0.8) out.tags.add("Long");
-    if (sample.peak > 0.85) out.tags.add("Loud");
-    if (transientRatio > 1.2) out.tags.add("Punchy");
-    if (sample.rms < 0.05) out.tags.add("Quiet");
+    if (sample.durationSeconds < 0.24 && sample.rms < 0.12 && sample.bitDepth > 0) addTag("Short");
+    if (sample.durationSeconds > 0.8) addTag("Long");
+    if (sample.peak > 0.85) addTag("Loud");
+    if (transientRatio > 1.2) addTag("Punchy");
+    if (sample.rms < 0.05) addTag("Quiet");
+
+    juce::StringArray namedCategories;
+    if (has({"kick", "bass drum", "bassdrum"})) namedCategories.add("Kick");
+    if (has({"snare"})) namedCategories.add("Snare");
+    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat"}))
+    {
+        if (has({"pedal", "foot", "phh"})) namedCategories.add("Pedal hi-hat");
+        else if (has({"open", "ohh"})) namedCategories.add("Open hi-hat");
+        else namedCategories.add("Closed hi-hat");
+    }
+    if (has({"clap", "handclap"})) namedCategories.add("Clap");
+    if (has({"tom", "floor tom", "rack tom"})) namedCategories.add("Tom");
+    if (has({"rimshot", "rim shot", "side stick", "sidestick"})) namedCategories.add("Rimshot");
+    if (has({"ride", "ride cymbal"})) namedCategories.add("Ride");
+    if (has({"crash", "crash cymbal"})) namedCategories.add("Crash");
+    if (has({"percussion", "conga", "bongo", "cowbell", "shaker", "tambourine"})) namedCategories.add("Percussion");
+
+    if (namedCategories.contains("Rimshot") && namedCategories.contains("Snare"))
+        namedCategories.removeString("Snare");
+
+    if (namedCategories.size() == 1)
+    {
+        out.category = namedCategories[0];
+        out.confidence = has({"808", "909", "kick", "snare", "hihat", "hi-hat", "hi hat", "tom", "clap", "ride", "crash", "rimshot", "percussion"}) ? 0.92 : 0.82;
+        return out;
+    }
+    if (namedCategories.size() > 1)
+        return out;
 
     // Classification intentionally stays Unknown when the available measurements
     // do not separate likely drum families with useful confidence.

@@ -145,6 +145,11 @@ int main()
     ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
+    ScannedSample namedHat=kickLike;namedHat.file=juce::File("808_Open_HiHat_deep.wav");
+    const auto namedPrediction=AudioClassifier{}.classify(namedHat);
+    if(namedPrediction.category!="Open hi-hat"||namedPrediction.confidence<0.9||!namedPrediction.tags.contains("808")||!namedPrediction.tags.contains("Electronic")||!namedPrediction.tags.contains("Deep"))return 64;
+    ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");
+    if(AudioClassifier{}.classify(ambiguousName).category!="Unknown")return 65;
     const AudioClassifier modelClassifier(std::make_shared<FixtureClassificationModel>());
     const auto modelPrediction=modelClassifier.classify(kickLike);
     if(modelPrediction.category!="Clap"||std::abs(modelPrediction.confidence-0.83)>0.0001||modelPrediction.tags.size()!=1)return 54;
