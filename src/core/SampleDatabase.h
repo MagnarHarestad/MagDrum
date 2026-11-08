@@ -17,7 +17,7 @@ struct PluginSoundRecord
     int midiNote = 0, velocity = 100;
     juce::String articulation, previewPath, fingerprint, category = "Unknown";
     bool silent = false;
-    double duration = 0.0, sampleRate = 0.0, peak = 0.0, rms = 0.0, spectralCentroid = 0.0, transientStrength = 0.0, confidence = 0.0;
+    double duration = 0.0, sampleRate = 0.0, peak = 0.0, rms = 0.0, spectralCentroid = 0.0, transientStrength = 0.0, fundamentalHz = 0.0, pitchConfidence = 0.0, confidence = 0.0;
     int channels = 0;
 };
 

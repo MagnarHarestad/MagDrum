@@ -14,6 +14,8 @@ struct ScannedSample
     double rms = 0.0;
     double spectralCentroidHz = 0.0;
     double transientStrength = 0.0;
+    double fundamentalHz = 0.0;
+    double pitchConfidence = 0.0;
     juce::String fingerprint;
     juce::String category = "Unknown";
     double classificationConfidence = 0.0;

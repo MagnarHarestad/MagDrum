@@ -72,6 +72,7 @@ int main()
     if(scanned.size()!=1||scanned.getFirst().file!=waveFile)return 5;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
+    if(scanned.getFirst().fundamentalHz<418.0||scanned.getFirst().fundamentalHz>462.0||scanned.getFirst().pitchConfidence<0.65)return 43;
     if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600){std::cerr<<"Feature check: peak="<<scanned.getFirst().peak<<" rms="<<scanned.getFirst().rms<<" centroid="<<scanned.getFirst().spectralCentroidHz<<"\n";return 18;}
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 

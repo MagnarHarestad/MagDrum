@@ -3,6 +3,77 @@
 #include <juce_cryptography/juce_cryptography.h>
 #include <juce_dsp/juce_dsp.h>
 #include <algorithm>
+#include <cmath>
+#include <vector>
+
+namespace
+{
+struct PitchEstimate { double frequency = 0.0, confidence = 0.0; };
+
+PitchEstimate estimateFundamental(const juce::AudioBuffer<float>& buffer, unsigned int channelCount, int count, double sampleRate)
+{
+    const int decimation = juce::jmax(1, (count + 1023) / 1024);
+    const int size = count / decimation;
+    const double effectiveRate = sampleRate / decimation;
+    if (size < 32 || effectiveRate <= 0.0) return {};
+
+    std::vector<double> mono(static_cast<size_t>(size));
+    double mean = 0.0;
+    for (int i = 0; i < size; ++i)
+    {
+        double value = 0.0;
+        for (unsigned int channel = 0; channel < channelCount; ++channel)
+            for (int j = 0; j < decimation; ++j)
+                value += buffer.getSample(static_cast<int>(channel), i * decimation + j);
+        value /= static_cast<double>(channelCount * static_cast<unsigned int>(decimation));
+        mono[static_cast<size_t>(i)] = value;
+        mean += value;
+    }
+    mean /= size;
+    for (auto& value : mono) value -= mean;
+
+    const int minLag = juce::jmax(2, static_cast<int>(std::floor(effectiveRate / 1000.0)));
+    const int maxLag = juce::jmin(size / 2, static_cast<int>(std::ceil(effectiveRate / 25.0)));
+    if (maxLag <= minLag) return {};
+    std::vector<double> correlation(static_cast<size_t>(maxLag + 1), 0.0);
+    double strongest = 0.0;
+    int strongestLag = 0;
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        double cross = 0.0, energyA = 0.0, energyB = 0.0;
+        for (int i = 0; i < size - lag; ++i)
+        {
+            const double a = mono[static_cast<size_t>(i)], b = mono[static_cast<size_t>(i + lag)];
+            cross += a * b; energyA += a * a; energyB += b * b;
+        }
+        const double denominator = std::sqrt(energyA * energyB);
+        const double score = denominator > 0.0 ? cross / denominator : 0.0;
+        correlation[static_cast<size_t>(lag)] = score;
+        if (score > strongest) { strongest = score; strongestLag = lag; }
+    }
+    if (strongest < 0.65 || strongestLag == 0) return {};
+
+    int selectedLag = strongestLag;
+    for (int lag = minLag + 1; lag < strongestLag; ++lag)
+        if (correlation[static_cast<size_t>(lag)] >= strongest * 0.95
+            && correlation[static_cast<size_t>(lag)] >= correlation[static_cast<size_t>(lag - 1)]
+            && correlation[static_cast<size_t>(lag)] >= correlation[static_cast<size_t>(lag + 1)])
+        {
+            selectedLag = lag;
+            break;
+        }
+    double adjustment = 0.0;
+    if (selectedLag > minLag && selectedLag < maxLag)
+    {
+        const double before = correlation[static_cast<size_t>(selectedLag - 1)];
+        const double current = correlation[static_cast<size_t>(selectedLag)];
+        const double after = correlation[static_cast<size_t>(selectedLag + 1)];
+        const double divisor = before - 2.0 * current + after;
+        if (std::abs(divisor) > 1.0e-12) adjustment = juce::jlimit(-0.5, 0.5, 0.5 * (before - after) / divisor);
+    }
+    return {effectiveRate / (selectedLag + adjustment), juce::jlimit(0.0, 1.0, correlation[static_cast<size_t>(selectedLag)])};
+}
+}
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel) const
 {
@@ -42,6 +113,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         double transientMax = 0.0;
         double centroid = 0.0;
         bool centroidMeasured = false;
+        bool pitchMeasured = false;
         constexpr int fftOrder = 10;
         constexpr int fftSize = 1 << fftOrder;
         juce::dsp::FFT fft(fftOrder);
@@ -76,6 +148,13 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
                 }
                 centroid = sumMagnitude > 0.0 ? weightedMagnitude / sumMagnitude : 0.0;
                 centroidMeasured = true;
+            }
+            if (!pitchMeasured && count >= 256)
+            {
+                const auto pitch = estimateFundamental(buffer, reader->numChannels, count, reader->sampleRate);
+                sample.fundamentalHz = pitch.frequency;
+                sample.pitchConfidence = pitch.confidence;
+                pitchMeasured = true;
             }
             double frameEnergy = 0.0;
             for (unsigned int c = 0; c < reader->numChannels; ++c)
