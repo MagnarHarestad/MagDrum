@@ -4,7 +4,9 @@ MagDrum represents a drum event with a semantic instrument and articulation, vel
 
 The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride, crash, clap, rimshot and percussion. Conversion to a target profile returns both the note and whether an articulation fallback was used. Callers can disable fallback and report unsupported articulations instead of silently substituting them.
 
-`MidiMappingProfile` also accepts a custom in-memory entry list. Saving profiles, editing them in the app and importing/exporting Standard MIDI Files are not implemented yet.
+`MidiMappingProfile` also accepts a custom in-memory entry list. `MidiPatternIO` imports/exports Standard MIDI Files using PPQ timing, tracks note-on/off pairs, preserves tempo and time-signature metadata, reports unmapped notes, and emits unsupported events from export when no mapping is available.
+
+Saving profiles and editing them in the app are not implemented yet. The first importer supports PPQ time division; SMPTE-timed files are reported as unsupported.
 
 ## Current limitations
 

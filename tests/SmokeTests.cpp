@@ -2,6 +2,7 @@
 #include "core/WavScanner.h"
 #include "core/AudioClassifier.h"
 #include "core/MidiMapping.h"
+#include "core/MidiPatternIO.h"
 #include <iostream>
 
 int main()
@@ -58,5 +59,11 @@ int main()
     if(gm.toMidi(unsupported,false).note)return 21;
     auto fallback=gm.toMidi(unsupported,true);
     if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
+    MidiPattern pattern;pattern.events.push_back(hat);pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::tempoMetaEvent(600000)});pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::timeSignatureMetaEvent(7,8)});
+    MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
+    if(!midiIO.write(midiFile,pattern,gm,false))return 23;
+    MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
+    if(!midiReport.ok||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2)return 24;
+    if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
     return 0;
 }
