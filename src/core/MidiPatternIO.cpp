@@ -25,7 +25,7 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
             if(message.isNoteOn())
             {
                 const Key key{message.getChannel(),message.getNoteNumber()};
-                pending[key].push_back({beat,static_cast<std::uint8_t>(juce::jlimit(0,127,message.getVelocity()))});
+                pending[key].push_back({beat,static_cast<std::uint8_t>(message.getVelocity())});
             }
             else if(message.isNoteOff())
             {
