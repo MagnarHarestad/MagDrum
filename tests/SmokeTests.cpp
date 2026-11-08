@@ -18,7 +18,7 @@ int main()
     float samples[4096]{};
     for (int i=0;i<4096;++i) samples[i]=0.5f*std::sin(2.0*juce::MathConstants<double>::pi*440.0*i/44100.0);
     const float* channels[]{samples};
-    if(!writer->writeFromFloatArrays(channels,1,128))return 4;
+    if(!writer->writeFromFloatArrays(channels,1,4096))return 4;
     writer.reset();
 
     WavScanner scanner;
