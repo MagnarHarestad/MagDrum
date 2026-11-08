@@ -80,6 +80,19 @@ private:
  MidiPattern& pattern;juce::ListBox events;juce::ComboBox instrument,articulation;juce::TextEditor velocity,beat,duration,tempo,timeSignature;juce::TextButton apply,remove,saveMeta;juce::Label message,tempoLabel,timeSignatureLabel;
 };
 
+class StepCellButton final : public juce::TextButton
+{
+public:
+ void mouseDown(const juce::MouseEvent& event)override
+ {
+  if(!event.mods.isRightButtonDown()){juce::TextButton::mouseDown(event);return;}
+  juce::PopupMenu menu;for(int first=1;first<=127;first+=32){juce::PopupMenu range;const int last=juce::jmin(first+31,127);for(int value=first;value<=last;++value)range.addItem(value,juce::String(value));menu.addSubMenu(juce::String(first)+"–"+juce::String(last),range);}
+  juce::Component::SafePointer<StepCellButton> safe(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),[safe](int value){if(safe!=nullptr&&value>=1&&value<=127){safe->stepVelocity=value;safe->customVelocity=true;safe->updateCellText();}});
+ }
+ void updateCellText(){setButtonText(getToggleState()?juce::String(stepVelocity):juce::String());}
+ int stepVelocity=100;bool customVelocity=false;
+};
+
 class DrumStepSequencer final : public juce::Component
 {
 public:
@@ -87,7 +100,7 @@ public:
  {
   setSize(1160,390);
   const char* names[]{"Kick","Snare","Closed hat","Open hat","Clap","Tom","Ride","Crash"};
-  for(int row=0;row<8;++row){labels[static_cast<size_t>(row)].setText(names[row],juce::dontSendNotification);labels[static_cast<size_t>(row)].setColour(juce::Label::textColourId,juce::Colour(0xfff0ece4));addAndMakeVisible(labels[static_cast<size_t>(row)]);for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setButtonText(juce::String(step+1));button.setClickingTogglesState(true);button.setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xffff8a42));addAndMakeVisible(button);}}
+  for(int row=0;row<8;++row){labels[static_cast<size_t>(row)].setText(names[row],juce::dontSendNotification);labels[static_cast<size_t>(row)].setColour(juce::Label::textColourId,juce::Colour(0xfff0ece4));addAndMakeVisible(labels[static_cast<size_t>(row)]);for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setClickingTogglesState(true);button.setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xffff8a42));button.onClick=[this,row,step]{auto& cell=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];if(!cell.customVelocity){const int defaultVelocity=velocity.getText().getIntValue();if(defaultVelocity>=1&&defaultVelocity<=127)cell.stepVelocity=defaultVelocity;}cell.updateCellText();};addAndMakeVisible(button);}}
   velocity.setText("100",juce::dontSendNotification);velocity.setInputRestrictions(3,"0123456789");addAndMakeVisible(velocity);velocityLabel.setText("Velocity",juce::dontSendNotification);velocityLabel.setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));addAndMakeVisible(velocityLabel);
   append.setButtonText("Append one bar to pattern");append.onClick=[this]{appendBar();};addAndMakeVisible(append);
   message.setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));addAndMakeVisible(message);updateGridForPattern();
@@ -107,16 +120,16 @@ private:
   activeSteps=requestedSteps;stepBeats=4.0/static_cast<double>(denominator)/4.0;barLength=static_cast<double>(numerator)*4.0/static_cast<double>(denominator);
   if(latestEventBeat<0.0)startBeat=latestMetaBeat>=0.0?latestMetaBeat:0.0;else if(signatureBeat>latestEventBeat)startBeat=signatureBeat;else startBeat=signatureBeat+(std::floor((timelineEnd-signatureBeat)/barLength)+1.0)*barLength;
   for(int row=0;row<8;++row)for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setEnabled(step<activeSteps);if(step>=activeSteps)button.setToggleState(false,juce::dontSendNotification);}
-  message.setText("Meter "+juce::String(numerator)+"/"+juce::String(denominator)+": "+juce::String(activeSteps)+" steps. New bar starts at beat "+juce::String(startBeat,2)+".",juce::dontSendNotification);
+  message.setText("Meter "+juce::String(numerator)+"/"+juce::String(denominator)+": "+juce::String(activeSteps)+" steps. Left-click toggles; right-click sets velocity 1–127.",juce::dontSendNotification);
  }
  void appendBar()
  {
   updateGridForPattern();if(activeSteps==0)return;const int value=velocity.getText().getIntValue();if(value<1||value>127){message.setText("Velocity must be between 1 and 127.",juce::dontSendNotification);return;}
   static const DrumInstrument instruments[]{DrumInstrument::Kick,DrumInstrument::Snare,DrumInstrument::HiHat,DrumInstrument::HiHat,DrumInstrument::Clap,DrumInstrument::Tom,DrumInstrument::Ride,DrumInstrument::Crash};
-  for(int row=0;row<8;++row)for(int step=0;step<activeSteps;++step)if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState()){DrumEvent event;event.instrument=instruments[row];event.articulation=row==2?DrumArticulation::Closed:row==3?DrumArticulation::Open:DrumArticulation::Default;event.velocity=static_cast<std::uint8_t>(value);event.positionBeats=startBeat+static_cast<double>(step)*stepBeats;event.durationBeats=row==3?stepBeats*1.2:stepBeats*0.5;pattern.events.push_back(event);}
+  for(int row=0;row<8;++row)for(int step=0;step<activeSteps;++step){auto& cell=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];if(cell.getToggleState()){DrumEvent event;event.instrument=instruments[row];event.articulation=row==2?DrumArticulation::Closed:row==3?DrumArticulation::Open:DrumArticulation::Default;event.velocity=static_cast<std::uint8_t>(cell.customVelocity?cell.stepVelocity:value);event.positionBeats=startBeat+static_cast<double>(step)*stepBeats;event.durationBeats=row==3?stepBeats*1.2:stepBeats*0.5;pattern.events.push_back(event);}}
   const double appendedAt=startBeat;const int appendedSteps=activeSteps;std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});updateGridForPattern();message.setText("Added a "+juce::String(appendedSteps)+"-step bar at beat "+juce::String(appendedAt,2)+". Next bar begins at beat "+juce::String(startBeat,2)+".",juce::dontSendNotification);
  }
- MidiPattern& pattern;std::array<juce::Label,8>labels;std::array<std::array<juce::TextButton,16>,8>steps;std::array<std::unique_ptr<juce::Label>,16>stepLabels;juce::TextEditor velocity;juce::Label velocityLabel,message;juce::TextButton append;double startBeat=0.0,stepBeats=0.25,barLength=4.0;int activeSteps=16;
+ MidiPattern& pattern;std::array<juce::Label,8>labels;std::array<std::array<StepCellButton,16>,8>steps;std::array<std::unique_ptr<juce::Label>,16>stepLabels;juce::TextEditor velocity;juce::Label velocityLabel,message;juce::TextButton append;double startBeat=0.0,stepBeats=0.25,barLength=4.0;int activeSteps=16;
 };
 
 class MainComponent final : public juce::AudioAppComponent, private juce::Button::Listener, private juce::ListBoxModel, private juce::ChangeListener {
