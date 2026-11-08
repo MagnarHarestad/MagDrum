@@ -14,7 +14,8 @@ int main()
     std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(stream.get(),44100.0,1u,16,{},0));
     if(!writer)return 3;
     stream.release();
-    float samples[128]{};
+    float samples[4096]{};
+    for (int i=0;i<4096;++i) samples[i]=0.5f*std::sin(2.0*juce::MathConstants<double>::pi*440.0*i/44100.0);
     const float* channels[]{samples};
     if(!writer->writeFromFloatArrays(channels,1,128))return 4;
     writer.reset();
@@ -24,6 +25,7 @@ int main()
     if(scanned.size()!=1||scanned.getFirst().file!=waveFile)return 5;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
+    if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600)return 18;
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 
     const auto dbFile=root.getChildFile("index.sqlite3");
