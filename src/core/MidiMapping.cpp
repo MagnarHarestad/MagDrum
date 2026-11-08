@@ -1,7 +1,24 @@
 #include "MidiMapping.h"
 #include <algorithm>
+#include <array>
+#include <charconv>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
+
+namespace
+{
+constexpr std::array instrumentNames{"Kick", "Snare", "HiHat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion"};
+constexpr std::array articulationNames{"Default", "Center", "Rimshot", "SideStick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge"};
+
+template <typename Names>
+std::optional<std::size_t> findName(const Names& names, const std::string& value)
+{
+    const auto found = std::find(names.begin(), names.end(), value);
+    if (found == names.end()) return std::nullopt;
+    return static_cast<std::size_t>(std::distance(names.begin(), found));
+}
+}
 
 MidiMappingProfile::MidiMappingProfile(std::vector<MidiNoteMapping> value) : mappings(std::move(value))
 {
@@ -44,6 +61,54 @@ bool MidiMappingProfile::removeMapping(DrumInstrument instrument,DrumArticulatio
 {
     const auto oldSize=mappings.size();mappings.erase(std::remove_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==instrument&&m.articulation==articulation;}),mappings.end());
     return mappings.size()!=oldSize;
+}
+
+std::string MidiMappingProfile::toCsv() const
+{
+    std::ostringstream output;
+    output << "instrument,articulation,note\n";
+    for (const auto& mapping : mappings)
+    {
+        const auto instrument = static_cast<std::size_t>(mapping.instrument);
+        const auto articulation = static_cast<std::size_t>(mapping.articulation);
+        if (instrument >= instrumentNames.size() || articulation >= articulationNames.size()) continue;
+        output << instrumentNames[instrument] << ',' << articulationNames[articulation] << ','
+               << static_cast<unsigned int>(mapping.note) << '\n';
+    }
+    return output.str();
+}
+
+std::optional<MidiMappingProfile> MidiMappingProfile::fromCsv(const std::string& csv)
+{
+    std::istringstream input(csv);
+    std::string line;
+    if (!std::getline(input, line) || line != "instrument,articulation,note") return std::nullopt;
+    std::vector<MidiNoteMapping> parsed;
+    while (std::getline(input, line))
+    {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        const auto first = line.find(',');
+        const auto second = first == std::string::npos ? first : line.find(',', first + 1);
+        if (first == std::string::npos || second == std::string::npos || line.find(',', second + 1) != std::string::npos)
+            return std::nullopt;
+        const auto instrument = findName(instrumentNames, line.substr(0, first));
+        const auto articulation = findName(articulationNames, line.substr(first + 1, second - first - 1));
+        unsigned int note = 0;
+        const auto noteText = line.substr(second + 1);
+        const auto conversion = std::from_chars(noteText.data(), noteText.data() + noteText.size(), note);
+        if (!instrument || !articulation || conversion.ec != std::errc{} || conversion.ptr != noteText.data() + noteText.size() || note > 127)
+            return std::nullopt;
+        const MidiNoteMapping mapping{static_cast<DrumInstrument>(*instrument),
+                                      static_cast<DrumArticulation>(*articulation),
+                                      static_cast<std::uint8_t>(note)};
+        if (std::any_of(parsed.begin(), parsed.end(), [&](const auto& existing)
+                        { return existing.instrument == mapping.instrument && existing.articulation == mapping.articulation; }))
+            return std::nullopt;
+        parsed.push_back(mapping);
+    }
+    if (parsed.empty()) return std::nullopt;
+    return MidiMappingProfile(std::move(parsed));
 }
 
 std::optional<DrumEvent> MidiMappingProfile::fromMidi(std::uint8_t note,std::uint8_t velocity,double position,double duration) const
