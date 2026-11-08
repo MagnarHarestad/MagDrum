@@ -12,11 +12,11 @@ This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scan
 
 Sample-folder scans are recorded in history and use saved file size/modification time to skip unchanged files on later scans. An interrupted scan is marked on the next app launch; selecting the same folder again indexes missing or changed files.
 
-The browser shows the selected sample waveform and can compare two selected waveforms side by side. Exact duplicates can be listed by matching file hashes. A separate near-duplicate search ranks feature-based candidates using duration, spectrum, crest factor, transient strength and confident pitch where available. It is a heuristic for listening review, not proof that two recordings sound identical.
+The browser shows the selected sample waveform and can compare two selected waveforms side by side. Exact duplicates can be listed by matching file hashes. A separate near-duplicate search compares normalized spectral fingerprints from four points in each sound, along with duration and audio features. Results are listening candidates, not proof that two recordings sound identical.
 
 See [the plugin scanning guide](docs/plugin-scanning.md) for the manual kit capture workflow and its current limits.
 
-The current classifier is an early heuristic and the initial spectral measurement uses one analysis window. It is not a validated tagging model or perceptual fingerprint. Third-party plugin scanning still runs in-process, so a crashing plugin can terminate MagDrum. AU/AUv3 and iOS remain roadmap work.
+The current classifier is an early heuristic and the initial spectral measurement uses one analysis window. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against a labeled sound corpus. Third-party plugin scanning still runs in-process, so a crashing plugin can terminate MagDrum. AUv3 and iOS remain roadmap work.
 
 ## Build
 

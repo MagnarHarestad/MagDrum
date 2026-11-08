@@ -20,6 +20,8 @@ struct ScannedSample
     std::int64_t fileSizeBytes = 0;
     std::int64_t modifiedTimeMillis = 0;
     juce::String fingerprint;
+    juce::String acousticFingerprint;
+    int acousticFingerprintVersion = 0;
     juce::String category = "Unknown";
     double classificationConfidence = 0.0;
 };

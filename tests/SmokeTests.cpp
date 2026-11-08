@@ -89,16 +89,27 @@ int main()
     if(initialScanStats.filesConsidered!=1||initialScanStats.filesAnalyzed!=1||initialScanStats.errors!=0)return 44;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
+    if(scanned.getFirst().acousticFingerprint.length()!=128)return 56;
     if(scanned.getFirst().fundamentalHz<418.0||scanned.getFirst().fundamentalHz>462.0||scanned.getFirst().pitchConfidence<0.65)return 43;
     if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600){std::cerr<<"Feature check: peak="<<scanned.getFirst().peak<<" rms="<<scanned.getFirst().rms<<" centroid="<<scanned.getFirst().spectralCentroidHz<<"\n";return 18;}
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 
+    const auto acousticRoot=root.getSiblingFile("MagDrumAcousticFingerprintTest");acousticRoot.deleteRecursively();if(!acousticRoot.createDirectory().wasOk())return 57;
+    const auto writeTone=[&](const juce::File& file,double frequency,float amplitude){auto output=file.createOutputStream();if(!output)return false;std::unique_ptr<juce::AudioFormatWriter> toneWriter(wav.createWriterFor(output.get(),44100.0,1u,16,{},0));if(!toneWriter)return false;output.release();float tone[4096]{};for(int i=0;i<4096;++i)tone[i]=amplitude*std::sin(2.0*juce::MathConstants<double>::pi*frequency*i/44100.0);const float* data[]{tone};return toneWriter->writeFromFloatArrays(data,1,4096);};
+    const auto gainFile=acousticRoot.getChildFile("gain.wav"),pitchFile=acousticRoot.getChildFile("pitch.wav");
+    if(!writeTone(gainFile,440.0,0.25f)||!writeTone(pitchFile,880.0,0.5f))return 58;
+    const auto acousticScans=scanner.scan(acousticRoot);if(acousticScans.size()!=2)return 59;
+    ScannedSample gainSample,pitchSample;for(const auto& item:acousticScans){if(item.file==gainFile)gainSample=item;else if(item.file==pitchFile)pitchSample=item;}
+    if(gainSample.acousticFingerprint!=scanned.getFirst().acousticFingerprint||gainSample.fingerprint==scanned.getFirst().fingerprint)return 60;
+    if(pitchSample.acousticFingerprint==scanned.getFirst().acousticFingerprint)return 61;
+
     const auto dbFile=root.getChildFile("index.sqlite3");
     const auto legacyDbFile=root.getChildFile("legacy.sqlite3");sqlite3* legacy=nullptr;
     if(sqlite3_open(legacyDbFile.getFullPathName().toRawUTF8(),&legacy)!=SQLITE_OK)return 36;
-    const auto legacyPath=waveFile.getFullPathName();const auto legacySql="CREATE TABLE samples(path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0); INSERT INTO samples(path,name,duration,channels,sample_rate) VALUES('"+legacyPath.replace("'","''")+"','kick.wav',0.1,1,44100);";
+    const auto legacyPath=waveFile.getFullPathName();const auto legacySql="CREATE TABLE samples(path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0); INSERT INTO samples(path,name,duration,channels,sample_rate,size_bytes,modified_time_ms) VALUES('"+legacyPath.replace("'","''")+"','kick.wav',0.1,1,44100,"+juce::String(static_cast<juce::int64>(waveFile.getSize()))+","+juce::String(waveFile.getLastModificationTime().toMilliseconds())+");";
     const bool legacyCreated=sqlite3_exec(legacy,legacySql.toRawUTF8(),nullptr,nullptr,nullptr)==SQLITE_OK;sqlite3_close(legacy);if(!legacyCreated)return 37;
     SampleDatabase migrated;if(!migrated.open(legacyDbFile)||migrated.getAllPaths().size()!=1||!migrated.setUserCategory(waveFile,"Kick"))return 38;
+    if(migrated.isSampleUnchanged(waveFile,static_cast<std::int64_t>(waveFile.getSize()),waveFile.getLastModificationTime().toMilliseconds()))return 63;
     SampleDatabase db;
     if(!db.open(dbFile))return 8;
     PluginInstrumentRecord instrument{"vst3:fixture:drums","VST3","Fixture Drums","MagDrum Test","Instrument",root.getFullPathName(),"1.0"};
@@ -130,6 +141,7 @@ int main()
     auto paths=db.getAllPaths();
     if(paths.size()!=1||paths.getFirst()!=waveFile)return 11;
     if(db.searchPaths("kick",10).size()!=1||!db.searchPaths("missing",10).isEmpty())return 30;
+    if(!db.insertSample(gainSample)||!db.insertSample(pitchSample))return 62;
     ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
@@ -143,14 +155,12 @@ int main()
     if(!db.insertSample(related))return 15;
     const auto duplicates=db.findExactDuplicates(waveFile);
     if(duplicates.size()!=1||duplicates.getFirst()!=related.file)return 51;
-    ScannedSample nearDuplicate=sample;nearDuplicate.file=root.getChildFile("near_duplicate.wav");nearDuplicate.fingerprint="byte-different-audio";nearDuplicate.durationSeconds+=0.002;
-    if(!db.insertSample(nearDuplicate))return 52;
     const auto perceptualDuplicates=db.findPerceptualDuplicates(waveFile,0.85);
-    if(perceptualDuplicates.size()!=1||perceptualDuplicates.front().file!=nearDuplicate.file||perceptualDuplicates.front().similarity<0.85)return 53;
+    if(perceptualDuplicates.size()!=1||perceptualDuplicates.front().file!=gainFile||perceptualDuplicates.front().similarity<0.85)return 53;
     juce::StringArray tags{"Acoustic","Punchy"};
     if(!db.setUserTags(related.file,tags)||db.getUserTags(related.file).size()!=2)return 16;
     auto similar=db.findSimilar(waveFile,5);
-    if(similar.size()!=2)return 17;
+    if(similar.size()!=3)return 17;
     auto gm=MidiMappingProfile::generalMidi();
     DrumEvent hat{DrumInstrument::HiHat,DrumArticulation::Closed,96,1.5,0.125};
     auto mapped=gm.toMidi(hat,false);

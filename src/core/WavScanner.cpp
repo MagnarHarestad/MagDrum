@@ -3,7 +3,9 @@
 #include <juce_cryptography/juce_cryptography.h>
 #include <juce_dsp/juce_dsp.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <string>
 #include <vector>
 
 namespace
@@ -72,6 +74,69 @@ PitchEstimate estimateFundamental(const juce::AudioBuffer<float>& buffer, unsign
         if (std::abs(divisor) > 1.0e-12) adjustment = juce::jlimit(-0.5, 0.5, 0.5 * (before - after) / divisor);
     }
     return {effectiveRate / (selectedLag + adjustment), juce::jlimit(0.0, 1.0, correlation[static_cast<size_t>(selectedLag)])};
+}
+
+juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::dsp::FFT& fft,
+                                       juce::HeapBlock<float>& fftData, juce::AudioBuffer<float>& buffer,
+                                       float** channelData, int fftSize)
+{
+    constexpr int segmentCount = 4;
+    constexpr int bandCount = 16;
+    std::array<std::uint8_t, segmentCount * bandCount> quantized{};
+    const auto sampleCount = static_cast<juce::int64>(reader.lengthInSamples);
+    const double topHz = juce::jmin(18000.0, reader.sampleRate * 0.48);
+    if (sampleCount <= 0 || topHz <= 30.0) return {};
+
+    for (int segment = 0; segment < segmentCount; ++segment)
+    {
+        const auto start = sampleCount <= fftSize ? juce::int64(0)
+            : static_cast<juce::int64>((sampleCount - fftSize) * segment / (segmentCount - 1));
+        const int count = static_cast<int>(std::min<juce::int64>(fftSize, sampleCount - start));
+        if (count <= 0) continue;
+        buffer.clear();
+        if (!reader.read(channelData, static_cast<int>(reader.numChannels), start, count)) return {};
+        std::fill_n(fftData.getData(), fftSize * 2, 0.0f);
+        for (int i = 0; i < count; ++i)
+        {
+            double mono = 0.0;
+            for (unsigned int channel = 0; channel < reader.numChannels; ++channel)
+                mono += buffer.getSample(static_cast<int>(channel), i);
+            mono /= reader.numChannels;
+            const double window = count > 1 ? 0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * i / (count - 1)) : 1.0;
+            fftData[i] = static_cast<float>(mono * window);
+        }
+        fft.performFrequencyOnlyForwardTransform(fftData.getData());
+        std::array<double, bandCount> bandEnergy{};
+        double totalEnergy = 0.0;
+        for (int band = 0; band < bandCount; ++band)
+        {
+            const double lowHz = 30.0 * std::pow(topHz / 30.0, static_cast<double>(band) / bandCount);
+            const double highHz = 30.0 * std::pow(topHz / 30.0, static_cast<double>(band + 1) / bandCount);
+            const int firstBin = juce::jlimit(1, fftSize / 2 - 1, static_cast<int>(std::floor(lowHz * fftSize / reader.sampleRate)));
+            const int lastBin = juce::jlimit(firstBin + 1, fftSize / 2, static_cast<int>(std::ceil(highHz * fftSize / reader.sampleRate)));
+            for (int bin = firstBin; bin < lastBin; ++bin)
+            {
+                const double magnitude = fftData[bin];
+                bandEnergy[static_cast<size_t>(band)] += magnitude * magnitude;
+            }
+            totalEnergy += bandEnergy[static_cast<size_t>(band)];
+        }
+        if (totalEnergy <= 1.0e-20) continue;
+        for (int band = 0; band < bandCount; ++band)
+        {
+            const auto proportion = bandEnergy[static_cast<size_t>(band)] / totalEnergy;
+            quantized[static_cast<size_t>(segment * bandCount + band)] = static_cast<std::uint8_t>(juce::jlimit(0, 255, static_cast<int>(std::lround(proportion * 255.0))));
+        }
+    }
+    constexpr char digits[] = "0123456789abcdef";
+    std::string encoded;
+    encoded.reserve(quantized.size() * 2);
+    for (const auto value : quantized)
+    {
+        encoded.push_back(digits[value >> 4]);
+        encoded.push_back(digits[value & 0x0f]);
+    }
+    return juce::String::fromUTF8(encoded.c_str());
 }
 }
 
@@ -213,6 +278,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.transientStrength = transientMax;
         sample.spectralCentroidHz = centroid;
         sample.fingerprint = juce::SHA256(file).toHexString();
+        sample.acousticFingerprint = createAcousticFingerprint(*reader, fft, fftData, buffer, channelData.getData(), fftSize);
+        sample.acousticFingerprintVersion = sample.acousticFingerprint.length() == 128 ? 1 : 0;
         const auto classification = AudioClassifier{}.classify(sample);
         sample.category = classification.category;
         sample.classificationConfidence = classification.confidence;

@@ -1,7 +1,32 @@
 #include "SampleDatabase.h"
 #include "WavScanner.h"
+#include <array>
 #include <algorithm>
 #include <cmath>
+
+namespace
+{
+int hexDigit(juce::juce_wchar character)
+{
+    if (character >= '0' && character <= '9') return static_cast<int>(character - '0');
+    if (character >= 'a' && character <= 'f') return static_cast<int>(character - 'a' + 10);
+    if (character >= 'A' && character <= 'F') return static_cast<int>(character - 'A' + 10);
+    return -1;
+}
+
+bool decodeAcousticFingerprint(const juce::String& text, std::array<std::uint8_t, 64>& values)
+{
+    if (text.length() != static_cast<int>(values.size() * 2)) return false;
+    for (size_t index = 0; index < values.size(); ++index)
+    {
+        const int high = hexDigit(text[static_cast<int>(index * 2)]);
+        const int low = hexDigit(text[static_cast<int>(index * 2 + 1)]);
+        if (high < 0 || low < 0) return false;
+        values[index] = static_cast<std::uint8_t>((high << 4) | low);
+    }
+    return true;
+}
+}
 
 SampleDatabase::~SampleDatabase()
 {
@@ -25,7 +50,7 @@ bool SampleDatabase::open(const juce::File& file)
     sqlite3_busy_timeout(connection, 5000);
     if (sqlite3_exec(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '',size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0)";
+    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '',size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',acoustic_fingerprint_version INTEGER NOT NULL DEFAULT 0)";
     if (sqlite3_exec(connection, schema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     // Upgrade databases created by earlier MagDrum builds without losing indexed paths.
@@ -43,11 +68,15 @@ bool SampleDatabase::open(const juce::File& file)
         "ALTER TABLE samples ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE samples ADD COLUMN modified_time_ms INTEGER NOT NULL DEFAULT 0"
+        "ALTER TABLE samples ADD COLUMN modified_time_ms INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE samples ADD COLUMN acoustic_fingerprint_version INTEGER NOT NULL DEFAULT 0"
     };
     for (const auto* migration : migrations)
         sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
-    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,5) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity)";
+    if (sqlite3_exec(connection, "CREATE INDEX IF NOT EXISTS samples_fingerprint ON samples(fingerprint); CREATE INDEX IF NOT EXISTS samples_duration ON samples(duration)", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,6) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity)";
     if (sqlite3_exec(connection, pluginSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
@@ -161,7 +190,7 @@ bool SampleDatabase::insertSample(const ScannedSample& sample)
 {
     if (connection == nullptr) return false;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms";
+    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
     const auto path = sample.file.getFullPathName(); const auto name = sample.file.getFileName();
     sqlite3_bind_text(statement,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,name.toRawUTF8(),-1,SQLITE_TRANSIENT);
@@ -172,6 +201,8 @@ bool SampleDatabase::insertSample(const ScannedSample& sample)
     sqlite3_bind_text(statement,14,sample.fingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
     sqlite3_bind_text(statement,15,sample.category.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_double(statement,16,sample.classificationConfidence);
     sqlite3_bind_int64(statement,17,sample.fileSizeBytes); sqlite3_bind_int64(statement,18,sample.modifiedTimeMillis);
+    sqlite3_bind_text(statement,19,sample.acousticFingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement,20,sample.acousticFingerprintVersion);
     const bool ok=sqlite3_step(statement)==SQLITE_DONE; sqlite3_finalize(statement); return ok;
 }
 
@@ -180,13 +211,16 @@ bool SampleDatabase::isSampleUnchanged(const juce::File& file, std::int64_t size
 {
     if (connection == nullptr || sizeBytes <= 0 || modifiedTimeMillis <= 0) return false;
     sqlite3_stmt* query = nullptr;
-    if (sqlite3_prepare_v2(connection, "SELECT size_bytes,modified_time_ms FROM samples WHERE path=?", -1, &query, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(connection, "SELECT size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version FROM samples WHERE path=?", -1, &query, nullptr) != SQLITE_OK)
         return false;
     const auto path = file.getFullPathName();
     sqlite3_bind_text(query, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
     const bool unchanged = sqlite3_step(query) == SQLITE_ROW
         && sqlite3_column_int64(query, 0) == sizeBytes
-        && sqlite3_column_int64(query, 1) == modifiedTimeMillis;
+        && sqlite3_column_int64(query, 1) == modifiedTimeMillis
+        && sqlite3_column_text(query, 2) != nullptr
+        && sqlite3_column_bytes(query, 2) == 128
+        && sqlite3_column_int(query, 3) == 1;
     sqlite3_finalize(query);
     return unchanged;
 }
@@ -346,7 +380,7 @@ std::vector<PerceptualDuplicateMatch> SampleDatabase::findPerceptualDuplicates(c
     minimumSimilarity = juce::jlimit(0.0, 1.0, minimumSimilarity);
     const auto path = file.getFullPathName();
     sqlite3_stmt* source = nullptr;
-    const char* select = "SELECT duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint FROM samples WHERE path=?";
+    const char* select = "SELECT duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,acoustic_fingerprint FROM samples WHERE path=?";
     if (sqlite3_prepare_v2(connection, select, -1, &source, nullptr) != SQLITE_OK) return matches;
     sqlite3_bind_text(source, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
     if (sqlite3_step(source) != SQLITE_ROW) { sqlite3_finalize(source); return matches; }
@@ -359,15 +393,20 @@ std::vector<PerceptualDuplicateMatch> SampleDatabase::findPerceptualDuplicates(c
     const double pitchConfidence = sqlite3_column_double(source, 6);
     const auto* fingerprintText = reinterpret_cast<const char*>(sqlite3_column_text(source, 7));
     const juce::String fingerprint = fingerprintText != nullptr ? juce::String::fromUTF8(fingerprintText) : juce::String();
+    const auto* acousticText = reinterpret_cast<const char*>(sqlite3_column_text(source, 8));
+    const juce::String acousticFingerprint = acousticText != nullptr ? juce::String::fromUTF8(acousticText) : juce::String();
     sqlite3_finalize(source);
-    if (duration <= 0.0) return matches;
+    std::array<std::uint8_t, 64> sourceAcoustic{};
+    if (duration <= 0.0 || rms <= 1.0e-5 || !decodeAcousticFingerprint(acousticFingerprint, sourceAcoustic)) return matches;
 
     struct Candidate { PerceptualDuplicateMatch match; };
     std::vector<Candidate> candidates;
     sqlite3_stmt* rows = nullptr;
-    if (sqlite3_prepare_v2(connection, "SELECT path,duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint FROM samples WHERE path<>?", -1, &rows, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(connection, "SELECT path,duration,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,acoustic_fingerprint FROM samples WHERE path<>? AND duration BETWEEN ? AND ?", -1, &rows, nullptr) != SQLITE_OK)
         return matches;
     sqlite3_bind_text(rows, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(rows, 2, duration * 0.95);
+    sqlite3_bind_double(rows, 3, duration * 1.05);
     const double sourceCrest = peak > 1.0e-9 ? rms / peak : 0.0;
     const double sourceTransient = peak > 1.0e-9 ? transient / peak : 0.0;
     while (sqlite3_step(rows) == SQLITE_ROW)
@@ -382,9 +421,20 @@ std::vector<PerceptualDuplicateMatch> SampleDatabase::findPerceptualDuplicates(c
         const auto candidatePitchConfidence = sqlite3_column_double(rows, 7);
         const auto* candidateFingerprintText = reinterpret_cast<const char*>(sqlite3_column_text(rows, 8));
         const juce::String candidateFingerprint = candidateFingerprintText != nullptr ? juce::String::fromUTF8(candidateFingerprintText) : juce::String();
+        const auto* candidateAcousticText = reinterpret_cast<const char*>(sqlite3_column_text(rows, 9));
+        const juce::String candidateAcousticFingerprint = candidateAcousticText != nullptr ? juce::String::fromUTF8(candidateAcousticText) : juce::String();
         if (candidatePath == nullptr || candidateDuration <= 0.0 || (!fingerprint.isEmpty() && fingerprint == candidateFingerprint)) continue;
+        if (candidateRms <= 1.0e-5) continue;
         const double durationError = std::abs(candidateDuration - duration) / duration;
         if (durationError > 0.05) continue;
+        std::array<std::uint8_t, 64> candidateAcoustic{};
+        if (!decodeAcousticFingerprint(candidateAcousticFingerprint, candidateAcoustic)) continue;
+        double acousticError = 0.0;
+        for (size_t index = 0; index < sourceAcoustic.size(); ++index)
+            acousticError += std::abs(static_cast<int>(sourceAcoustic[index]) - static_cast<int>(candidateAcoustic[index])) / 255.0;
+        acousticError /= static_cast<double>(sourceAcoustic.size());
+        const double acousticSimilarity = 1.0 - acousticError;
+        if (acousticSimilarity < 0.88) continue;
         const double candidateCrest = candidatePeak > 1.0e-9 ? candidateRms / candidatePeak : 0.0;
         const double candidateTransient = candidatePeak > 1.0e-9 ? candidateTransientStrength / candidatePeak : 0.0;
         const double centroidError = std::abs(candidateCentroid - centroid) / juce::jmax(300.0, std::abs(centroid));
@@ -393,9 +443,10 @@ std::vector<PerceptualDuplicateMatch> SampleDatabase::findPerceptualDuplicates(c
         const bool hasPitch = pitchConfidence >= 0.65 && candidatePitchConfidence >= 0.65 && pitch > 0.0 && candidatePitch > 0.0;
         const double pitchError = hasPitch ? std::abs(std::log2(candidatePitch / pitch)) : 0.0;
         if (centroidError > 0.25 || crestError > 0.15 || transientError > 0.20 || (hasPitch && pitchError > 0.08)) continue;
-        const double similarity = juce::jlimit(0.0, 1.0, 1.0 - (0.25 * durationError / 0.05
+        const double featureSimilarity = juce::jlimit(0.0, 1.0, 1.0 - (0.25 * durationError / 0.05
             + 0.25 * centroidError / 0.25 + 0.20 * crestError / 0.15
             + 0.20 * transientError / 0.20 + (hasPitch ? 0.10 * pitchError / 0.08 : 0.0)));
+        const double similarity = juce::jlimit(0.0, 1.0, 0.70 * acousticSimilarity + 0.30 * featureSimilarity);
         if (similarity >= minimumSimilarity)
             candidates.push_back({{juce::File(juce::String::fromUTF8(candidatePath)), similarity}});
     }
