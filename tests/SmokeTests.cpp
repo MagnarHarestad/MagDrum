@@ -6,6 +6,8 @@
 #include "core/PluginNoteScanner.h"
 #include <iostream>
 #include <cstring>
+#include <memory>
+#include <utility>
 
 class SyntheticInstrument final : public juce::AudioProcessor
 {
@@ -47,6 +49,19 @@ private:
     double sampleRate = 44100.0, phase = 0.0;
     float amplitude = 0.0f;
     int activeNote = -1, program = 0;
+};
+
+class FixtureClassificationModel final : public DrumClassificationModel
+{
+public:
+    FixtureClassificationModel(juce::String value = "Clap", double score = 0.83) : category(std::move(value)), confidence(score) {}
+    DrumClassification classify(const ScannedSample&) const override
+    {
+        DrumClassification result; result.category = category; result.confidence = confidence; result.tags.add("Acoustic"); return result;
+    }
+private:
+    juce::String category;
+    double confidence;
 };
 
 int main()
@@ -118,6 +133,11 @@ int main()
     ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
+    const AudioClassifier modelClassifier(std::make_shared<FixtureClassificationModel>());
+    const auto modelPrediction=modelClassifier.classify(kickLike);
+    if(modelPrediction.category!="Clap"||std::abs(modelPrediction.confidence-0.83)>0.0001||modelPrediction.tags.size()!=1)return 54;
+    const AudioClassifier invalidModelClassifier(std::make_shared<FixtureClassificationModel>("unsupported",1.2));
+    if(invalidModelClassifier.classify(kickLike).category!="Unknown")return 55;
     if(!db.setUserCategory(waveFile,"Snare"))return 14;
     ScannedSample related=sample; related.file=root.getChildFile("related.wav"); related.durationSeconds+=0.02;
     if(!db.insertSample(related))return 15;

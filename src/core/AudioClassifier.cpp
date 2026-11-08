@@ -1,6 +1,13 @@
 #include "AudioClassifier.h"
+#include <cmath>
+#include <utility>
 
-DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
+namespace
+{
+class HeuristicDrumClassificationModel final : public DrumClassificationModel
+{
+public:
+DrumClassification classify(const ScannedSample& sample) const override
 {
     DrumClassification out;
     if (sample.durationSeconds <= 0.0 || sample.rms <= 0.00001 || sample.peak <= 0.0001)
@@ -28,4 +35,27 @@ DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
         out.confidence = juce::jlimit(0.30, 0.68, 0.42 + juce::jmin(0.2, transientRatio * 0.08) + (crest > 4.0 ? 0.04 : 0.0));
     }
     return out;
+}
+};
+}
+
+AudioClassifier::AudioClassifier() : classificationModel(std::make_shared<HeuristicDrumClassificationModel>())
+{
+}
+
+AudioClassifier::AudioClassifier(std::shared_ptr<const DrumClassificationModel> model)
+    : classificationModel(model != nullptr ? std::move(model) : std::make_shared<HeuristicDrumClassificationModel>())
+{
+}
+
+DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
+{
+    if (classificationModel == nullptr) return {};
+    auto result = classificationModel->classify(sample);
+    const juce::StringArray supported{"Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat",
+                                      "Clap", "Tom", "Rimshot", "Ride", "Crash", "Percussion", "Unknown"};
+    if (!supported.contains(result.category) || !std::isfinite(result.confidence)
+        || result.confidence < 0.0 || result.confidence > 1.0)
+        return {};
+    return result;
 }
