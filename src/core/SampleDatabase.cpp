@@ -315,6 +315,26 @@ juce::Array<juce::File> SampleDatabase::findSimilar(const juce::File& file,int l
     while(sqlite3_step(q)==SQLITE_ROW){const auto* v=reinterpret_cast<const char*>(sqlite3_column_text(q,0));if(v)result.add(juce::File(juce::String::fromUTF8(v)));}sqlite3_finalize(q);return result;
 }
 
+juce::Array<juce::File> SampleDatabase::findExactDuplicates(const juce::File& file,int limit) const
+{
+    juce::Array<juce::File> result;
+    if(connection==nullptr||limit<=0)return result;
+    sqlite3_stmt* query=nullptr;
+    const char* sql="SELECT path FROM samples WHERE fingerprint<>'' AND fingerprint=(SELECT fingerprint FROM samples WHERE path=?) AND path<>? ORDER BY path COLLATE NOCASE LIMIT ?";
+    if(sqlite3_prepare_v2(connection,sql,-1,&query,nullptr)!=SQLITE_OK)return result;
+    const auto path=file.getFullPathName();
+    sqlite3_bind_text(query,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_text(query,2,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_int(query,3,juce::jlimit(1,1000,limit));
+    while(sqlite3_step(query)==SQLITE_ROW)
+    {
+        const auto* value=reinterpret_cast<const char*>(sqlite3_column_text(query,0));
+        if(value!=nullptr)result.add(juce::File(juce::String::fromUTF8(value)));
+    }
+    sqlite3_finalize(query);
+    return result;
+}
+
 bool SampleDatabase::saveMappingProfile(const juce::String& name,const MidiMappingProfile& profile)
 {
     if(connection==nullptr||name.trim().isEmpty())return false;

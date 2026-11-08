@@ -55,6 +55,7 @@ public:
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;
     juce::Array<juce::File> findSimilar(const juce::File& file, int limit = 20) const;
+    juce::Array<juce::File> findExactDuplicates(const juce::File& file, int limit = 100) const;
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::Array<juce::File> getAllPaths() const;

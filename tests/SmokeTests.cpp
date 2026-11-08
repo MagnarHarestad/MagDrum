@@ -119,8 +119,10 @@ int main()
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
     if(!db.setUserCategory(waveFile,"Snare"))return 14;
-    ScannedSample related=sample; related.file=root.getChildFile("related.wav"); related.durationSeconds+=0.02; related.fingerprint="related";
+    ScannedSample related=sample; related.file=root.getChildFile("related.wav"); related.durationSeconds+=0.02;
     if(!db.insertSample(related))return 15;
+    const auto duplicates=db.findExactDuplicates(waveFile);
+    if(duplicates.size()!=1||duplicates.getFirst()!=related.file)return 51;
     juce::StringArray tags{"Acoustic","Punchy"};
     if(!db.setUserTags(related.file,tags)||db.getUserTags(related.file).size()!=2)return 16;
     auto similar=db.findSimilar(waveFile,5);
