@@ -8,7 +8,7 @@ MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Brows
 
 ## Phase 1 foundation
 
-This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scanning (subject to JUCE decoder support) with cancellation, a version-upgraded SQLite sample index, audio measurements, basic heuristic classification, category correction, user tags, similarity lookup, semantic drum-event and GM MIDI mapping foundations, plus tests and cross-platform CI.
+This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scanning (subject to JUCE decoder support) with cancellation, a version-upgraded SQLite sample index, audio measurements, basic heuristic classification, category correction, user tags, similarity lookup, semantic drum-event and GM MIDI mapping, custom profile persistence/editing, and PPQ MIDI import/export. The VST3 now loads user-selected audio samples onto MIDI notes and saves the sample paths with plugin state.
 
 The current classifier is an early heuristic and the initial spectral measurement uses one analysis window. It is not a validated tagging model or perceptual fingerprint. Plugin hosting/scanning, MIDI file import/export, custom mapping persistence, AU/AUv3 and iOS remain roadmap work.
 
