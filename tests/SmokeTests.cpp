@@ -34,6 +34,10 @@ int main()
     const auto dbFile=root.getChildFile("index.sqlite3");
     SampleDatabase db;
     if(!db.open(dbFile))return 8;
+    PluginInstrumentRecord instrument{"vst3:fixture:drums","VST3","Fixture Drums","MagDrum Test","Instrument",root.getFullPathName(),"1.0"};
+    if(!db.upsertPluginInstrument(instrument)||!db.upsertPluginInstrument(instrument))return 31;
+    const auto instruments=db.getPluginInstruments();
+    if(instruments.size()!=1||instruments.getFirst().identifier!=instrument.identifier||instruments.getFirst().name!=instrument.name)return 32;
     const auto& sample=scanned.getFirst();
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 9;
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 10;

@@ -6,6 +6,11 @@
 
 struct ScannedSample;
 
+struct PluginInstrumentRecord
+{
+    juce::String identifier, format, name, manufacturer, category, file, version;
+};
+
 class SampleDatabase
 {
 public:
@@ -16,6 +21,8 @@ public:
     bool open(const juce::File& file);
     bool insertSample(const juce::File& file, double durationSeconds, int channels, double sampleRate);
     bool insertSample(const ScannedSample& sample);
+    bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
+    juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
