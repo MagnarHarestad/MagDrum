@@ -15,6 +15,8 @@ struct ScannedSample
     double spectralCentroidHz = 0.0;
     double transientStrength = 0.0;
     juce::String fingerprint;
+    juce::String category = "Unknown";
+    double classificationConfidence = 0.0;
 };
 
 class WavScanner

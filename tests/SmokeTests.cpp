@@ -1,5 +1,6 @@
 #include "core/SampleDatabase.h"
 #include "core/WavScanner.h"
+#include "core/AudioClassifier.h"
 
 int main()
 {
@@ -22,6 +23,7 @@ int main()
     auto scanned=scanner.scan(root);
     if(scanned.size()!=1||scanned.getFirst().file!=waveFile)return 5;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
+    if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 
     const auto dbFile=root.getChildFile("index.sqlite3");
@@ -32,5 +34,9 @@ int main()
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 10;
     auto paths=db.getAllPaths();
     if(paths.size()!=1||paths.getFirst()!=waveFile)return 11;
+    ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
+    auto prediction=AudioClassifier{}.classify(kickLike);
+    if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
+    if(!db.setUserCategory(waveFile,"Snare"))return 14;
     return 0;
 }

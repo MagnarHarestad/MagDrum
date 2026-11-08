@@ -1,4 +1,6 @@
 #include "WavScanner.h"
+#include "AudioClassifier.h"
+#include <juce_dsp/juce_dsp.h>
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel) const
 {
@@ -36,6 +38,12 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         double sumSquares = 0.0;
         double previousMean = 0.0;
         double transientMax = 0.0;
+        double centroid = 0.0;
+        bool centroidMeasured = false;
+        constexpr int fftOrder = 10;
+        constexpr int fftSize = 1 << fftOrder;
+        juce::dsp::FFT fft(fftOrder);
+        juce::HeapBlock<float> fftData(static_cast<size_t>(fftSize * 2), true);
         int64 measured = 0;
         for (int64 offset = 0; offset < sampleCount; offset += frameCount)
         {
@@ -45,6 +53,28 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             buffer.clear();
             if (!reader->read(channelData.getData(), static_cast<int>(reader->numChannels), offset, count))
                 break;
+            if (!centroidMeasured && count >= fftSize)
+            {
+                double sumMagnitude = 0.0, weightedMagnitude = 0.0;
+                for (int i = 0; i < fftSize; ++i)
+                {
+                    double mono = 0.0;
+                    for (unsigned int c = 0; c < reader->numChannels; ++c)
+                        mono += buffer.getSample(static_cast<int>(c), i);
+                    mono /= reader->numChannels;
+                    fftData[i] = static_cast<float>(mono * (0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * i / (fftSize - 1))));
+                }
+                fft.performFrequencyOnlyForwardTransform(fftData.getData());
+                for (int bin = 1; bin < fftSize / 2; ++bin)
+                {
+                    const double magnitude = fftData[bin];
+                    const double hz = static_cast<double>(bin) * reader->sampleRate / fftSize;
+                    weightedMagnitude += hz * magnitude;
+                    sumMagnitude += magnitude;
+                }
+                centroid = sumMagnitude > 0.0 ? weightedMagnitude / sumMagnitude : 0.0;
+                centroidMeasured = true;
+            }
             double frameEnergy = 0.0;
             for (unsigned int c = 0; c < reader->numChannels; ++c)
                 for (int i = 0; i < count; ++i)
@@ -61,7 +91,11 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
+        sample.spectralCentroidHz = centroid;
         sample.fingerprint = juce::SHA256(file).toHexString();
+        const auto classification = AudioClassifier{}.classify(sample);
+        sample.category = classification.category;
+        sample.classificationConfidence = classification.confidence;
         result.add(std::move(sample));
     }
     return result;
