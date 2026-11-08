@@ -11,6 +11,7 @@ struct PluginNoteScanSettings
     std::vector<int> velocityLevels { 100 };
     double noteDurationSeconds = 0.25;
     double releaseSeconds = 0.5;
+    double captureLengthSeconds = 0.75;
     double silencePeakThreshold = 1.0e-5;
 };
 

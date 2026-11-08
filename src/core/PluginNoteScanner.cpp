@@ -13,6 +13,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         || settings.blockSize < 16 || settings.blockSize > 8192 || settings.velocityLevels.empty() || settings.velocityLevels.size() > 16
         || !std::isfinite(settings.noteDurationSeconds) || settings.noteDurationSeconds <= 0.0 || settings.noteDurationSeconds > 10.0
         || !std::isfinite(settings.releaseSeconds) || settings.releaseSeconds < 0.0 || settings.releaseSeconds > 10.0
+        || !std::isfinite(settings.captureLengthSeconds) || settings.captureLengthSeconds <= 0.0 || settings.captureLengthSeconds > 20.0
         || !std::isfinite(settings.silencePeakThreshold) || settings.silencePeakThreshold < 0.0)
     {
         result.error = "Invalid plugin note scan settings.";
@@ -34,7 +35,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 
     const auto noteSamples = static_cast<juce::int64>(std::llround(settings.noteDurationSeconds * settings.sampleRate));
     const auto releaseSamples = juce::jmax<juce::int64>(1, static_cast<juce::int64>(std::llround(settings.releaseSeconds * settings.sampleRate)));
-    const auto captureSamples64 = noteSamples + releaseSamples;
+    const auto captureSamples64 = juce::jmax(noteSamples + releaseSamples, static_cast<juce::int64>(std::llround(settings.captureLengthSeconds * settings.sampleRate)));
     if (captureSamples64 > static_cast<juce::int64>(settings.sampleRate * 20.0) || captureSamples64 > std::numeric_limits<int>::max())
     {
         result.error = "The requested capture is too long.";
