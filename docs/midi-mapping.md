@@ -6,7 +6,7 @@ The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride,
 
 `MidiMappingProfile` also accepts a custom entry list, and named profiles can be saved to and loaded from SQLite. `MidiPatternIO` imports/exports Standard MIDI Files using PPQ timing, tracks note-on/off pairs, preserves tempo and time-signature metadata, reports unmapped notes, and emits unsupported events from export when no mapping is available.
 
-Editing profiles in the app is not implemented yet. The first importer supports PPQ time division; SMPTE-timed files are reported as unsupported.
+The standalone app provides MIDI import/export buttons and save/load controls for named profiles. Mapping entry editing in the app is not implemented yet. The first importer supports PPQ time division; SMPTE-timed files are reported as unsupported.
 
 ## Current limitations
 
