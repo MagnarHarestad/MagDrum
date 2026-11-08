@@ -8,26 +8,34 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $buildDirectory = Join-Path $repoRoot 'build/local-windows-x64'
 $dependencyDirectory = Join-Path $repoRoot 'build/_deps'
-$vs18Path = 'C:\Program Files\Microsoft Visual Studio\18\Professional'
-$vs2022Path = 'C:\Program Files\Microsoft Visual Studio\2022\Professional'
-$generator = if (Test-Path -LiteralPath $vs18Path) { 'Visual Studio 18 2026' }
-    elseif (Test-Path -LiteralPath $vs2022Path) { 'Visual Studio 17 2022' }
-    else { throw 'Visual Studio with the C++ desktop workload was not found.' }
+$vswhereCandidates = @(
+    (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'),
+    (Join-Path $env:ProgramFiles 'Microsoft Visual Studio/Installer/vswhere.exe')
+)
+$vswhere = $vswhereCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $vswhere) { throw 'vswhere.exe was not found. Install Visual Studio with the C++ desktop workload.' }
+$vsRequirements = @('-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64')
+$vsInstallPath = & $vswhere @vsRequirements -property installationPath
+$vsVersion = & $vswhere @vsRequirements -property installationVersion
+if (-not $vsInstallPath -or -not $vsVersion) { throw 'A Visual Studio installation with the x64 C++ toolset was not found.' }
+$vsMajorVersion = ([string]$vsVersion).Split('.')[0]
+$generator = switch ($vsMajorVersion) {
+    '18' { 'Visual Studio 18 2026' }
+    '17' { 'Visual Studio 17 2022' }
+    default { throw "Unsupported Visual Studio major version: $vsMajorVersion." }
+}
 $latestDirectory = Join-Path $repoRoot 'latest-publish'
 
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmakePath = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
 if (-not $cmakePath) {
     $candidates = @(
-        'C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
-        'C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+        (Join-Path $vsInstallPath 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'),
         'C:\Program Files\CMake\bin\cmake.exe'
     )
     $cmakePath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 }
-if (-not $cmakePath) {
-    throw 'CMake was not found. Install CMake and the Visual Studio C++ desktop workload.'
-}
+if (-not $cmakePath) { throw 'CMake was not found. Install CMake and the Visual Studio C++ desktop workload.' }
 
 $ctestPath = Join-Path (Split-Path -Parent $cmakePath) 'ctest.exe'
 if (-not (Test-Path -LiteralPath $ctestPath)) {
