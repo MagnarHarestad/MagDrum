@@ -22,7 +22,7 @@ juce_generate_juce_header(MagDrum)
 target_sources(MagDrum PRIVATE src/app/Main.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp)
 target_include_directories(MagDrum PRIVATE src)
 target_compile_definitions(MagDrum PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="MagDrum" JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
-target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_formats juce::juce_dsp juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 
 juce_add_plugin(MagDrumPlugin
     COMPANY_NAME "Censor Design"
@@ -41,6 +41,6 @@ if(BUILD_TESTING)
  add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp)
  target_include_directories(MagDrumTests PRIVATE src)
  target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
- target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_audio_formats juce::juce_dsp juce::juce_core)
+ target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_core)
  add_test(NAME MagDrumTests COMMAND MagDrumTests)
 endif()

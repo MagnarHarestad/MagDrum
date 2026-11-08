@@ -34,7 +34,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         juce::HeapBlock<float*> channelData(static_cast<size_t>(reader->numChannels));
         for (unsigned int c = 0; c < reader->numChannels; ++c)
             channelData[c] = buffer.getWritePointer(static_cast<int>(c));
-        const auto sampleCount = static_cast<int64>(reader->lengthInSamples);
+        const auto sampleCount = static_cast<juce::int64>(reader->lengthInSamples);
         double sumSquares = 0.0;
         double previousMean = 0.0;
         double transientMax = 0.0;
@@ -45,11 +45,11 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         juce::dsp::FFT fft(fftOrder);
         juce::HeapBlock<float> fftData(static_cast<size_t>(fftSize * 2), true);
         int64 measured = 0;
-        for (int64 offset = 0; offset < sampleCount; offset += frameCount)
+        for (juce::int64 offset = 0; offset < sampleCount; offset += frameCount)
         {
             if (shouldCancel && shouldCancel())
                 break;
-            const int count = static_cast<int>(juce::jmin<int64>(frameCount, sampleCount - offset));
+            const int count = static_cast<int>(juce::jmin<juce::int64>(frameCount, sampleCount - offset));
             buffer.clear();
             if (!reader->read(channelData.getData(), static_cast<int>(reader->numChannels), offset, count))
                 break;
