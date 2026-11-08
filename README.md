@@ -4,7 +4,7 @@ MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Brows
 
 **MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments.
 
-**Website:** [magnarharestad.github.io/MagDrum](https://magnarharestad.github.io/MagDrum/)
+**Website source:** [docs/index.html](docs/index.html). The repository is private and GitHub Pages is not enabled, so this source is not currently hosted.
 
 ## Phase 1 foundation
 
