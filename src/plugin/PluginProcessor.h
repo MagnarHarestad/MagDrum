@@ -9,7 +9,7 @@ class MagDrumAudioProcessor final : public juce::AudioProcessor
 public:
     MagDrumAudioProcessor();
     void prepareToPlay(double, int) override;
-    void releaseResources() override {}
+    void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout&) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     juce::AudioProcessorEditor* createEditor() override;

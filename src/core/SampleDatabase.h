@@ -24,6 +24,7 @@ public:
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::Array<juce::File> getAllPaths() const;
+    juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;
 private:
     sqlite3* connection = nullptr;
 };

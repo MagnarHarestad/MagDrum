@@ -181,3 +181,11 @@ juce::Array<juce::File> SampleDatabase::getAllPaths() const
     sqlite3_finalize(statement);
     return files;
 }
+
+juce::Array<juce::File> SampleDatabase::searchPaths(const juce::String& query,int limit) const
+{
+    juce::Array<juce::File> files;if(connection==nullptr||limit<=0)return files;sqlite3_stmt* statement=nullptr;
+    if(sqlite3_prepare_v2(connection,"SELECT path FROM samples WHERE instr(lower(name),lower(?))>0 OR instr(lower(path),lower(?))>0 ORDER BY name COLLATE NOCASE LIMIT ?",-1,&statement,nullptr)!=SQLITE_OK)return files;
+    const auto term=query.trim();sqlite3_bind_text(statement,1,term.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_text(statement,2,term.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_int(statement,3,juce::jmin(limit,1000));
+    while(sqlite3_step(statement)==SQLITE_ROW){const auto* value=reinterpret_cast<const char*>(sqlite3_column_text(statement,0));if(value)files.add(juce::File(juce::String::fromUTF8(value)));}sqlite3_finalize(statement);return files;
+}

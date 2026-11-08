@@ -14,6 +14,12 @@ void MagDrumAudioProcessor::prepareToPlay(double rate, int)
     outputSampleRate = rate > 0.0 ? rate : 44100.0;
 }
 
+void MagDrumAudioProcessor::releaseResources()
+{
+    const juce::ScopedLock lock(sampleLock);
+    for (auto& voice : voices) voice = {};
+}
+
 bool MagDrumAudioProcessor::isBusesLayoutSupported(const BusesLayout& layout) const
 {
     const auto output = layout.getMainOutputChannelSet();
@@ -37,6 +43,8 @@ bool MagDrumAudioProcessor::loadSampleForNote(int note, const juce::File& file)
 
     {
         const juce::ScopedLock lock(sampleLock);
+        const auto* oldSample=ownedSamples[static_cast<size_t>(note)].get();
+        if(oldSample!=nullptr)for(auto& voice:voices)if(voice.sample==oldSample)voice={};
         ownedSamples[static_cast<size_t>(note)] = std::move(sample);
         sampleSlots[static_cast<size_t>(note)].store(ownedSamples[static_cast<size_t>(note)].get(), std::memory_order_release);
     }

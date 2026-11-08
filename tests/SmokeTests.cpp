@@ -39,6 +39,7 @@ int main()
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 10;
     auto paths=db.getAllPaths();
     if(paths.size()!=1||paths.getFirst()!=waveFile)return 11;
+    if(db.searchPaths("kick",10).size()!=1||!db.searchPaths("missing",10).isEmpty())return 30;
     ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
