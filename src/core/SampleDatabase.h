@@ -29,6 +29,13 @@ struct PluginSoundBrowseRecord
     int midiNote = 0, velocity = 0;
 };
 
+struct SampleBrowseRecord
+{
+    juce::File file;
+    juce::String category;
+    double durationSeconds = 0.0, brightnessHz = 0.0;
+};
+
 struct SampleScanRecord
 {
     std::int64_t id = 0;
@@ -77,6 +84,7 @@ public:
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::Array<juce::File> getAllPaths() const;
+    juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;
 private:
     sqlite3* connection = nullptr;

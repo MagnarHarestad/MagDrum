@@ -540,6 +540,29 @@ juce::Array<juce::File> SampleDatabase::getAllPaths() const
     return files;
 }
 
+juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
+{
+    juce::Array<SampleBrowseRecord> records;
+    if (connection == nullptr) return records;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT path,COALESCE(NULLIF(user_category,''),category),duration,spectral_centroid FROM samples ORDER BY name COLLATE NOCASE";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto* path = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        const auto* category = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
+        if (path == nullptr) continue;
+        SampleBrowseRecord record;
+        record.file = juce::File(juce::String::fromUTF8(path));
+        record.category = category != nullptr ? juce::String::fromUTF8(category) : juce::String("Unknown");
+        record.durationSeconds = sqlite3_column_double(statement, 2);
+        record.brightnessHz = sqlite3_column_double(statement, 3);
+        records.add(std::move(record));
+    }
+    sqlite3_finalize(statement);
+    return records;
+}
+
 juce::Array<juce::File> SampleDatabase::searchPaths(const juce::String& query,int limit) const
 {
     juce::Array<juce::File> files;if(connection==nullptr||limit<=0)return files;sqlite3_stmt* statement=nullptr;
