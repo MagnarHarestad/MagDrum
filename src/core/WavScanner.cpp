@@ -2,6 +2,7 @@
 #include "AudioClassifier.h"
 #include <juce_cryptography/juce_cryptography.h>
 #include <juce_dsp/juce_dsp.h>
+#include <algorithm>
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel) const
 {
@@ -50,7 +51,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         {
             if (shouldCancel && shouldCancel())
                 break;
-            const int count = static_cast<int>(juce::jmin<juce::int64>(frameCount, sampleCount - offset));
+            const int count = static_cast<int>(std::min<juce::int64>(frameCount, sampleCount - offset));
             buffer.clear();
             if (!reader->read(channelData.getData(), static_cast<int>(reader->numChannels), offset, count))
                 break;
