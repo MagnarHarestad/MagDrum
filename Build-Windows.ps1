@@ -1,4 +1,6 @@
 param(
+    [ValidateSet('x64', 'ARM64')]
+    [string] $Architecture = 'x64',
     [switch] $SkipTests
 )
 
@@ -6,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
-$buildDirectory = Join-Path $repoRoot 'build/local-windows-x64'
+$architectureKey = $Architecture.ToLowerInvariant()
+$buildDirectory = Join-Path $repoRoot "build/local-windows-$architectureKey"
 $dependencyDirectory = Join-Path $repoRoot 'build/_deps'
 $vswhereCandidates = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'),
@@ -14,10 +17,15 @@ $vswhereCandidates = @(
 )
 $vswhere = $vswhereCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $vswhere) { throw 'vswhere.exe was not found. Install Visual Studio with the C++ desktop workload.' }
-$vsRequirements = @('-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64')
+$toolsetComponent = if ($Architecture -eq 'ARM64') {
+    'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
+} else {
+    'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+}
+$vsRequirements = @('-latest', '-products', '*', '-requires', $toolsetComponent)
 $vsInstallPath = & $vswhere @vsRequirements -property installationPath
 $vsVersion = & $vswhere @vsRequirements -property installationVersion
-if (-not $vsInstallPath -or -not $vsVersion) { throw 'A Visual Studio installation with the x64 C++ toolset was not found.' }
+if (-not $vsInstallPath -or -not $vsVersion) { throw "A Visual Studio installation with the $Architecture C++ toolset was not found. Install component $toolsetComponent." }
 $vsMajorVersion = ([string]$vsVersion).Split('.')[0]
 $generator = switch ($vsMajorVersion) {
     '18' { 'Visual Studio 18 2026' }
@@ -50,7 +58,7 @@ try {
         '-S', $repoRoot,
         '-B', $buildDirectory,
         '-G', $generator,
-        '-A', 'x64',
+        '-A', $Architecture,
         '-DBUILD_TESTING=ON'
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'
@@ -85,10 +93,10 @@ try {
     Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $stagingDirectory 'MagDrum.vst3') -Recurse
     Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
 
-    $zipPath = Join-Path $buildDirectory ($stagingName + '-Windows-x64.zip')
+    $zipPath = Join-Path $buildDirectory ($stagingName + "-Windows-$Architecture.zip")
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath
     New-Item -ItemType Directory -Force -Path $latestDirectory | Out-Null
-    $latestZipPath = Join-Path $latestDirectory 'MagDrum-Windows-x64.zip'
+    $latestZipPath = Join-Path $latestDirectory "MagDrum-Windows-$Architecture.zip"
     Copy-Item -LiteralPath $zipPath -Destination $latestZipPath -Force
 
     $hash = (Get-FileHash -LiteralPath $latestZipPath -Algorithm SHA256).Hash.ToLowerInvariant()

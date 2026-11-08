@@ -8,6 +8,6 @@ The current package is:
 
 The package is intended for testing the VST3 instrument in Cubase Pro 15. The standalone browser can sort by name, duration and spectral brightness and shows plugin source/kit and MIDI mapping metadata. Its SHA-256 is `53f2666354caf4b6f864aeb43b36e7af122699b04b404f5f47be62c83e439512`.
 
-Windows ARM64, separate Intel and Apple Silicon macOS, and Linux x64 archive jobs are configured in GitHub Actions but cannot run while account billing blocks Actions. Those archives are not yet available. See [installing.md](../docs/installing.md) for host setup instructions.
+GitHub Actions is currently blocked by account billing, so platform builds are being prepared to run locally. Windows ARM64 can be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS Intel/Apple Silicon and AU packages must be built on a Mac with Xcode; Linux x64 can be built on Linux or in WSL2. Local build scripts and host requirements are documented in [local-builds.md](../docs/local-builds.md). Those additional archives have not been produced yet.
 
 Archives generated locally are ignored here; this directory is the in-repository package index.

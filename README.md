@@ -28,10 +28,10 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure
 ```
 
-On Windows, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1` builds and tests the standalone app and VST3, then creates the Cubase ZIP under `latest-publish`. See [local platform build limits](docs/local-builds.md) for ARM64, Linux, macOS, and AUv3 requirements.
+On Windows, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1` builds and tests the standalone app and VST3, then creates the Cubase ZIP under `latest-publish`. Add `-Architecture ARM64` to cross-compile for Windows ARM64 when its Visual Studio toolset is installed. `Build-Unix.sh` builds Linux x64 on Linux/WSL2 and macOS VST3/AU on a Mac. See [local platform builds](docs/local-builds.md) for requirements and limits.
 
 See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The project license is undecided; keep this repository private until licensing is settled. No proprietary SDKs or copyrighted sample libraries are included.
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
 
-The current locally verified package targets Windows x64 and contains the standalone app and VST3. The release workflow configures Windows ARM64, separate Intel and Apple Silicon macOS packages with VST3/AU, and Linux x64, but GitHub Actions billing currently prevents hosted jobs from running. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS is not available yet.
+The current Windows test package targets Windows x64 and contains the standalone app and VST3. GitHub Actions billing currently prevents hosted builds, so platform packages are built locally on Windows, Mac, and Linux hosts and collected under `latest-publish`. See the [local build guide](docs/local-builds.md) and [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS is not available yet.
