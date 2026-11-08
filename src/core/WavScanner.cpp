@@ -45,7 +45,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         constexpr int fftSize = 1 << fftOrder;
         juce::dsp::FFT fft(fftOrder);
         juce::HeapBlock<float> fftData(static_cast<size_t>(fftSize * 2), true);
-        int64 measured = 0;
+        juce::int64 measured = 0;
         for (juce::int64 offset = 0; offset < sampleCount; offset += frameCount)
         {
             if (shouldCancel && shouldCancel())
