@@ -1,6 +1,7 @@
 #include "core/SampleDatabase.h"
 #include "core/WavScanner.h"
 #include "core/AudioClassifier.h"
+#include "core/MidiMapping.h"
 #include <iostream>
 
 int main()
@@ -47,5 +48,15 @@ int main()
     if(!db.setUserTags(related.file,tags)||db.getUserTags(related.file).size()!=2)return 16;
     auto similar=db.findSimilar(waveFile,5);
     if(similar.size()!=1||similar.getFirst()!=related.file)return 17;
+    auto gm=MidiMappingProfile::generalMidi();
+    DrumEvent hat{DrumInstrument::HiHat,DrumArticulation::Closed,96,1.5,0.125};
+    auto mapped=gm.toMidi(hat,false);
+    if(!mapped.note||*mapped.note!=42||mapped.usedFallback)return 19;
+    auto decoded=gm.fromMidi(42,96,1.5,0.125);
+    if(!decoded||decoded->instrument!=DrumInstrument::HiHat||decoded->articulation!=DrumArticulation::Closed||decoded->positionBeats!=1.5)return 20;
+    DrumEvent unsupported{DrumInstrument::HiHat,DrumArticulation::Edge,80,0.0,0.1};
+    if(gm.toMidi(unsupported,false).note)return 21;
+    auto fallback=gm.toMidi(unsupported,true);
+    if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
     return 0;
 }
