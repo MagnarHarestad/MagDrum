@@ -1,4 +1,6 @@
 name: Build and test
+permissions:
+  contents: write
 on:
   push:
   pull_request:
@@ -40,3 +42,4 @@ jobs:
         with:
           files: latest-publish/MagDrum-Windows-VST3.zip
           generate_release_notes: true
+          prerelease: true
