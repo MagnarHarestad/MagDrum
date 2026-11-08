@@ -1,6 +1,41 @@
 #include "MidiPatternIO.h"
 #include <algorithm>
+#include <cmath>
 #include <map>
+
+namespace
+{
+void replaceMetaAtBeat(MidiPattern& pattern, bool tempo, const juce::MidiMessage& replacement, double positionBeats)
+{
+    pattern.tempoAndSignature.erase(std::remove_if(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
+        [tempo, positionBeats](const MidiMetaEvent& item)
+        {
+            const bool sameType = tempo ? item.message.isTempoMetaEvent() : item.message.isTimeSignatureMetaEvent();
+            return sameType && std::abs(item.positionBeats - positionBeats) < 1.0e-9;
+        }), pattern.tempoAndSignature.end());
+    pattern.tempoAndSignature.push_back({positionBeats, replacement});
+    std::stable_sort(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
+        [](const auto& left, const auto& right) { return left.positionBeats < right.positionBeats; });
+}
+}
+
+bool setPatternTempo(MidiPattern& pattern, int beatsPerMinute, double positionBeats)
+{
+    if (beatsPerMinute < 20 || beatsPerMinute > 300 || !std::isfinite(positionBeats) || positionBeats < 0.0)
+        return false;
+    replaceMetaAtBeat(pattern, true,
+        juce::MidiMessage::tempoMetaEvent(static_cast<int>(std::round(60000000.0 / beatsPerMinute))), positionBeats);
+    return true;
+}
+
+bool setPatternTimeSignature(MidiPattern& pattern, int numerator, int denominator, double positionBeats)
+{
+    if (numerator < 1 || numerator > 32 || (denominator != 1 && denominator != 2 && denominator != 4 && denominator != 8 && denominator != 16)
+        || !std::isfinite(positionBeats) || positionBeats < 0.0)
+        return false;
+    replaceMetaAtBeat(pattern, false, juce::MidiMessage::timeSignatureMetaEvent(numerator, denominator), positionBeats);
+    return true;
+}
 
 MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingProfile& profile,MidiPattern& output) const
 {

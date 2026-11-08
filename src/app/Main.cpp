@@ -37,13 +37,17 @@ public:
   velocity.setTextToShowWhenEmpty("Velocity",juce::Colours::grey);beat.setTextToShowWhenEmpty("Beat position",juce::Colours::grey);duration.setTextToShowWhenEmpty("Duration beats",juce::Colours::grey);
   addAndMakeVisible(velocity);addAndMakeVisible(beat);addAndMakeVisible(duration);
   apply.setButtonText("Apply edit");remove.setButtonText("Delete event");apply.addListener(this);remove.addListener(this);addAndMakeVisible(apply);addAndMakeVisible(remove);
+  tempoLabel.setText("Tempo BPM",juce::dontSendNotification);timeSignatureLabel.setText("Time signature",juce::dontSendNotification);for(auto* label:{&tempoLabel,&timeSignatureLabel})label->setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));
+  tempo.setInputRestrictions(3,"0123456789");timeSignature.setInputRestrictions(5,"0123456789/");tempo.setText("120",juce::dontSendNotification);timeSignature.setText("4/4",juce::dontSendNotification);
+  addAndMakeVisible(tempoLabel);addAndMakeVisible(tempo);addAndMakeVisible(timeSignatureLabel);addAndMakeVisible(timeSignature);saveMeta.setButtonText("Set at start");saveMeta.addListener(this);addAndMakeVisible(saveMeta);
+  bool tempoAtStartFound=false,signatureAtStartFound=false;for(const auto& meta:pattern.tempoAndSignature)if(meta.positionBeats==0.0){if(meta.message.isTempoMetaEvent()&&!tempoAtStartFound){tempo.setText(juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote()))),juce::dontSendNotification);tempoAtStartFound=true;}if(meta.message.isTimeSignatureMetaEvent()&&!signatureAtStartFound){int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);timeSignature.setText(juce::String(numerator)+"/"+juce::String(denominator),juce::dontSendNotification);signatureAtStartFound=true;}}
   message.setText("Select an imported event to edit its instrument, articulation, velocity and timing.",juce::dontSendNotification);addAndMakeVisible(message);
  }
  void resized()override
  {
   auto area=getLocalBounds().reduced(12);events.setBounds(area.removeFromTop(230));area.removeFromTop(6);
   auto row=area.removeFromTop(32);instrument.setBounds(row.removeFromLeft(125));row.removeFromLeft(5);articulation.setBounds(row.removeFromLeft(125));row.removeFromLeft(5);velocity.setBounds(row.removeFromLeft(80));row.removeFromLeft(5);beat.setBounds(row.removeFromLeft(130));row.removeFromLeft(5);duration.setBounds(row.removeFromLeft(130));row.removeFromLeft(5);apply.setBounds(row.removeFromLeft(100));row.removeFromLeft(5);remove.setBounds(row.removeFromLeft(105));
-  area.removeFromTop(5);message.setBounds(area.removeFromTop(40));
+  area.removeFromTop(5);row=area.removeFromTop(32);tempoLabel.setBounds(row.removeFromLeft(72));tempo.setBounds(row.removeFromLeft(56));row.removeFromLeft(12);timeSignatureLabel.setBounds(row.removeFromLeft(100));timeSignature.setBounds(row.removeFromLeft(65));row.removeFromLeft(8);saveMeta.setBounds(row.removeFromLeft(112));area.removeFromTop(5);message.setBounds(area.removeFromTop(40));
  }
 private:
  int getNumRows()override{return static_cast<int>(pattern.events.size());}
@@ -65,6 +69,7 @@ private:
  }
  void buttonClicked(juce::Button* button)override
  {
+  if(button==&saveMeta){const int bpm=tempo.getText().getIntValue();const auto text=timeSignature.getText().trim();const int slash=text.indexOfChar('/');if(slash<=0){message.setText("Use tempo 20–300 BPM and a time signature such as 4/4.",juce::dontSendNotification);return;}const int numerator=text.substring(0,slash).getIntValue(),denominator=text.substring(slash+1).getIntValue();if(bpm<20||bpm>300||numerator<1||numerator>32||(denominator!=1&&denominator!=2&&denominator!=4&&denominator!=8&&denominator!=16)){message.setText("Use tempo 20–300 BPM and a time signature numerator 1–32 with denominator 1, 2, 4, 8 or 16.",juce::dontSendNotification);return;}setPatternTempo(pattern,bpm);setPatternTimeSignature(pattern,numerator,denominator);message.setText("Tempo and time signature updated at beat 0. Later changes are preserved.",juce::dontSendNotification);return;}
   const int row=events.getSelectedRow();if(!juce::isPositiveAndBelow(row,pattern.events.size())){message.setText("Select a drum event first.",juce::dontSendNotification);return;}
   if(button==&remove){pattern.events.erase(pattern.events.begin()+row);events.updateContent();events.selectRow(juce::jmin(row,static_cast<int>(pattern.events.size())-1));message.setText("Event deleted.",juce::dontSendNotification);return;}
   const int newVelocity=velocity.getText().getIntValue();const double newBeat=beat.getText().getDoubleValue(),newDuration=duration.getText().getDoubleValue();
@@ -72,7 +77,7 @@ private:
   auto& event=pattern.events[static_cast<size_t>(row)];event.instrument=static_cast<DrumInstrument>(instrument.getSelectedId()-1);event.articulation=static_cast<DrumArticulation>(articulation.getSelectedId()-1);event.velocity=static_cast<std::uint8_t>(newVelocity);event.positionBeats=newBeat;event.durationBeats=newDuration;
   std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});events.updateContent();events.selectRow(row);message.setText("Event updated and pattern resorted by beat position.",juce::dontSendNotification);
  }
- MidiPattern& pattern;juce::ListBox events;juce::ComboBox instrument,articulation;juce::TextEditor velocity,beat,duration;juce::TextButton apply,remove;juce::Label message;
+ MidiPattern& pattern;juce::ListBox events;juce::ComboBox instrument,articulation;juce::TextEditor velocity,beat,duration,tempo,timeSignature;juce::TextButton apply,remove,saveMeta;juce::Label message,tempoLabel,timeSignatureLabel;
 };
 
 class DrumStepSequencer final : public juce::Component
@@ -85,7 +90,7 @@ public:
   for(int row=0;row<8;++row){labels[static_cast<size_t>(row)].setText(names[row],juce::dontSendNotification);labels[static_cast<size_t>(row)].setColour(juce::Label::textColourId,juce::Colour(0xfff0ece4));addAndMakeVisible(labels[static_cast<size_t>(row)]);for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setButtonText(juce::String(step+1));button.setClickingTogglesState(true);button.setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xffff8a42));addAndMakeVisible(button);}}
   velocity.setText("100",juce::dontSendNotification);velocity.setInputRestrictions(3,"0123456789");addAndMakeVisible(velocity);velocityLabel.setText("Velocity",juce::dontSendNotification);velocityLabel.setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));addAndMakeVisible(velocityLabel);
   append.setButtonText("Append one bar to pattern");append.onClick=[this]{appendBar();};addAndMakeVisible(append);
-  message.setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));message.setText("Click steps, then append this 4/4 bar to the current MIDI pattern.",juce::dontSendNotification);addAndMakeVisible(message);
+  message.setColour(juce::Label::textColourId,juce::Colour(0xffc6c1b7));addAndMakeVisible(message);updateGridForPattern();
  }
  void resized()override
  {
@@ -94,15 +99,24 @@ public:
   area.removeFromTop(6);auto controls=area.removeFromTop(32);velocityLabel.setBounds(controls.removeFromLeft(62));velocity.setBounds(controls.removeFromLeft(58));controls.removeFromLeft(8);append.setBounds(controls.removeFromLeft(190));controls.removeFromLeft(10);message.setBounds(controls);
  }
 private:
+ void updateGridForPattern()
+ {
+  double latestEventBeat=-1.0,latestMetaBeat=-1.0;for(const auto& event:pattern.events)latestEventBeat=juce::jmax(latestEventBeat,event.positionBeats);for(const auto& meta:pattern.tempoAndSignature)latestMetaBeat=juce::jmax(latestMetaBeat,meta.positionBeats);
+  const double timelineEnd=juce::jmax(0.0,juce::jmax(latestEventBeat,latestMetaBeat));int numerator=4,denominator=4;double signatureBeat=0.0;for(const auto& meta:pattern.tempoAndSignature)if(meta.positionBeats<=timelineEnd&&meta.message.isTimeSignatureMetaEvent()){meta.message.getTimeSignatureInfo(numerator,denominator);signatureBeat=meta.positionBeats;}
+  if(denominator<1||16%denominator!=0){activeSteps=0;message.setText("This meter cannot be represented by the current 16-step grid.",juce::dontSendNotification);return;}const int requestedSteps=numerator*(16/denominator);if(requestedSteps<1||requestedSteps>16){activeSteps=0;message.setText("This meter needs more than 16 steps per bar; the sequencer leaves the pattern unchanged.",juce::dontSendNotification);return;}
+  activeSteps=requestedSteps;stepBeats=4.0/static_cast<double>(denominator)/4.0;barLength=static_cast<double>(numerator)*4.0/static_cast<double>(denominator);
+  if(latestEventBeat<0.0)startBeat=latestMetaBeat>=0.0?latestMetaBeat:0.0;else if(signatureBeat>latestEventBeat)startBeat=signatureBeat;else startBeat=signatureBeat+(std::floor((timelineEnd-signatureBeat)/barLength)+1.0)*barLength;
+  for(int row=0;row<8;++row)for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setEnabled(step<activeSteps);if(step>=activeSteps)button.setToggleState(false,juce::dontSendNotification);}
+  message.setText("Meter "+juce::String(numerator)+"/"+juce::String(denominator)+": "+juce::String(activeSteps)+" steps. New bar starts at beat "+juce::String(startBeat,2)+".",juce::dontSendNotification);
+ }
  void appendBar()
  {
-  const int value=velocity.getText().getIntValue();if(value<1||value>127){message.setText("Velocity must be between 1 and 127.",juce::dontSendNotification);return;}
-  double startBeat=0.0;for(const auto& event:pattern.events)startBeat=juce::jmax(startBeat,std::floor(event.positionBeats/4.0+1.0)*4.0);
+  updateGridForPattern();if(activeSteps==0)return;const int value=velocity.getText().getIntValue();if(value<1||value>127){message.setText("Velocity must be between 1 and 127.",juce::dontSendNotification);return;}
   static const DrumInstrument instruments[]{DrumInstrument::Kick,DrumInstrument::Snare,DrumInstrument::HiHat,DrumInstrument::HiHat,DrumInstrument::Clap,DrumInstrument::Tom,DrumInstrument::Ride,DrumInstrument::Crash};
-  for(int row=0;row<8;++row)for(int step=0;step<16;++step)if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState()){DrumEvent event;event.instrument=instruments[row];event.articulation=row==2?DrumArticulation::Closed:row==3?DrumArticulation::Open:DrumArticulation::Default;event.velocity=static_cast<std::uint8_t>(value);event.positionBeats=startBeat+static_cast<double>(step)*0.25;event.durationBeats=row==3?0.3:0.1;pattern.events.push_back(event);}
-  std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});message.setText("Added one 4/4 bar at beat "+juce::String(startBeat,2)+". MIDI tempo and signature events were preserved.",juce::dontSendNotification);
+  for(int row=0;row<8;++row)for(int step=0;step<activeSteps;++step)if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState()){DrumEvent event;event.instrument=instruments[row];event.articulation=row==2?DrumArticulation::Closed:row==3?DrumArticulation::Open:DrumArticulation::Default;event.velocity=static_cast<std::uint8_t>(value);event.positionBeats=startBeat+static_cast<double>(step)*stepBeats;event.durationBeats=row==3?stepBeats*1.2:stepBeats*0.5;pattern.events.push_back(event);}
+  const double appendedAt=startBeat;const int appendedSteps=activeSteps;std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});updateGridForPattern();message.setText("Added a "+juce::String(appendedSteps)+"-step bar at beat "+juce::String(appendedAt,2)+". Next bar begins at beat "+juce::String(startBeat,2)+".",juce::dontSendNotification);
  }
- MidiPattern& pattern;std::array<juce::Label,8>labels;std::array<std::array<juce::TextButton,16>,8>steps;std::array<std::unique_ptr<juce::Label>,16>stepLabels;juce::TextEditor velocity;juce::Label velocityLabel,message;juce::TextButton append;
+ MidiPattern& pattern;std::array<juce::Label,8>labels;std::array<std::array<juce::TextButton,16>,8>steps;std::array<std::unique_ptr<juce::Label>,16>stepLabels;juce::TextEditor velocity;juce::Label velocityLabel,message;juce::TextButton append;double startBeat=0.0,stepBeats=0.25,barLength=4.0;int activeSteps=16;
 };
 
 class MainComponent final : public juce::AudioAppComponent, private juce::Button::Listener, private juce::ListBoxModel, private juce::ChangeListener {
@@ -157,7 +171,7 @@ private:
  private:MainComponent&main;
  };
  class MidiPatternWindow final:public juce::DocumentWindow{
- public:explicit MidiPatternWindow(MainComponent& owner):DocumentWindow("Edit MIDI pattern",juce::Colour(0xff202226),juce::DocumentWindow::allButtons),main(owner){setUsingNativeTitleBar(true);setContentOwned(new MidiPatternEditor(main.midiPattern),true);setResizable(true,true);centreWithSize(900,360);setVisible(true);}void closeButtonPressed()override{main.midiPatternWindow.reset();}
+ public:explicit MidiPatternWindow(MainComponent& owner):DocumentWindow("Edit MIDI pattern",juce::Colour(0xff202226),juce::DocumentWindow::allButtons),main(owner){setUsingNativeTitleBar(true);setContentOwned(new MidiPatternEditor(main.midiPattern),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}void closeButtonPressed()override{main.midiPatternWindow.reset();}
  private:MainComponent& main;
  };
  class StepSequencerWindow final:public juce::DocumentWindow{

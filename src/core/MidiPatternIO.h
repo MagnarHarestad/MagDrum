@@ -16,6 +16,9 @@ struct MidiPattern
     std::vector<MidiMetaEvent> tempoAndSignature;
 };
 
+bool setPatternTempo(MidiPattern&, int beatsPerMinute, double positionBeats = 0.0);
+bool setPatternTimeSignature(MidiPattern&, int numerator, int denominator, double positionBeats = 0.0);
+
 struct MidiImportReport
 {
     std::vector<int> unmappedNotes;
