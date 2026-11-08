@@ -49,7 +49,8 @@ private:
     juce::AudioFormatManager formats;
     std::array<std::atomic<const SampleData*>, 128> sampleSlots{};
     std::array<juce::String, 128> samplePaths{};
-    std::vector<std::unique_ptr<SampleData>> ownedSamples;
+    std::array<std::unique_ptr<SampleData>, 128> ownedSamples{};
+    juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
     std::array<Voice, maxVoices> voices{};
     int nextVoice = 0;

@@ -35,9 +35,11 @@ bool MagDrumAudioProcessor::loadSampleForNote(int note, const juce::File& file)
     sample->audio.setSize(channels, sampleCount);
     if (!reader->read(sample->audio.getArrayOfWritePointers(), channels, 0, sampleCount)) return false;
 
-    const auto* stable = sample.get();
-    ownedSamples.push_back(std::move(sample)); // Keep old buffers alive while the audio thread may still use them.
-    sampleSlots[static_cast<size_t>(note)].store(stable, std::memory_order_release);
+    {
+        const juce::ScopedLock lock(sampleLock);
+        ownedSamples[static_cast<size_t>(note)] = std::move(sample);
+        sampleSlots[static_cast<size_t>(note)].store(ownedSamples[static_cast<size_t>(note)].get(), std::memory_order_release);
+    }
     {
         const juce::ScopedLock lock(stateLock);
         samplePaths[static_cast<size_t>(note)] = file.getFullPathName();
@@ -56,6 +58,8 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+    if (!sampleLock.tryEnter()) { midi.clear(); return; }
+    struct CallbackUnlock { juce::CriticalSection& lock; ~CallbackUnlock() { lock.exit(); } } unlock{sampleLock};
     juce::MidiBuffer::Iterator iterator(midi);
     juce::MidiMessage message;
     int eventSample = 0;
@@ -120,9 +124,15 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
     if (!state || !state->hasTagName("MAGDRUM_STATE")) return;
     std::array<juce::String, 128> paths;
     for (int note = 0; note < 128; ++note)
-    {
         paths[static_cast<size_t>(note)] = state->getStringAttribute("sample" + juce::String(note));
-        sampleSlots[static_cast<size_t>(note)].store(nullptr, std::memory_order_release);
+    {
+        const juce::ScopedLock lock(sampleLock);
+        for (int note = 0; note < 128; ++note)
+        {
+            sampleSlots[static_cast<size_t>(note)].store(nullptr, std::memory_order_release);
+            ownedSamples[static_cast<size_t>(note)].reset();
+        }
+        for (auto& voice : voices) voice = {};
     }
     {
         const juce::ScopedLock lock(stateLock);
