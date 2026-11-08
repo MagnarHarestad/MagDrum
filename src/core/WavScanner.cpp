@@ -1,5 +1,6 @@
 #include "WavScanner.h"
 #include "AudioClassifier.h"
+#include <juce_cryptography/juce_cryptography.h>
 #include <juce_dsp/juce_dsp.h>
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel) const
