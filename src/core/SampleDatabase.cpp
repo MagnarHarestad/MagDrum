@@ -1,4 +1,5 @@
 #include "SampleDatabase.h"
+#include "WavScanner.h"
 
 SampleDatabase::~SampleDatabase()
 {
@@ -19,8 +20,37 @@ bool SampleDatabase::open(const juce::File& file)
         connection = nullptr;
         return false;
     }
-    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0)";
-    return sqlite3_exec(connection, schema, nullptr, nullptr, nullptr) == SQLITE_OK;
+    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '')";
+    if (sqlite3_exec(connection, schema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    // Upgrade databases created by earlier MagDrum builds without losing indexed paths.
+    const char* migrations[] = {
+        "ALTER TABLE samples ADD COLUMN format TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE samples ADD COLUMN bit_depth INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN peak REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN rms REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN spectral_centroid REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN transient_strength REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''"
+    };
+    for (const auto* migration : migrations)
+        sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
+    return true;
+}
+
+bool SampleDatabase::insertSample(const ScannedSample& sample)
+{
+    if (connection == nullptr) return false;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fingerprint=excluded.fingerprint";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+    const auto path = sample.file.getFullPathName(); const auto name = sample.file.getFileName();
+    sqlite3_bind_text(statement,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,name.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_double(statement,3,sample.durationSeconds); sqlite3_bind_int(statement,4,sample.channels); sqlite3_bind_double(statement,5,sample.sampleRate);
+    sqlite3_bind_text(statement,6,sample.format.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(statement,7,sample.bitDepth);
+    sqlite3_bind_double(statement,8,sample.peak); sqlite3_bind_double(statement,9,sample.rms); sqlite3_bind_double(statement,10,sample.spectralCentroidHz);
+    sqlite3_bind_double(statement,11,sample.transientStrength); sqlite3_bind_text(statement,12,sample.fingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    const bool ok=sqlite3_step(statement)==SQLITE_DONE; sqlite3_finalize(statement); return ok;
 }
 
 bool SampleDatabase::insertSample(const juce::File& file, double duration, int channels, double rate)
