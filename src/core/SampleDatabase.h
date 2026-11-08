@@ -3,12 +3,22 @@
 #include <sqlite3.h>
 #include "MidiMapping.h"
 #include <optional>
+#include <cstdint>
 
 struct ScannedSample;
 
 struct PluginInstrumentRecord
 {
     juce::String identifier, format, name, manufacturer, category, file, version;
+};
+
+struct PluginSoundRecord
+{
+    int midiNote = 0, velocity = 100;
+    juce::String articulation, previewPath, fingerprint, category = "Unknown";
+    bool silent = false;
+    double duration = 0.0, sampleRate = 0.0, peak = 0.0, rms = 0.0, spectralCentroid = 0.0, transientStrength = 0.0, confidence = 0.0;
+    int channels = 0;
 };
 
 class SampleDatabase
@@ -23,6 +33,8 @@ public:
     bool insertSample(const ScannedSample& sample);
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
+    std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
+    bool upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound);
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);

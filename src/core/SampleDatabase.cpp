@@ -77,6 +77,53 @@ juce::Array<PluginInstrumentRecord> SampleDatabase::getPluginInstruments() const
     return result;
 }
 
+std::optional<std::int64_t> SampleDatabase::savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState)
+{
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return std::nullopt;
+    bool ok = sqlite3_prepare_v2(connection, "INSERT INTO plugin_kits(plugin_id,name,plugin_state) SELECT id,?,? FROM plugin_instruments WHERE identifier=? ON CONFLICT(plugin_id,name) DO UPDATE SET plugin_state=excluded.plugin_state,created_at=CURRENT_TIMESTAMP", -1, &statement, nullptr) == SQLITE_OK;
+    if (ok)
+    {
+        const auto name = kitName.trim(), identifier = pluginIdentifier.trim();
+        sqlite3_bind_text(statement, 1, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_blob(statement, 2, pluginState.getData(), static_cast<int>(pluginState.getSize()), SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 3, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        ok = sqlite3_step(statement) == SQLITE_DONE && sqlite3_changes(connection) > 0;
+    }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    statement = nullptr;
+    std::optional<std::int64_t> result;
+    if (ok && sqlite3_prepare_v2(connection, "SELECT k.id FROM plugin_kits k JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=?", -1, &statement, nullptr) == SQLITE_OK)
+    {
+        const auto name = kitName.trim(), identifier = pluginIdentifier.trim();
+        sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(statement) == SQLITE_ROW) result = sqlite3_column_int64(statement, 0); else ok = false;
+    }
+    else if (ok) ok = false;
+    if (statement != nullptr) sqlite3_finalize(statement);
+    sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok ? result : std::nullopt;
+}
+
+bool SampleDatabase::upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound)
+{
+    if (connection == nullptr || kitId <= 0 || sound.midiNote < 0 || sound.midiNote > 127 || sound.velocity < 1 || sound.velocity > 127 || sound.duration < 0.0 || sound.sampleRate < 0.0 || sound.channels < 0 || sound.peak < 0.0 || sound.rms < 0.0 || sound.confidence < 0.0 || sound.confidence > 1.0) return false;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "INSERT INTO plugin_sounds(kit_id,midi_note,velocity,articulation,silent,preview_path,duration,sample_rate,channels,peak,rms,spectral_centroid,transient_strength,fingerprint,category,classification_confidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kit_id,midi_note,velocity,articulation) DO UPDATE SET silent=excluded.silent,preview_path=excluded.preview_path,duration=excluded.duration,sample_rate=excluded.sample_rate,channels=excluded.channels,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fingerprint=excluded.fingerprint,category=excluded.category,classification_confidence=excluded.classification_confidence";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int64(statement, 1, kitId); sqlite3_bind_int(statement, 2, sound.midiNote); sqlite3_bind_int(statement, 3, sound.velocity);
+    sqlite3_bind_text(statement, 4, sound.articulation.toRawUTF8(), -1, SQLITE_TRANSIENT); sqlite3_bind_int(statement, 5, sound.silent ? 1 : 0);
+    sqlite3_bind_text(statement, 6, sound.previewPath.toRawUTF8(), -1, SQLITE_TRANSIENT); sqlite3_bind_double(statement, 7, sound.duration);
+    sqlite3_bind_double(statement, 8, sound.sampleRate); sqlite3_bind_int(statement, 9, sound.channels); sqlite3_bind_double(statement, 10, sound.peak);
+    sqlite3_bind_double(statement, 11, sound.rms); sqlite3_bind_double(statement, 12, sound.spectralCentroid); sqlite3_bind_double(statement, 13, sound.transientStrength);
+    sqlite3_bind_text(statement, 14, sound.fingerprint.toRawUTF8(), -1, SQLITE_TRANSIENT); sqlite3_bind_text(statement, 15, sound.category.toRawUTF8(), -1, SQLITE_TRANSIENT); sqlite3_bind_double(statement, 16, sound.confidence);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    return ok;
+}
+
 bool SampleDatabase::insertSample(const ScannedSample& sample)
 {
     if (connection == nullptr) return false;

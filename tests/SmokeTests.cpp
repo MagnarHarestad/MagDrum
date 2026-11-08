@@ -32,12 +32,23 @@ int main()
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 
     const auto dbFile=root.getChildFile("index.sqlite3");
+    const auto legacyDbFile=root.getChildFile("legacy.sqlite3");sqlite3* legacy=nullptr;
+    if(sqlite3_open(legacyDbFile.getFullPathName().toRawUTF8(),&legacy)!=SQLITE_OK)return 36;
+    const auto legacyPath=waveFile.getFullPathName();const auto legacySql="CREATE TABLE samples(path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0); INSERT INTO samples(path,name,duration,channels,sample_rate) VALUES('"+legacyPath.replace("'","''")+"','kick.wav',0.1,1,44100);";
+    const bool legacyCreated=sqlite3_exec(legacy,legacySql.toRawUTF8(),nullptr,nullptr,nullptr)==SQLITE_OK;sqlite3_close(legacy);if(!legacyCreated)return 37;
+    SampleDatabase migrated;if(!migrated.open(legacyDbFile)||migrated.getAllPaths().size()!=1||!migrated.setUserCategory(waveFile,"Kick"))return 38;
     SampleDatabase db;
     if(!db.open(dbFile))return 8;
     PluginInstrumentRecord instrument{"vst3:fixture:drums","VST3","Fixture Drums","MagDrum Test","Instrument",root.getFullPathName(),"1.0"};
     if(!db.upsertPluginInstrument(instrument)||!db.upsertPluginInstrument(instrument))return 31;
     const auto instruments=db.getPluginInstruments();
     if(instruments.size()!=1||instruments.getFirst().identifier!=instrument.identifier||instruments.getFirst().name!=instrument.name)return 32;
+    juce::MemoryBlock pluginState;const std::uint8_t stateBytes[]{1,2,3};pluginState.append(stateBytes,sizeof(stateBytes));
+    const auto kitId=db.savePluginKit(instrument.identifier,"Test Kit",pluginState);
+    if(!kitId||db.savePluginKit(instrument.identifier,"Test Kit",pluginState)!=kitId)return 33;
+    PluginSoundRecord generatedSound;generatedSound.midiNote=36;generatedSound.velocity=100;generatedSound.duration=0.4;generatedSound.sampleRate=44100;generatedSound.channels=2;generatedSound.peak=0.8;generatedSound.rms=0.2;generatedSound.category="Kick";generatedSound.confidence=0.6;
+    if(!db.upsertPluginSound(*kitId,generatedSound)||!db.upsertPluginSound(*kitId,generatedSound))return 34;
+    generatedSound.midiNote=128;if(db.upsertPluginSound(*kitId,generatedSound))return 35;
     const auto& sample=scanned.getFirst();
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 9;
     if(!db.insertSample(sample.file,sample.durationSeconds,sample.channels,sample.sampleRate))return 10;

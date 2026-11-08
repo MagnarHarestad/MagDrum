@@ -17,7 +17,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `mapping_entries` | Instrument/articulation to MIDI-note mappings within a profile. |
 | `schema_info` | Single-row schema version marker, currently version 3. |
 
-Plugin kit and captured-sound tables define the relationship shape needed by the scanner workflow, but the desktop app does not populate them yet. Plugin discovery currently persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
+Database APIs can upsert plugin instruments, named kits with opaque plugin state, and note/velocity sound captures with metadata. The desktop scanner does not populate kits or captures yet. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
 
 ## Planned additions
 
