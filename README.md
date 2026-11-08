@@ -28,6 +28,8 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure
 ```
 
+On Windows, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1` builds and tests the standalone app and VST3, then creates the Cubase ZIP under `latest-publish`. See [local platform build limits](docs/local-builds.md) for ARM64, Linux, macOS, and AUv3 requirements.
+
 See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The project license is undecided; keep this repository private until licensing is settled. No proprietary SDKs or copyrighted sample libraries are included.
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
