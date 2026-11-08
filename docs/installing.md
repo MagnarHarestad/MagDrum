@@ -4,6 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
+The currently available archive is Windows x64. The macOS and Linux sections
+describe the intended package layout; those archives are not published yet.
+
 ## Windows x64 and Cubase
 
 Unzip `MagDrum-Windows-x64.zip`, close Cubase, then run `Install-MagDrum.ps1`

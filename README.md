@@ -32,4 +32,4 @@ See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The pro
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
 
-Tagged test releases package the Windows x64 app and VST3, the macOS app with VST3/AU, and Linux x64 app/VST3. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS and Intel macOS validation are not available yet.
+The current locally verified package targets Windows x64 and contains the standalone app and VST3. The tagged workflow is configured for macOS VST3/AU and Linux VST3 archives, but GitHub Actions billing currently prevents those jobs from running. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS and Intel macOS validation are not available yet.
