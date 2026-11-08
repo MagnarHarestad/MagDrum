@@ -186,6 +186,25 @@ bool SampleDatabase::upsertPluginSound(std::int64_t kitId, const PluginSoundReco
     return ok;
 }
 
+juce::Array<PluginSoundBrowseRecord> SampleDatabase::getPluginSoundBrowseRecords() const
+{
+    juce::Array<PluginSoundBrowseRecord> result;
+    if (connection == nullptr) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT s.preview_path,p.identifier,p.name,k.name,s.midi_note,s.velocity,s.articulation FROM plugin_sounds s JOIN plugin_kits k ON k.id=s.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE s.silent=0 AND s.preview_path<>'' ORDER BY p.name COLLATE NOCASE,k.name COLLATE NOCASE,s.midi_note,s.velocity";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto text = [statement](int column) { const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column)); return value != nullptr ? juce::String::fromUTF8(value) : juce::String(); };
+        PluginSoundBrowseRecord record;
+        record.previewFile = juce::File(text(0)); record.pluginIdentifier = text(1); record.pluginName = text(2); record.kitName = text(3);
+        record.midiNote = sqlite3_column_int(statement, 4); record.velocity = sqlite3_column_int(statement, 5); record.articulation = text(6);
+        result.add(std::move(record));
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
 bool SampleDatabase::insertSample(const ScannedSample& sample)
 {
     if (connection == nullptr) return false;

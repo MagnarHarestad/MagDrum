@@ -22,6 +22,13 @@ struct PluginSoundRecord
     int channels = 0;
 };
 
+struct PluginSoundBrowseRecord
+{
+    juce::File previewFile;
+    juce::String pluginIdentifier, pluginName, kitName, articulation;
+    int midiNote = 0, velocity = 0;
+};
+
 struct SampleScanRecord
 {
     std::int64_t id = 0;
@@ -57,6 +64,7 @@ public:
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
     std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     bool upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound);
+    juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
