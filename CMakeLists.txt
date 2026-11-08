@@ -34,7 +34,7 @@ juce_add_plugin(MagDrumPlugin
     NEEDS_MIDI_INPUT TRUE
     PRODUCT_NAME "MagDrum")
 juce_generate_juce_header(MagDrumPlugin)
-target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp)
+target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp)
 target_include_directories(MagDrumPlugin PRIVATE src)
 target_compile_definitions(MagDrumPlugin PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(MagDrumPlugin PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
