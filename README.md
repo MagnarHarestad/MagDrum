@@ -27,3 +27,5 @@ ctest --test-dir build --output-on-failure
 See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The project license is undecided; keep this repository private until licensing is settled. No proprietary SDKs or copyrighted sample libraries are included.
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
+
+Tagged test releases package the Windows x64 app and VST3, the macOS app with VST3/AU, and Linux x64 app/VST3. See the [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS and Intel macOS validation are not available yet.

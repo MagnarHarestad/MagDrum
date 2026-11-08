@@ -21,25 +21,93 @@ jobs:
       - run: cmake --build build --config Release --parallel 2
       - run: ctest --test-dir build -C Release --output-on-failure
 
-  windows-vst3-package:
+  package:
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+          - os: macos-latest
+            name: macos
+          - os: ubuntu-latest
+            name: linux-x64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
-      - run: cmake --build build --config Release --target MagDrumPlugin_VST3 --parallel 2
-      - name: Package plugin and installer script
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+      - name: Build desktop app and VST3
+        run: cmake --build build --config Release --target MagDrum MagDrumPlugin_VST3 --parallel 2
+      - name: Build AU
+        if: runner.os == 'macOS'
+        run: cmake --build build --config Release --target MagDrumPlugin_AU --parallel 2
+      - name: Stage Windows package
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $plugin = Get-ChildItem build -Directory -Recurse -Filter 'MagDrum.vst3' | Select-Object -First 1
           if (-not $plugin) { throw 'MagDrum.vst3 bundle was not produced.' }
-          New-Item -ItemType Directory -Force package | Out-Null
-          Copy-Item $plugin.FullName package\MagDrum.vst3 -Recurse
-          Copy-Item installer\Install-MagDrum.ps1 package\Install-MagDrum.ps1
-          Copy-Item installer\README.txt package\README.txt
-          Compress-Archive -Path package\* -DestinationPath latest-publish\MagDrum-Windows-VST3.zip -Force
+          $app = Get-ChildItem build -File -Recurse -Filter 'MagDrum.exe' | Select-Object -First 1
+          if (-not $app) { throw 'MagDrum.exe was not produced.' }
+          New-Item -ItemType Directory -Force package\windows-x64 | Out-Null
+          Copy-Item $plugin.FullName package\windows-x64\MagDrum.vst3 -Recurse
+          Copy-Item $app.FullName package\windows-x64\
+          Copy-Item installer\Install-MagDrum.ps1 package\windows-x64\
+          Copy-Item installer\README.txt package\windows-x64\
+          Compress-Archive -Path package\windows-x64\* -DestinationPath MagDrum-Windows-x64.zip -Force
+      - name: Stage macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/macos
+          app="$(find build -type d -name 'MagDrum.app' -print -quit)"
+          vst="$(find build -type d -name 'MagDrum.vst3' -print -quit)"
+          au="$(find build -type d -name 'MagDrum.component' -print -quit)"
+          test -n "$app" && test -n "$vst" && test -n "$au"
+          ditto "$app" package/macos/MagDrum.app
+          ditto "$vst" package/macos/MagDrum.vst3
+          ditto "$au" package/macos/MagDrum.component
+          cp installer/README.txt package/macos/README.txt
+          ditto -c -k --sequesterRsrc --keepParent package/macos MagDrum-macOS.zip
+      - name: Stage Linux package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/linux-x64
+          app="$(find build -type f -executable -name 'MagDrum' -print -quit)"
+          vst="$(find build -type d -name 'MagDrum.vst3' -print -quit)"
+          test -n "$app" && test -n "$vst"
+          cp "$app" package/linux-x64/MagDrum
+          cp -a "$vst" package/linux-x64/MagDrum.vst3
+          tar -C package -czf MagDrum-Linux-x64.tar.gz linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MagDrum-${{ matrix.name }}
+          path: |
+            MagDrum-Windows-x64.zip
+            MagDrum-macOS.zip
+            MagDrum-Linux-x64.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: latest-publish/MagDrum-Windows-VST3.zip
+          files: release-assets/*
           generate_release_notes: true
           prerelease: true
