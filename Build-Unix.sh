@@ -74,9 +74,10 @@ if [[ "$host_os" == "Darwin" ]]; then
   mkdir -p "$(dirname "$archive")"
   ditto -c -k --sequesterRsrc --keepParent "$stage" "$archive"
 else
-  app="$(find "$build_dir" -type f -name MagDrum -perm -u+x -print -quit)"
+  # Avoid selecting package-local/MagDrum from a previous run when rebuilding.
+  app="$build_dir/MagDrum_artefacts/Release/MagDrum"
   vst="$(find "$build_dir" -type d -path '*/MagDrumPlugin_artefacts/Release/VST3/MagDrum.vst3' -print -quit)"
-  [[ -n "$app" && -n "$vst" ]] || { echo "Expected Linux app and VST3 bundle were not both produced." >&2; exit 1; }
+  [[ -f "$app" && -x "$app" && -n "$vst" ]] || { echo "Expected Linux app and VST3 bundle were not both produced." >&2; exit 1; }
   cp "$app" "$stage/MagDrum"
   cp -a "$vst" "$stage/MagDrum.vst3"
   cp "$repo_root/installer/README.txt" "$stage/README.txt"
