@@ -15,14 +15,18 @@ public:
 
 private:
     void buttonClicked(juce::Button*) override;
+    void updateLayerSummary();
     MagDrumAudioProcessor& processor;
     SampleDatabase database;
     juce::Array<juce::File> indexedSamples;
     juce::TextEditor sampleSearch;
     juce::TextButton searchButton{"Search index"};
     juce::TextButton assignButton{"Assign selected"};
+    juce::TextButton clearButton{"Clear note layers"};
     juce::ListBox indexedList;
     juce::ComboBox noteSelect;
+    juce::TextEditor velocityRange;
+    juce::Label layerSummary;
     juce::TextButton loadButton{"Load WAV for note"};
     juce::Label status;
     std::unique_ptr<juce::FileChooser> chooser;

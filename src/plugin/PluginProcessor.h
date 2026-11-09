@@ -7,6 +7,13 @@
 class MagDrumAudioProcessor final : public juce::AudioProcessor
 {
 public:
+    struct SampleLayerInfo
+    {
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
+        juce::String path;
+    };
+
     MagDrumAudioProcessor();
     void prepareToPlay(double, int) override;
     void releaseResources() override;
@@ -28,6 +35,9 @@ public:
     void setStateInformation(const void*, int) override;
 
     bool loadSampleForNote(int midiNote, const juce::File&);
+    bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&);
+    bool clearSamplesForNote(int midiNote);
+    std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
     juce::String getSamplePathForNote(int midiNote) const;
 
 private:
@@ -35,6 +45,8 @@ private:
     {
         juce::AudioBuffer<float> audio;
         double sampleRate = 44100.0;
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
     };
     struct Voice
     {
@@ -45,11 +57,12 @@ private:
     };
 
     static constexpr int maxVoices = 32;
+    static constexpr int maxVelocityLayers = 8;
     double outputSampleRate = 44100.0;
     juce::AudioFormatManager formats;
-    std::array<std::atomic<const SampleData*>, 128> sampleSlots{};
-    std::array<juce::String, 128> samplePaths{};
-    std::array<std::unique_ptr<SampleData>, 128> ownedSamples{};
+    std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
+    std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
+    std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
     std::array<Voice, maxVoices> voices{};

@@ -5,12 +5,12 @@
 
 namespace
 {
-bool writeFixture(const juce::File& file)
+bool writeFixture(const juce::File& file, float amplitude = 0.25f)
 {
     constexpr double sampleRate = 48000.0;
     juce::AudioBuffer<float> audio(1, 960);
     for (int sample = 0; sample < audio.getNumSamples(); ++sample)
-        audio.setSample(0, sample, static_cast<float>(0.25 * std::sin(2.0 * juce::MathConstants<double>::pi * 220.0 * sample / sampleRate)));
+        audio.setSample(0, sample, static_cast<float>(amplitude * std::sin(2.0 * juce::MathConstants<double>::pi * 220.0 * sample / sampleRate)));
 
     juce::WavAudioFormat format;
     std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());
@@ -99,12 +99,38 @@ int main()
                   << ", ratio=" << (fullVelocityPeak > 0.0 ? lowVelocityPeak / fullVelocityPeak : 0.0) << '\n';
         return 13;
     }
+
+    const auto softLayer = root.getChildFile("kick-soft.wav");
+    const auto hardLayer = root.getChildFile("kick-hard.wav");
+    if (!writeFixture(softLayer, 0.10f) || !writeFixture(hardLayer, 0.22f)) return 15;
+    MagDrumAudioProcessor layered;
+    if (!layered.loadSampleForVelocityRange(36, 64, 127, hardLayer)
+        || !layered.loadSampleForVelocityRange(36, 1, 63, softLayer)
+        || layered.loadSampleForVelocityRange(36, 50, 80, sample)
+        || layered.loadSampleForNote(36, sample)
+        || layered.getSamplePathForNote(36) != softLayer.getFullPathName()) return 16;
+    juce::MemoryBlock layeredState;
+    layered.getStateInformation(layeredState);
+    MagDrumAudioProcessor restoredLayers;
+    restoredLayers.setStateInformation(layeredState.getData(), static_cast<int>(layeredState.getSize()));
+    const auto restoredLayerInfo = restoredLayers.getSampleLayersForNote(36);
+    if (restoredLayers.getSamplePathForNote(36) != softLayer.getFullPathName() || restoredLayerInfo.size() != 2
+        || restoredLayerInfo[0].minimumVelocity != 1 || restoredLayerInfo[0].maximumVelocity != 63
+        || restoredLayerInfo[1].minimumVelocity != 64 || restoredLayerInfo[1].maximumVelocity != 127) return 17;
+    restoredLayers.prepareToPlay(44100.0, 128);
+    const double softPeak = renderPeak(restoredLayers, 36, 32);
+    const double hardPeak = renderPeak(restoredLayers, 36, 96);
+    if (softPeak <= 0.0 || hardPeak <= softPeak * 3.0) return 18;
+    if (!restoredLayers.clearSamplesForNote(36) || restoredLayers.clearSamplesForNote(36)
+        || restoredLayers.getSamplePathForNote(36).isNotEmpty() || renderPeak(restoredLayers, 36, 96) != 0.0) return 19;
+
     MagDrumAudioProcessor emptyNote;
     emptyNote.prepareToPlay(44100.0, 128);
     if (renderPeak(emptyNote, 37, 100) != 0.0) return 14;
 
     restored.releaseResources();
     lowVelocity.releaseResources();
+    restoredLayers.releaseResources();
     emptyNote.releaseResources();
     root.deleteRecursively();
     std::cout << "Scoped file copy, cancellation, MIDI playback, velocity and empty-note checks passed.\n";
