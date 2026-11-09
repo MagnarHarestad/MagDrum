@@ -1,3 +1,4 @@
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'None')]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+-test\.[0-9]+$')]
@@ -24,8 +25,26 @@ $knownAssets = @(
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw 'GitHub CLI (gh) is required. Authenticate with `gh auth login` first.'
 }
-& gh auth status
-if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI is not authenticated.' }
+$previousGhToken = $env:GH_TOKEN
+$usingGitCredential = $false
+try {
+    & gh auth status
+    if ($LASTEXITCODE -ne 0) {
+        $credentialInput = @('protocol=https', 'host=github.com', 'path=MagnarHarestad/MagDrum', '')
+        $credentialLines = $credentialInput | & git credential fill 2>$null
+        $credential = @{}
+        foreach ($line in $credentialLines) {
+            $separator = $line.IndexOf('=')
+            if ($separator -gt 0) { $credential[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+        }
+        if (-not $credential.ContainsKey('password') -or [string]::IsNullOrWhiteSpace($credential['password'])) {
+            throw 'GitHub CLI authentication failed and Git Credential Manager has no credential for this repository. Run `gh auth login -h github.com`.'
+        }
+        $env:GH_TOKEN = $credential['password']
+        $usingGitCredential = $true
+        & gh auth status
+        if ($LASTEXITCODE -ne 0) { throw 'GitHub rejected the credential Git Credential Manager used for the repository push.' }
+    }
 
 $releaseAssets = [System.Collections.Generic.List[string]]::new()
 $checksums = [System.Collections.Generic.List[string]]::new()
@@ -72,7 +91,16 @@ $existingTags = & gh release list --limit 100 --json tagName --jq '.[].tagName'
 if ($LASTEXITCODE -ne 0) { throw 'Could not query existing GitHub releases.' }
 if ($existingTags -contains $Tag) { throw "Release $Tag already exists." }
 
-& gh release create $Tag @releaseAssets --title "MagDrum $Tag" --notes-file $notesPath --prerelease --target main
-if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed for $Tag." }
+if ($PSCmdlet.ShouldProcess("GitHub release $Tag", "Upload $($includedNames.Count) local package(s)")) {
+    & gh release create $Tag @releaseAssets --title "MagDrum $Tag" --notes-file $notesPath --prerelease --target main
+    if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed for $Tag." }
 
-Write-Host "Created prerelease $Tag with $($includedNames.Count) platform package(s)."
+    Write-Host "Created prerelease $Tag with $($includedNames.Count) platform package(s)."
+}
+}
+finally {
+    if ($usingGitCredential) {
+        if ($null -eq $previousGhToken) { Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue }
+        else { $env:GH_TOKEN = $previousGhToken }
+    }
+}

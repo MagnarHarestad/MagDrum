@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The currently available archive is the [Windows x64 test build v0.1.1-test.37](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.37). It was built and tested locally without GitHub Actions. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The currently available archive is the [Windows x64 test build v0.1.1-test.38](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.38). It was built and tested locally without GitHub Actions. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
-For the newest local Cubase test, use `latest-publish/MagDrum-Windows-x64.zip` in the repository. It is newer than v0.1.1-test.37 and has SHA-256 `c235be49f50f9acb66fe1efd0cfc22e7733a6f3aa8c1278e342977f8ccf00258`; a GitHub release upload is not required to install it.
+The local `latest-publish/MagDrum-Windows-x64.zip` is the same archive as v0.1.1-test.38 and has SHA-256 `c235be49f50f9acb66fe1efd0cfc22e7733a6f3aa8c1278e342977f8ccf00258`.
 
 ## Windows x64 and Cubase
 
