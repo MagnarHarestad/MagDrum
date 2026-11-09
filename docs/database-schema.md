@@ -2,7 +2,7 @@
 
 MagDrum stores the local library in `samples.sqlite3` under the user's application data directory. The database is local to the user and is not synchronized or uploaded.
 
-The database evolves with additive migrations. `schema_info.version` records the current schema level (version 12); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns or tables are added. Rows without acoustic fingerprint version 1 or the current sample analysis version are rescanned once so updated measurements are populated.
+The database evolves with additive migrations. `schema_info.version` records the current schema level (version 12); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns or tables are added. Rows without acoustic fingerprint version 1 or the current sample analysis version (version 3) are rescanned once so updated measurements and classifier tags are populated.
 
 ## Current tables
 
