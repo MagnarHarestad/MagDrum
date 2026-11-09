@@ -395,6 +395,9 @@ int main(int argc,char** argv)
     if(!AudioClassifier{}.classify(brightFeatureSample).tags.contains("Bright"))return 194;
     auto loudShortSample=kickLike;loudShortSample.durationSeconds=0.1;loudShortSample.rms=0.3;loudShortSample.bitDepth=0;
     if(!AudioClassifier{}.classify(loudShortSample).tags.contains("Short"))return 195;
+    auto descriptiveTagSample=kickLike;descriptiveTagSample.file=juce::File("Distorted_909_Snare.wav");
+    const auto descriptiveTags=AudioClassifier{}.classify(descriptiveTagSample);
+    if(descriptiveTags.category!="Snare"||!descriptiveTags.tags.contains("Distorted")||!descriptiveTags.tags.contains("909"))return 196;
     auto sustainedTone=scanned.getFirst();sustainedTone.file=juce::File("tone.wav");
     if(AudioClassifier{}.classify(sustainedTone).category!="Unknown")return 138;
     auto lowCentroidNoise=kickLike;lowCentroidNoise.transientStrength=.02;lowCentroidNoise.fundamentalHz=0;lowCentroidNoise.pitchConfidence=0;

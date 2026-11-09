@@ -41,7 +41,8 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"deep", "sub"})) addTag("Deep");
     if (has({"bright", "crisp"})) addTag("Bright");
     if (has({"dark", "muted"})) addTag("Dark");
-    if (has({"distort", "saturat", "fuzz", "overdrive"})) addTag("Distorted");
+    if (has({"distort", "distorted", "distortion", "distortions", "saturate", "saturated",
+             "saturation", "fuzz", "fuzzy", "overdrive", "overdriven"})) addTag("Distorted");
 
     if (sample.durationSeconds <= 0.0 || sample.rms <= 0.00001 || sample.peak <= 0.0001)
         return out;
