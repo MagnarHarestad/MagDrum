@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $source = Join-Path $PSScriptRoot 'MagDrum.vst3'
 if (-not (Test-Path $source)) { throw 'MagDrum.vst3 was not found beside this installer.' }
 $pluginPrincipal = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+$systemWideDestination = Join-Path $env:CommonProgramFiles 'VST3\MagDrum.vst3'
 if ($AllUsers) {
     if (-not $pluginPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Run PowerShell as administrator to install for all users, or omit -AllUsers to install for the current user.'
@@ -14,6 +15,9 @@ if ($AllUsers) {
     $destination = Join-Path $env:CommonProgramFiles 'VST3\MagDrum.vst3'
 }
 else {
+    if (Test-Path -LiteralPath $systemWideDestination) {
+        Write-Warning "A system-wide MagDrum VST3 already exists at '$systemWideDestination'. A per-user install creates a second copy. To replace the system-wide copy and keep a backup, run PowerShell as administrator and use Install-MagDrum.ps1 -AllUsers."
+    }
     $destination = Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3\MagDrum.vst3'
 }
 $staging = "$destination.installing-$([guid]::NewGuid().ToString('N'))"

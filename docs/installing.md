@@ -4,18 +4,20 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published archive is the [Windows x64 test build v0.1.1-test.55](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.55). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The latest published archive is the [Windows x64 test build v0.1.1-test.56](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.56). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
-The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `59580cf353723556bb1deb842f980f2aa728388d343fdf6c55fb604700462072`, matching the v0.1.1-test.55 release asset. It contains the standalone app, VST3 bundle and installer. The previous v0.1.1-test.54 package had SHA-256 `15074ae69aceea5cfb4bcc5e80501f632b443fac224f6f69acb03cf8bd27d3c3`.
+The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `f6794b7960c59d70c5b43ccd1a5703def7c2e362be7543172c9a20aee9d0505f`, matching the v0.1.1-test.56 release asset. It contains the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.55 package had SHA-256 `59580cf353723556bb1deb842f980f2aa728388d343fdf6c55fb604700462072`.
 
 ## Windows x64 and Cubase
 
 Unzip `MagDrum-Windows-x64.zip`, close Cubase, then run `Install-MagDrum.ps1`
 from PowerShell. It installs into your per-user VST3 folder without administrator
-access. For an all-users install, run PowerShell as administrator and add
-`-AllUsers`. Start Cubase 15 and rescan plugins
-in Studio > VST Plug-in Manager. Add MagDrum as an instrument track. The
-archive also contains the standalone sample library app.
+access. If a system-wide MagDrum VST3 is already installed, the installer warns
+that Cubase may discover both copies. To update the system-wide copy, run
+PowerShell as administrator and add `-AllUsers`; the installer asks before
+replacing it and keeps a backup. Start Cubase 15 and rescan plugins in Studio >
+VST Plug-in Manager. Add MagDrum as an instrument track. The archive also
+contains the standalone sample library app.
 
 ## Windows ARM64
 
