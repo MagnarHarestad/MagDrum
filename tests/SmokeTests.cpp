@@ -11,10 +11,12 @@
 #include "core/PluginVelocityLayerAnalyzer.h"
 #include "core/PluginRoundRobinAnalyzer.h"
 #include "core/SampleFeatureFilter.h"
+#include "core/SampleClassificationReview.h"
 #include "core/StructuredLogger.h"
 #include <iostream>
 #include <cstring>
 #include <memory>
+#include <limits>
 #include <utility>
 
 class SyntheticInstrument final : public juce::AudioProcessor
@@ -74,6 +76,7 @@ private:
 
 int main()
 {
+    if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;
     if(!matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.099,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.1,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.1,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::mediumSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::longSample,2.0,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,999.9)||matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::midBrightness,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,3000.0)||matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,0.0))return 110;
     const auto logLine=StructuredLogger::formatEvent(StructuredLogger::Level::warning,"test.event",{{"detail","quoted \"text\"\nline"}},"2026-01-02T03:04:05Z");const auto parsedLog=juce::JSON::parse(logLine);if(!parsedLog.isObject()||parsedLog.getDynamicObject()->getProperty("level").toString()!="warning"||parsedLog.getDynamicObject()->getProperty("event").toString()!="test.event"||parsedLog.getDynamicObject()->getProperty("detail").toString()!="quoted \"text\"\nline")return 114;
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
@@ -159,6 +162,7 @@ int main()
     const auto& sample=scanned.getFirst();
     if(!db.insertSample(sample))return 9;
     if(!db.insertSample(sample))return 10;
+    const auto initialBrowseRecords=db.getSampleBrowseRecords();if(initialBrowseRecords.size()!=1||std::abs(initialBrowseRecords.getFirst().classificationConfidence-sample.classificationConfidence)>0.0001||initialBrowseRecords.getFirst().manuallyClassified||needsClassificationReview(initialBrowseRecords.getFirst().manuallyClassified,initialBrowseRecords.getFirst().category,initialBrowseRecords.getFirst().classificationConfidence))return 129;
     const auto folderSourceId=db.ensureSampleSource("folder",root.getFullPathName(),root.getFileName(),root.getFullPathName());if(!folderSourceId||!db.assignSamplesToSource(root,*folderSourceId))return 107;const auto pluginSourceId=db.ensureSampleSource("plugin",instrument.identifier,instrument.name);if(!pluginSourceId||db.getSampleSources().size()!=2)return 108;
     const auto browseRecords=db.getSampleBrowseRecords();if(browseRecords.size()!=1||browseRecords.getFirst().file!=sample.file||browseRecords.getFirst().durationSeconds<=0.0||browseRecords.getFirst().category.isEmpty()||browseRecords.getFirst().sourceType!="folder"||browseRecords.getFirst().sourceName!=root.getFileName())return 68;
     const auto pluginBrowse=db.getPluginSoundBrowseRecords();if(pluginBrowse.size()!=1||pluginBrowse.getFirst().previewFile!=sample.file||pluginBrowse.getFirst().pluginName!=instrument.name||pluginBrowse.getFirst().kitName!="Test Kit"||pluginBrowse.getFirst().midiNote!=36||pluginBrowse.getFirst().velocity!=100)return 69;
@@ -193,6 +197,16 @@ int main()
     const AudioClassifier invalidModelClassifier(std::make_shared<FixtureClassificationModel>("unsupported",1.2));
     if(invalidModelClassifier.classify(kickLike).category!="Unknown")return 55;
     if(!db.setUserCategory(waveFile,"Snare"))return 14;
+    const auto correctedBrowse=db.getSampleBrowseRecords();
+    bool correctedSampleIsManual=false;
+    for(const auto& record:correctedBrowse)
+        if(record.file==waveFile)
+        {
+            correctedSampleIsManual=record.manuallyClassified&&
+                !needsClassificationReview(record.manuallyClassified,record.category,record.classificationConfidence);
+            break;
+        }
+    if(!correctedSampleIsManual)return 130;
     if(db.getFirstSampleForCategory("Snare")!=std::optional<juce::File>(waveFile))return 74;
     if(sqlite3_open(dbFile.getFullPathName().toRawUTF8(),&legacy)!=SQLITE_OK)return 111;sqlite3_stmt* correctedPluginSound=nullptr;if(sqlite3_prepare_v2(legacy,"SELECT count(*) FROM plugin_sounds WHERE preview_path=? AND category='Snare'",-1,&correctedPluginSound,nullptr)!=SQLITE_OK)return 112;sqlite3_bind_text(correctedPluginSound,1,waveFile.getFullPathName().toRawUTF8(),-1,SQLITE_TRANSIENT);const bool pluginCategoryCorrected=sqlite3_step(correctedPluginSound)==SQLITE_ROW&&sqlite3_column_int(correctedPluginSound,0)==1;sqlite3_finalize(correctedPluginSound);sqlite3_close(legacy);if(!pluginCategoryCorrected)return 113;
     ScannedSample related=sample; related.file=root.getChildFile("related.wav"); related.durationSeconds+=0.02;

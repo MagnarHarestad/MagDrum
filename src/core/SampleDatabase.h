@@ -61,6 +61,8 @@ struct SampleBrowseRecord
     juce::File file;
     juce::String category, sourceType, sourceName, sourceIdentifier;
     double durationSeconds = 0.0, brightnessHz = 0.0;
+    double classificationConfidence = 0.0;
+    bool manuallyClassified = false;
 };
 
 struct SampleScanRecord

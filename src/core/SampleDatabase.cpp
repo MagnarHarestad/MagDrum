@@ -848,7 +848,7 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
     juce::Array<SampleBrowseRecord> records;
     if (connection == nullptr) return records;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,'') FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id ORDER BY s.name COLLATE NOCASE";
+    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>'') FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id ORDER BY s.name COLLATE NOCASE";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
     while (sqlite3_step(statement) == SQLITE_ROW)
     {
@@ -866,6 +866,8 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
         record.sourceIdentifier = sourceIdentifier != nullptr ? juce::String::fromUTF8(sourceIdentifier) : juce::String();
         record.durationSeconds = sqlite3_column_double(statement, 2);
         record.brightnessHz = sqlite3_column_double(statement, 3);
+        record.classificationConfidence = sqlite3_column_double(statement, 7);
+        record.manuallyClassified = sqlite3_column_int(statement, 8) != 0;
         records.add(std::move(record));
     }
     sqlite3_finalize(statement);

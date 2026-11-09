@@ -12,11 +12,11 @@ This repository contains a JUCE/CMake desktop app, background WAV/AIFF/FLAC scan
 
 Sample-folder scans are recorded in history and use saved file size/modification time to skip unchanged files on later scans. An interrupted scan is marked on the next app launch; selecting the same folder again indexes missing or changed files.
 
-The browser filters by sample folder, scanned instrument, kit, category, measured duration and spectral-brightness bands, and text; it sorts by name, duration or brightness. Plugin previews show their MIDI note, velocity and articulation in the shared list. It also shows the selected waveform and can compare two waveforms side by side. Exact duplicates can be listed by matching file hashes. A separate near-duplicate search compares normalized spectral fingerprints from four points in each sound, along with duration and audio features. Results are listening candidates, not proof that two recordings sound identical.
+The browser filters by sample folder, scanned instrument, kit, category, measured duration, spectral-brightness bands, classification confidence and text; it sorts by name, duration or brightness. A review filter shows uncorrected Unknown or below-75% heuristic classifications, and each row shows the confidence score or a manual marker. This threshold is a triage aid, not a calibrated probability. Plugin previews show their MIDI note, velocity and articulation in the shared list. It also shows the selected waveform and can compare two waveforms side by side. Exact duplicates can be listed by matching file hashes. A separate near-duplicate search compares normalized spectral fingerprints from four points in each sound, along with duration and audio features. Results are listening candidates, not proof that two recordings sound identical.
 
 See [the plugin scanning guide](docs/plugin-scanning.md) for the manual kit capture workflow, VST3 preset loading and their current limits.
 
-The classifier is an early heuristic. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against a labeled sound corpus. Third-party plugin scanning still runs in-process, so a crashing plugin can terminate MagDrum. AUv3 and iOS remain roadmap work.
+The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Third-party plugin scanning still runs in-process, so a crashing plugin can terminate MagDrum. AUv3 and iOS remain roadmap work.
 
 ## Build
 
