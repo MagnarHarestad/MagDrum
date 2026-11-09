@@ -205,9 +205,13 @@ int main()
     if(paths.size()!=1||paths.getFirst()!=waveFile)return 11;
     if(db.searchPaths("kick",10).size()!=1||!db.searchPaths("missing",10).isEmpty())return 30;
     if(!db.insertSample(gainSample)||!db.insertSample(pitchSample))return 62;
-    ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.08;
+    ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.12; kickLike.fundamentalHz=90; kickLike.pitchConfidence=.8;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
+    auto sustainedTone=scanned.getFirst();sustainedTone.file=juce::File("tone.wav");
+    if(AudioClassifier{}.classify(sustainedTone).category!="Unknown")return 138;
+    auto lowCentroidNoise=kickLike;lowCentroidNoise.transientStrength=.02;lowCentroidNoise.fundamentalHz=0;lowCentroidNoise.pitchConfidence=0;
+    if(AudioClassifier{}.classify(lowCentroidNoise).category!="Unknown")return 139;
     ScannedSample namedHat=kickLike;namedHat.file=juce::File("808_Open_HiHat_deep.wav");
     const auto namedPrediction=AudioClassifier{}.classify(namedHat);
     if(namedPrediction.category!="Open hi-hat"||namedPrediction.confidence<0.9||!namedPrediction.tags.contains("808")||!namedPrediction.tags.contains("Electronic")||!namedPrediction.tags.contains("Deep"))return 64;

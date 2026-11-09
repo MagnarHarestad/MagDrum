@@ -66,7 +66,9 @@ DrumClassification classify(const ScannedSample& sample) const override
 
     // Classification intentionally stays Unknown when the available measurements
     // do not separate likely drum families with useful confidence.
-    if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1800.0 && sample.durationSeconds < 1.2)
+    const bool hasLowKickPitch = sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 220.0;
+    if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1300.0
+        && sample.durationSeconds < 1.2 && transientRatio > 0.45 && hasLowKickPitch)
     {
         out.category = "Kick";
         out.confidence = juce::jlimit(0.35, 0.72, 0.62 - sample.spectralCentroidHz / 12000.0 + (transientRatio > 1.0 ? 0.04 : 0.0));
