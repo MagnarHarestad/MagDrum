@@ -29,11 +29,25 @@ struct PluginVelocityLayerBoundary
     int algorithmVersion = 1;
 };
 
+struct PluginRoundRobinTake
+{
+    int midiNote = 0, velocity = 100, takeIndex = 1;
+    juce::String previewPath, acousticFingerprint;
+    bool silent = false;
+};
+
+struct PluginRoundRobinCandidate
+{
+    int midiNote = 0, velocity = 100, takeCount = 0, distinctVariants = 0;
+    double maximumSpectralDistance = 0.0;
+    int algorithmVersion = 1;
+};
+
 struct PluginSoundBrowseRecord
 {
     juce::File previewFile;
     juce::String pluginIdentifier, pluginName, kitName, articulation;
-    int midiNote = 0, velocity = 0;
+    int midiNote = 0, velocity = 0, takeIndex = 1;
 };
 
 struct SampleBrowseRecord
@@ -81,6 +95,9 @@ public:
     bool replacePluginVelocityLayerCandidates(std::int64_t kitId, const std::vector<PluginVelocityLayerBoundary>& candidates);
     std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(std::int64_t kitId) const;
     std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(const juce::String& pluginIdentifier, const juce::String& kitName) const;
+    bool replacePluginRoundRobinData(std::int64_t kitId, const std::vector<PluginRoundRobinTake>& takes,
+                                     const std::vector<PluginRoundRobinCandidate>& candidates);
+    std::vector<PluginRoundRobinCandidate> getPluginRoundRobinCandidates(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;

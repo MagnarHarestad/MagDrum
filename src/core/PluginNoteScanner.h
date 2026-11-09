@@ -9,6 +9,7 @@ struct PluginNoteScanSettings
     double sampleRate = 44100.0;
     int blockSize = 512;
     std::vector<int> velocityLevels { 100 };
+    int repeatCount = 1;
     double noteDurationSeconds = 0.25;
     double releaseSeconds = 0.5;
     double captureLengthSeconds = 0.75;
@@ -19,6 +20,7 @@ struct PluginNoteCapture
 {
     int midiNote = 0;
     int velocity = 100;
+    int takeIndex = 1;
     juce::AudioBuffer<float> audio;
     double peak = 0.0;
     double rms = 0.0;

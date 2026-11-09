@@ -11,6 +11,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     PluginNoteScanResult result;
     if (!std::isfinite(settings.sampleRate) || settings.sampleRate < 8000.0 || settings.sampleRate > 192000.0
         || settings.blockSize < 16 || settings.blockSize > 8192 || settings.velocityLevels.empty() || settings.velocityLevels.size() > 16
+        || settings.repeatCount < 1 || settings.repeatCount > 8
         || !std::isfinite(settings.noteDurationSeconds) || settings.noteDurationSeconds <= 0.0 || settings.noteDurationSeconds > 10.0
         || !std::isfinite(settings.releaseSeconds) || settings.releaseSeconds < 0.0 || settings.releaseSeconds > 10.0
         || !std::isfinite(settings.captureLengthSeconds) || settings.captureLengthSeconds <= 0.0 || settings.captureLengthSeconds > 20.0
@@ -44,6 +45,13 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     const int captureSamples = static_cast<int>(captureSamples64);
     const int inputChannels = juce::jlimit(0, 8, plugin.getTotalNumInputChannels());
     const int processChannels = juce::jmax(1, juce::jmax(inputChannels, outputChannels));
+    const auto totalCaptureCount = static_cast<juce::int64>(128) * static_cast<juce::int64>(settings.velocityLevels.size()) * settings.repeatCount;
+    const auto estimatedBytes = totalCaptureCount * captureSamples * outputChannels * static_cast<int>(sizeof(float));
+    if (estimatedBytes > 512 * 1024 * 1024)
+    {
+        result.error = "The requested scan would require more than 512 MiB of capture memory. Reduce velocity levels, repeats, or capture length.";
+        return result;
+    }
 
     juce::MemoryBlock previousState;
     plugin.getStateInformation(previousState);
@@ -68,7 +76,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     {
         plugin.prepareToPlay(settings.sampleRate, settings.blockSize);
         prepared = true;
-        const int totalScans = 128 * static_cast<int>(settings.velocityLevels.size());
+        const int totalScans = static_cast<int>(totalCaptureCount);
         result.notes.reserve(static_cast<size_t>(totalScans));
         int completed = 0;
 
@@ -83,48 +91,60 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                 }
 
                 plugin.reset();
-                PluginNoteCapture capture;
-                capture.midiNote = note;
-                capture.velocity = velocity;
-                capture.audio.setSize(outputChannels, captureSamples, false, true, false);
-
-                juce::AudioBuffer<float> block(processChannels, settings.blockSize);
-                juce::MidiBuffer midi;
-                double sumSquares = 0.0;
-                juce::int64 measuredSamples = 0;
-
-                for (int offset = 0; offset < captureSamples; offset += settings.blockSize)
+                for (int take = 1; take <= settings.repeatCount; ++take)
                 {
-                    const int count = juce::jmin(settings.blockSize, captureSamples - offset);
-                    block.clear();
-                    midi.clear();
-                    if (offset == 0)
-                        midi.addEvent(juce::MidiMessage::noteOn(1, note, static_cast<juce::uint8>(velocity)), 0);
-                    if (noteSamples >= offset && noteSamples < offset + count)
-                        midi.addEvent(juce::MidiMessage::noteOff(1, note), static_cast<int>(noteSamples - offset));
-
-                    plugin.processBlock(block, midi);
-                    for (int channel = 0; channel < outputChannels; ++channel)
+                    if (shouldCancel && shouldCancel())
                     {
-                        const float* source = block.getReadPointer(channel);
-                        float* destination = capture.audio.getWritePointer(channel) + offset;
-                        for (int i = 0; i < count; ++i)
-                        {
-                            const double value = std::isfinite(source[i]) ? source[i] : 0.0;
-                            capture.peak = juce::jmax(capture.peak, std::abs(value));
-                            sumSquares += value * value;
-                            destination[i] = static_cast<float>(value);
-                        }
-                        measuredSamples += count;
+                        result.cancelled = true;
+                        break;
                     }
-                }
 
-                capture.rms = measuredSamples > 0 ? std::sqrt(sumSquares / static_cast<double>(measuredSamples)) : 0.0;
-                capture.silent = capture.peak <= settings.silencePeakThreshold;
-                result.notes.push_back(std::move(capture));
-                ++completed;
-                if (progress)
-                    progress(completed, totalScans, note, velocity);
+                    PluginNoteCapture capture;
+                    capture.midiNote = note;
+                    capture.velocity = velocity;
+                    capture.takeIndex = take;
+                    capture.audio.setSize(outputChannels, captureSamples, false, true, false);
+
+                    juce::AudioBuffer<float> block(processChannels, settings.blockSize);
+                    juce::MidiBuffer midi;
+                    double sumSquares = 0.0;
+                    juce::int64 measuredSamples = 0;
+
+                    for (int offset = 0; offset < captureSamples; offset += settings.blockSize)
+                    {
+                        const int count = juce::jmin(settings.blockSize, captureSamples - offset);
+                        block.clear();
+                        midi.clear();
+                        if (offset == 0)
+                            midi.addEvent(juce::MidiMessage::noteOn(1, note, static_cast<juce::uint8>(velocity)), 0);
+                        if (noteSamples >= offset && noteSamples < offset + count)
+                            midi.addEvent(juce::MidiMessage::noteOff(1, note), static_cast<int>(noteSamples - offset));
+
+                        plugin.processBlock(block, midi);
+                        for (int channel = 0; channel < outputChannels; ++channel)
+                        {
+                            const float* source = block.getReadPointer(channel);
+                            float* destination = capture.audio.getWritePointer(channel) + offset;
+                            for (int i = 0; i < count; ++i)
+                            {
+                                const double value = std::isfinite(source[i]) ? source[i] : 0.0;
+                                capture.peak = juce::jmax(capture.peak, std::abs(value));
+                                sumSquares += value * value;
+                                destination[i] = static_cast<float>(value);
+                            }
+                            measuredSamples += count;
+                        }
+                    }
+
+                    capture.rms = measuredSamples > 0 ? std::sqrt(sumSquares / static_cast<double>(measuredSamples)) : 0.0;
+                    capture.silent = capture.peak <= settings.silencePeakThreshold;
+                    result.notes.push_back(std::move(capture));
+                    ++completed;
+                    if (progress)
+                        progress(completed, totalScans, note, velocity);
+                }
+                if (result.cancelled)
+                    break;
             }
             if (result.cancelled)
                 break;

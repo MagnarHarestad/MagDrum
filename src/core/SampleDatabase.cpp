@@ -77,8 +77,11 @@ bool SampleDatabase::open(const juce::File& file)
         sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
     if (sqlite3_exec(connection, "CREATE INDEX IF NOT EXISTS samples_fingerprint ON samples(fingerprint); CREATE INDEX IF NOT EXISTS samples_duration ON samples(duration)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,8) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity); CREATE TABLE IF NOT EXISTS plugin_velocity_layer_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),lower_velocity INTEGER NOT NULL CHECK(lower_velocity BETWEEN 1 AND 127),upper_velocity INTEGER NOT NULL CHECK(upper_velocity BETWEEN 1 AND 127),spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,lower_velocity,upper_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
+    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,9) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity); CREATE TABLE IF NOT EXISTS plugin_velocity_layer_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),lower_velocity INTEGER NOT NULL CHECK(lower_velocity BETWEEN 1 AND 127),upper_velocity INTEGER NOT NULL CHECK(upper_velocity BETWEEN 1 AND 127),spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,lower_velocity,upper_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, pluginSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    const char* roundRobinSchema = "UPDATE schema_info SET version=max(version,9) WHERE singleton=1; CREATE TABLE IF NOT EXISTS plugin_round_robin_takes(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_index INTEGER NOT NULL CHECK(take_index BETWEEN 1 AND 8),silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',acoustic_fingerprint TEXT NOT NULL DEFAULT '',PRIMARY KEY(kit_id,midi_note,velocity,take_index),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_round_robin_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_count INTEGER NOT NULL CHECK(take_count>=2),distinct_variants INTEGER NOT NULL CHECK(distinct_variants BETWEEN 2 AND take_count),maximum_spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
+    if (sqlite3_exec(connection, roundRobinSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
@@ -266,19 +269,108 @@ std::vector<PluginVelocityLayerBoundary> SampleDatabase::getPluginVelocityLayerC
     return result;
 }
 
+bool SampleDatabase::replacePluginRoundRobinData(
+    std::int64_t kitId, const std::vector<PluginRoundRobinTake>& takes,
+    const std::vector<PluginRoundRobinCandidate>& candidates)
+{
+    if (connection == nullptr || kitId <= 0) return false;
+    for (const auto& take : takes)
+        if (take.midiNote < 0 || take.midiNote > 127 || take.velocity < 1 || take.velocity > 127
+            || take.takeIndex < 1 || take.takeIndex > 8
+            || (!take.acousticFingerprint.isEmpty() && take.acousticFingerprint.length() != 128))
+            return false;
+    for (const auto& candidate : candidates)
+        if (candidate.midiNote < 0 || candidate.midiNote > 127 || candidate.velocity < 1
+            || candidate.velocity > 127 || candidate.takeCount < 2 || candidate.distinctVariants < 2
+            || candidate.distinctVariants > candidate.takeCount || !std::isfinite(candidate.maximumSpectralDistance)
+            || candidate.maximumSpectralDistance < 0.0 || candidate.maximumSpectralDistance > 1.0
+            || candidate.algorithmVersion < 1)
+            return false;
+
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
+    bool ok = true;
+    sqlite3_stmt* statement = nullptr;
+    for (const char* sql : {"DELETE FROM plugin_round_robin_candidates WHERE kit_id=?",
+                            "DELETE FROM plugin_round_robin_takes WHERE kit_id=?"})
+    {
+        if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) { ok = false; break; }
+        sqlite3_bind_int64(statement, 1, kitId);
+        ok = sqlite3_step(statement) == SQLITE_DONE;
+        sqlite3_finalize(statement);
+        statement = nullptr;
+        if (!ok) break;
+    }
+    if (ok && sqlite3_prepare_v2(connection, "INSERT INTO plugin_round_robin_takes(kit_id,midi_note,velocity,take_index,silent,preview_path,acoustic_fingerprint) VALUES(?,?,?,?,?,?,?)", -1, &statement, nullptr) != SQLITE_OK)
+        ok = false;
+    if (ok)
+        for (const auto& take : takes)
+        {
+            sqlite3_bind_int64(statement, 1, kitId);
+            sqlite3_bind_int(statement, 2, take.midiNote);
+            sqlite3_bind_int(statement, 3, take.velocity);
+            sqlite3_bind_int(statement, 4, take.takeIndex);
+            sqlite3_bind_int(statement, 5, take.silent ? 1 : 0);
+            sqlite3_bind_text(statement, 6, take.previewPath.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(statement, 7, take.acousticFingerprint.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(statement) != SQLITE_DONE) { ok = false; break; }
+            sqlite3_reset(statement);
+            sqlite3_clear_bindings(statement);
+        }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    statement = nullptr;
+    if (ok && sqlite3_prepare_v2(connection, "INSERT INTO plugin_round_robin_candidates(kit_id,midi_note,velocity,take_count,distinct_variants,maximum_spectral_distance,algorithm_version) VALUES(?,?,?,?,?,?,?)", -1, &statement, nullptr) != SQLITE_OK)
+        ok = false;
+    if (ok)
+        for (const auto& candidate : candidates)
+        {
+            sqlite3_bind_int64(statement, 1, kitId);
+            sqlite3_bind_int(statement, 2, candidate.midiNote);
+            sqlite3_bind_int(statement, 3, candidate.velocity);
+            sqlite3_bind_int(statement, 4, candidate.takeCount);
+            sqlite3_bind_int(statement, 5, candidate.distinctVariants);
+            sqlite3_bind_double(statement, 6, candidate.maximumSpectralDistance);
+            sqlite3_bind_int(statement, 7, candidate.algorithmVersion);
+            if (sqlite3_step(statement) != SQLITE_DONE) { ok = false; break; }
+            sqlite3_reset(statement);
+            sqlite3_clear_bindings(statement);
+        }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && transactionResult == SQLITE_OK;
+}
+
+std::vector<PluginRoundRobinCandidate> SampleDatabase::getPluginRoundRobinCandidates(
+    const juce::String& pluginIdentifier, const juce::String& kitName) const
+{
+    std::vector<PluginRoundRobinCandidate> result;
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT c.midi_note,c.velocity,c.take_count,c.distinct_variants,c.maximum_spectral_distance,c.algorithm_version FROM plugin_round_robin_candidates c JOIN plugin_kits k ON k.id=c.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=? ORDER BY c.midi_note,c.velocity";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    const auto identifier = pluginIdentifier.trim(), name = kitName.trim();
+    sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(statement) == SQLITE_ROW)
+        result.push_back({sqlite3_column_int(statement, 0), sqlite3_column_int(statement, 1),
+                          sqlite3_column_int(statement, 2), sqlite3_column_int(statement, 3),
+                          sqlite3_column_double(statement, 4), sqlite3_column_int(statement, 5)});
+    sqlite3_finalize(statement);
+    return result;
+}
+
 juce::Array<PluginSoundBrowseRecord> SampleDatabase::getPluginSoundBrowseRecords() const
 {
     juce::Array<PluginSoundBrowseRecord> result;
     if (connection == nullptr) return result;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT s.preview_path,p.identifier,p.name,k.name,s.midi_note,s.velocity,s.articulation FROM plugin_sounds s JOIN plugin_kits k ON k.id=s.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE s.silent=0 AND s.preview_path<>'' ORDER BY p.name COLLATE NOCASE,k.name COLLATE NOCASE,s.midi_note,s.velocity";
+    const char* sql = "SELECT s.preview_path AS preview_path,p.identifier AS plugin_identifier,p.name AS plugin_name,k.name AS kit_name,s.midi_note AS midi_note,s.velocity AS velocity,s.articulation AS articulation,1 AS take_index FROM plugin_sounds s JOIN plugin_kits k ON k.id=s.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE s.silent=0 AND s.preview_path<>'' UNION ALL SELECT t.preview_path,p.identifier,p.name,k.name,t.midi_note,t.velocity,'' AS articulation,t.take_index FROM plugin_round_robin_takes t JOIN plugin_kits k ON k.id=t.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE t.silent=0 AND t.preview_path<>'' AND t.take_index>1 ORDER BY plugin_name COLLATE NOCASE,kit_name COLLATE NOCASE,midi_note,velocity,take_index";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
     while (sqlite3_step(statement) == SQLITE_ROW)
     {
         const auto text = [statement](int column) { const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column)); return value != nullptr ? juce::String::fromUTF8(value) : juce::String(); };
         PluginSoundBrowseRecord record;
         record.previewFile = juce::File(text(0)); record.pluginIdentifier = text(1); record.pluginName = text(2); record.kitName = text(3);
-        record.midiNote = sqlite3_column_int(statement, 4); record.velocity = sqlite3_column_int(statement, 5); record.articulation = text(6);
+        record.midiNote = sqlite3_column_int(statement, 4); record.velocity = sqlite3_column_int(statement, 5); record.articulation = text(6); record.takeIndex = sqlite3_column_int(statement, 7);
         result.add(std::move(record));
     }
     sqlite3_finalize(statement);

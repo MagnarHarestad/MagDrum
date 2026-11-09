@@ -1,6 +1,7 @@
 param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Architecture = 'x64',
+    [string] $BuildDirectory,
     [switch] $SkipTests
 )
 
@@ -9,7 +10,16 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $architectureKey = $Architecture.ToLowerInvariant()
-$buildDirectory = Join-Path $repoRoot "build/local-windows-$architectureKey"
+$buildDirectory = if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
+    Join-Path $repoRoot "build/local-windows-$architectureKey"
+} else {
+    $candidate = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $BuildDirectory))
+    $repoPrefix = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $candidate.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'BuildDirectory must stay inside the MagDrum repository.'
+    }
+    $candidate
+}
 $dependencyDirectory = Join-Path $repoRoot 'build/_deps'
 $vswhereCandidates = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'),
