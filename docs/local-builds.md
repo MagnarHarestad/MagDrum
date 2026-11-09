@@ -30,7 +30,9 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-When an archive has been built and reviewed on each host, collect all five in `latest-publish` and publish them from a local machine with GitHub CLI. The workflow is now manual-only, so local commits and release tags do not launch the hosted build matrix:
+The first local Windows x64 build has now completed on this machine: the app and VST3 were built, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. Its SHA-256 is `a0d2f3d5fac457ab7af74f03f8dd51d2152961181208034fd8c62efd2440e39b`. This confirms that GitHub Actions is not needed to build, test, package, or publish the Windows x64 test version.
+
+When archives are available from each host, collect them in `latest-publish` and publish them from a local machine with GitHub CLI. GitHub release creation uses the GitHub API; it does not start a hosted build. The workflow is manual-only, so local commits and release tags do not launch the hosted build matrix:
 
 ```powershell
 $tag = 'v0.1.1-test.N' # Replace N with the next unused test number.
@@ -43,7 +45,7 @@ gh release create $tag `
   --prerelease --generate-notes
 ```
 
-Only run the command after the archives exist and pass their host-side checks. This repository's current `latest-publish` entry remains the earlier Windows x64 test package; the other four platform packages have not yet been built.
+Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. At the time of this build, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 

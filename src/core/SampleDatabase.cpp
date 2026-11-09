@@ -540,6 +540,26 @@ juce::Array<juce::File> SampleDatabase::getAllPaths() const
     return files;
 }
 
+std::optional<juce::File> SampleDatabase::getFirstSampleForCategory(const juce::String& category) const
+{
+    if (connection == nullptr || category.trim().isEmpty()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT path FROM samples WHERE COALESCE(NULLIF(user_category,''),category)=? ORDER BY name COLLATE NOCASE LIMIT 100";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return std::nullopt;
+    const auto trimmed = category.trim();
+    sqlite3_bind_text(statement, 1, trimmed.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    std::optional<juce::File> result;
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        if (value == nullptr) continue;
+        juce::File file(juce::String::fromUTF8(value));
+        if (file.existsAsFile()) { result = file; break; }
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
 juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
 {
     juce::Array<SampleBrowseRecord> records;
