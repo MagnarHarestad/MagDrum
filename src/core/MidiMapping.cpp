@@ -63,6 +63,21 @@ bool MidiMappingProfile::removeMapping(DrumInstrument instrument,DrumArticulatio
     return mappings.size()!=oldSize;
 }
 
+std::vector<MidiNoteMapping> MidiMappingProfile::mappingsForMidiNote(std::uint8_t note) const
+{
+    std::vector<MidiNoteMapping> matches;
+    for (const auto& mapping : mappings)
+    {
+        if (mapping.note != note) continue;
+        const auto duplicate = std::find_if(matches.begin(), matches.end(), [&](const auto& existing)
+        {
+            return existing.instrument == mapping.instrument && existing.articulation == mapping.articulation;
+        });
+        if (duplicate == matches.end()) matches.push_back(mapping);
+    }
+    return matches;
+}
+
 std::string MidiMappingProfile::toCsv() const
 {
     std::ostringstream output;

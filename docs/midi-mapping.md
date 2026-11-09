@@ -4,16 +4,16 @@ MagDrum represents a drum event with a semantic instrument and articulation, vel
 
 The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride, crash, clap, rimshot and percussion. Conversion to a target profile returns both the note and whether an articulation fallback was used. Callers can disable fallback and report unsupported articulations instead of silently substituting them.
 
-`MidiMappingProfile` also accepts a custom entry list, and named profiles can be saved to and loaded from SQLite. `MidiPatternIO` imports/exports Standard MIDI Files using PPQ timing, tracks note-on/off pairs, preserves tempo and time-signature metadata, reports unmapped notes, and emits unsupported events from export when no mapping is available.
+`MidiMappingProfile` also accepts a custom entry list, and named profiles can be saved to and loaded from SQLite. `MidiPatternIO` imports/exports Standard MIDI Files using PPQ timing, tracks note-on/off pairs, preserves tempo and time-signature metadata, reports unmapped notes and notes with multiple semantic mappings, and emits unsupported events from export when no mapping is available. Duplicate identical mapping rows do not create a false ambiguity.
 
 The standalone app provides MIDI import/export buttons, save/load controls for named profiles, entry set/remove controls by instrument and articulation, and CSV profile import/export. The CSV format has the header `instrument,articulation,note`; instrument and articulation names are case-sensitive enum names such as `HiHat,Closed,42`. Invalid names, duplicate semantic entries and notes outside 0–127 are rejected. Import replaces the active profile and saves it by the CSV filename.
 
 After importing a MIDI file, open **Edit pattern** to review drum events and change instrument, articulation, velocity, beat position and duration, or delete an event. The editor sorts events by beat position after edits. It also lists imported tempo and time-signature events and lets users set or remove either type at any non-negative beat without changing the other metadata events.
 
-When MIDI import encounters unmapped notes, the app lists each note number and how many note events used it. MIDI export lists the semantic events that were omitted because the active profile did not map them.
+When MIDI import encounters unmapped notes, the app lists each note number and how many note events used it. When a MIDI note maps to multiple instrument/articulation pairs, the import report lists all candidates and explains that the first profile entry was used for those events. Edit the profile to make that note unique before importing if another meaning is intended. MIDI export lists the semantic events that were omitted because the active profile did not map them.
 
 ## Current limitations
 
 - GM mappings are a starter profile, not a guarantee that every instrument follows GM exactly.
-- Reverse conversion resolves duplicate note assignments to the first matching semantic event.
+- Ambiguous note assignments are reported, but users must edit the profile and import again to choose another semantic interpretation.
 - The editor does not yet show a side-by-side MIDI round-trip diff.

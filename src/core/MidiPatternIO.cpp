@@ -76,6 +76,22 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
     if(ticksPerQuarter<=0){report.error="SMPTE time division is not supported; use a PPQ MIDI file";return report;}
     using Key=std::pair<int,int>;
     std::map<Key,std::vector<std::pair<double,std::uint8_t>>> pending;
+    std::map<int,MidiAmbiguousNote> ambiguousNotes;
+    const auto appendImportedEvent = [&](int note, std::uint8_t velocity, double position, double duration)
+    {
+        const auto noteNumber = static_cast<std::uint8_t>(note);
+        const auto candidates = profile.mappingsForMidiNote(noteNumber);
+        if (candidates.size() > 1)
+        {
+            auto& ambiguous = ambiguousNotes[note];
+            ambiguous.note = note;
+            ++ambiguous.eventCount;
+            ambiguous.candidates = candidates;
+        }
+        const auto event = profile.fromMidi(noteNumber, velocity, position, duration);
+        if (event) output.events.push_back(*event);
+        else report.unmappedNotes.push_back(note);
+    };
     for(int track=0;track<midi.getNumTracks();++track)
     {
         const auto* sequence=midi.getTrack(track);if(sequence==nullptr)continue;
@@ -96,13 +112,17 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
                 const Key key{message.getChannel(),message.getNoteNumber()};auto found=pending.find(key);
                 if(found==pending.end()||found->second.empty())continue;
                 const auto start=found->second.front();found->second.erase(found->second.begin());
-                auto event=profile.fromMidi(static_cast<std::uint8_t>(message.getNoteNumber()),start.second,start.first,juce::jmax(0.0,beat-start.first));
-                if(event)output.events.push_back(*event);else report.unmappedNotes.push_back(message.getNoteNumber());
+                appendImportedEvent(message.getNoteNumber(),start.second,start.first,juce::jmax(0.0,beat-start.first));
             }
         }
     }
     // Keep malformed files with missing note-offs usable; assign a short default gate.
-    for(const auto& [key,starts]:pending)for(const auto& start:starts){auto event=profile.fromMidi(static_cast<std::uint8_t>(key.second),start.second,start.first,0.1);if(event)output.events.push_back(*event);else report.unmappedNotes.push_back(key.second);}
+    for(const auto& [key,starts]:pending)for(const auto& start:starts)appendImportedEvent(key.second,start.second,start.first,0.1);
+    for (auto& [note, ambiguous] : ambiguousNotes)
+    {
+        juce::ignoreUnused(note);
+        report.ambiguousNotes.push_back(std::move(ambiguous));
+    }
     std::stable_sort(output.events.begin(),output.events.end(),[](const auto&a,const auto&b){return a.positionBeats<b.positionBeats;});
     std::stable_sort(output.tempoAndSignature.begin(),output.tempoAndSignature.end(),[](const auto&a,const auto&b){return a.positionBeats<b.positionBeats;});
     report.ok=true;return report;

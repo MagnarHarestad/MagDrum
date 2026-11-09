@@ -26,6 +26,7 @@ public:
     MidiMappingResult toMidi(const DrumEvent&, bool allowFallback) const;
     bool setMapping(MidiNoteMapping);
     bool removeMapping(DrumInstrument, DrumArticulation);
+    std::vector<MidiNoteMapping> mappingsForMidiNote(std::uint8_t note) const;
     std::string toCsv() const;
     static std::optional<MidiMappingProfile> fromCsv(const std::string&);
     std::optional<DrumEvent> fromMidi(std::uint8_t note, std::uint8_t velocity,

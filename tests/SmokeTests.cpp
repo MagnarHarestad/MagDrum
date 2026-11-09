@@ -247,6 +247,7 @@ int main()
     if(!mapped.note||*mapped.note!=42||mapped.usedFallback)return 19;
     auto decoded=gm.fromMidi(42,96,1.5,0.125);
     if(!decoded||decoded->instrument!=DrumInstrument::HiHat||decoded->articulation!=DrumArticulation::Closed||decoded->positionBeats!=1.5)return 20;
+    if(gm.mappingsForMidiNote(42).size()!=1||gm.mappingsForMidiNote(38).size()!=2)return 133;
     DrumEvent unsupported{DrumInstrument::HiHat,DrumArticulation::Edge,80,0.0,0.1};
     if(gm.toMidi(unsupported,false).note)return 21;
     auto fallback=gm.toMidi(unsupported,true);
@@ -264,8 +265,11 @@ int main()
     MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
     if(!midiIO.write(midiFile,pattern,gm,false))return 23;
     MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
-    if(!midiReport.ok||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2||std::abs(decodedPattern.lengthBeats-8.0)>0.001)return 24;
+    if(!midiReport.ok||!midiReport.ambiguousNotes.empty()||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2||std::abs(decodedPattern.lengthBeats-8.0)>0.001)return 24;
     if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
+    MidiMappingProfile ambiguousProfile({{DrumInstrument::HiHat,DrumArticulation::Closed,42},{DrumInstrument::Snare,DrumArticulation::Center,42},{DrumInstrument::HiHat,DrumArticulation::Closed,42}});
+    MidiPattern ambiguousPattern;const auto ambiguousReport=midiIO.read(midiFile,ambiguousProfile,ambiguousPattern);
+    if(!ambiguousReport.ok||ambiguousReport.ambiguousNotes.size()!=1||ambiguousReport.ambiguousNotes[0].note!=42||ambiguousReport.ambiguousNotes[0].eventCount!=1||ambiguousReport.ambiguousNotes[0].candidates.size()!=2||ambiguousPattern.events.size()!=1||ambiguousPattern.events[0].instrument!=DrumInstrument::HiHat)return 134;
     MidiPattern emptyBars;emptyBars.lengthBeats=12.0;const auto emptyBarsFile=root.getChildFile("empty-bars.mid");if(!midiIO.write(emptyBarsFile,emptyBars,gm,false))return 72;MidiPattern decodedEmptyBars;if(!midiIO.read(emptyBarsFile,gm,decodedEmptyBars).ok||!decodedEmptyBars.events.empty()||std::abs(decodedEmptyBars.lengthBeats-12.0)>0.001)return 73;
     MidiPattern metadataEdit;metadataEdit.tempoAndSignature={{0.0,juce::MidiMessage::tempoMetaEvent(500000)},{0.0,juce::MidiMessage::timeSignatureMetaEvent(4,4)},{8.0,juce::MidiMessage::tempoMetaEvent(750000)},{8.0,juce::MidiMessage::timeSignatureMetaEvent(3,4)}};
     if(!setPatternTempo(metadataEdit,100)||!setPatternTimeSignature(metadataEdit,5,8)||setPatternTempo(metadataEdit,10)||setPatternTimeSignature(metadataEdit,3,3)||metadataEdit.tempoAndSignature.size()!=4)return 64;

@@ -17,6 +17,13 @@ struct MidiPattern
     double lengthBeats = 0.0;
 };
 
+struct MidiAmbiguousNote
+{
+    int note = 0;
+    int eventCount = 0;
+    std::vector<MidiNoteMapping> candidates;
+};
+
 bool setPatternTempo(MidiPattern&, int beatsPerMinute, double positionBeats = 0.0);
 bool setPatternTimeSignature(MidiPattern&, int numerator, int denominator, double positionBeats = 0.0);
 bool removePatternTempo(MidiPattern&, double positionBeats);
@@ -25,6 +32,7 @@ bool removePatternTimeSignature(MidiPattern&, double positionBeats);
 struct MidiImportReport
 {
     std::vector<int> unmappedNotes;
+    std::vector<MidiAmbiguousNote> ambiguousNotes;
     juce::String error;
     bool ok = false;
 };
