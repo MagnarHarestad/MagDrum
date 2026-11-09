@@ -85,6 +85,95 @@ private:
     double confidence;
 };
 
+bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& pluginTestsExecutable,
+    const juce::File& sampleFile, const juce::File& root)
+{
+    juce::AudioPluginFormatManager formatManager;
+    juce::addHeadlessDefaultFormatsToManager(formatManager);
+    juce::AudioPluginFormat* vst3Format = nullptr;
+    for (int i = 0; i < formatManager.getNumFormats(); ++i)
+        if (formatManager.getFormat(i)->getName() == "VST3") vst3Format = formatManager.getFormat(i);
+    if (vst3Format == nullptr) { std::cerr << "VST3 format is unavailable to the test host.\n"; return false; }
+
+    juce::OwnedArray<juce::PluginDescription> descriptions;
+    vst3Format->findAllTypesForFile(descriptions, vst3Module.getFullPathName());
+    if (descriptions.isEmpty()) { std::cerr << "The built VST3 module was not discovered.\n"; return false; }
+
+    const auto requestDirectory = root.getChildFile("built-vst3-worker");
+    const auto captureDirectory = requestDirectory.getChildFile("captures");
+    if (!captureDirectory.createDirectory().wasOk()) return false;
+    const auto descriptionFile = requestDirectory.getChildFile("plugin.xml");
+    const auto stateFile = requestDirectory.getChildFile("state.bin");
+    const auto requestFile = requestDirectory.getChildFile("request.json");
+    const auto progressFile = requestDirectory.getChildFile("progress.json");
+    const auto resultFile = requestDirectory.getChildFile("result.json");
+    const auto cancellationFile = requestDirectory.getChildFile("cancel");
+    const auto captureLogFile = requestDirectory.getChildFile("captures.jsonl");
+    if (!descriptions[0]->createXml()->writeTo(descriptionFile)) return false;
+
+    juce::StringArray stateCommand;
+    stateCommand.add(pluginTestsExecutable.getFullPathName());
+    stateCommand.add("--magdrum-test-write-plugin-state");
+    stateCommand.add(sampleFile.getFullPathName());
+    stateCommand.add(stateFile.getFullPathName());
+    juce::ChildProcess stateWriter;
+    if (!stateWriter.start(stateCommand) || !stateWriter.waitForProcessToFinish(30000)
+        || stateWriter.getExitCode() != 0 || !stateFile.existsAsFile())
+    { std::cerr << "Could not create a host-format VST3 state fixture.\n"; return false; }
+
+    auto* request = new juce::DynamicObject();
+    request->setProperty("descriptionFile", descriptionFile.getFullPathName());
+    request->setProperty("stateFile", stateFile.getFullPathName());
+    request->setProperty("outputDirectory", captureDirectory.getFullPathName());
+    request->setProperty("cancellationFile", cancellationFile.getFullPathName());
+    request->setProperty("progressFile", progressFile.getFullPathName());
+    request->setProperty("captureLogFile", captureLogFile.getFullPathName());
+    request->setProperty("resultFile", resultFile.getFullPathName());
+    request->setProperty("sampleRate", 44100.0);
+    request->setProperty("blockSize", 128);
+    request->setProperty("repeatCount", 1);
+    request->setProperty("noteDurationSeconds", 0.02);
+    request->setProperty("releaseSeconds", 0.01);
+    request->setProperty("captureLengthSeconds", 0.03);
+    request->setProperty("realtimePaced", false);
+    request->setProperty("audioDeviceRealtime", false);
+    juce::Array<juce::var> velocities;
+    velocities.add(100);
+    request->setProperty("velocityLevels", velocities);
+    if (!requestFile.replaceWithText(juce::JSON::toString(juce::var(request), true))) return false;
+
+    juce::StringArray workerCommand;
+    workerCommand.add(pluginTestsExecutable.getFullPathName());
+    workerCommand.add("--magdrum-plugin-scan-worker");
+    workerCommand.add(requestFile.getFullPathName());
+    const auto execution = PluginScanProcess::monitorWorker(workerCommand, progressFile, resultFile,
+        cancellationFile, {}, {}, 30000, captureLogFile);
+    if (!execution.started || !execution.manifestRead || !execution.manifest.succeeded
+        || execution.manifest.error.isNotEmpty() || execution.manifest.captures.size() != 128)
+    {
+        std::cerr << "The isolated VST3 worker failed: " << execution.manifest.error
+                  << " captures=" << execution.manifest.captures.size() << " exit=" << execution.exitCode << "\n";
+        return false;
+    }
+
+    for (const auto& capture : execution.manifest.captures)
+    {
+        if (capture.midiNote != 36) continue;
+        if (capture.silent || capture.peak <= 0.0 || capture.rms <= 0.0 || capture.sampleRate != 44100.0
+            || !captureDirectory.getChildFile(capture.fileName).existsAsFile())
+        {
+            std::cerr << "The restored built VST3 did not render its sample: peak=" << capture.peak
+                      << " rms=" << capture.rms << " silent=" << capture.silent << "\n";
+            requestDirectory.deleteRecursively();
+            return false;
+        }
+        requestDirectory.deleteRecursively();
+        return true;
+    }
+    std::cerr << "The isolated worker did not return the sample's MIDI note.\n";
+    return false;
+}
+
 int main(int argc,char** argv)
 {
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::abort();
@@ -136,6 +225,9 @@ int main(int argc,char** argv)
     const float* channels[]{samples};
     if(!writer->writeFromFloatArrays(channels,1,4096))return 4;
     writer.reset();
+
+    if (argc == 3 && !runBuiltVst3WorkerFixture(juce::File(argv[1]), juce::File(argv[2]), waveFile, root))
+        return 188;
 
     WavScanner scanner;
     WavScanner::Stats initialScanStats;

@@ -294,6 +294,7 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
         writeJson(resultFile, makeErrorManifest("The velocity list is missing from the scanner request."));
         return 7;
     }
+    settings.velocityLevels.clear();
     for (const auto& velocity : *velocities)
         settings.velocityLevels.push_back(static_cast<int>(velocity));
 

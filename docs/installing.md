@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published archive is the [Windows x64 test build v0.1.1-test.54](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.54). It was built locally without GitHub Actions and passed both CTest suites. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The latest published archive is the [Windows x64 test build v0.1.1-test.55](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.55). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
-The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `15074ae69aceea5cfb4bcc5e80501f632b443fac224f6f69acb03cf8bd27d3c3`, matching the v0.1.1-test.54 release asset. It contains the standalone app, VST3 bundle and installer. The previous v0.1.1-test.53 package had SHA-256 `958b1435f608441c0f839869a6153c2ff6679171f633881a63d49bf43a2b2988`.
+The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `59580cf353723556bb1deb842f980f2aa728388d343fdf6c55fb604700462072`, matching the v0.1.1-test.55 release asset. It contains the standalone app, VST3 bundle and installer. The previous v0.1.1-test.54 package had SHA-256 `15074ae69aceea5cfb4bcc5e80501f632b443fac224f6f69acb03cf8bd27d3c3`.
 
 ## Windows x64 and Cubase
 

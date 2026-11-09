@@ -1,6 +1,8 @@
 #include "plugin/PluginProcessor.h"
+#include "core/PluginScanProcess.h"
 #include "core/ScopedFileAccess.h"
 #include <cmath>
+#include <cstring>
 #include <iostream>
 
 namespace
@@ -37,8 +39,27 @@ double renderPeak(MagDrumAudioProcessor& processor, int note, int velocity)
 }
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-plugin-scan-worker") == 0)
+        return PluginScanProcess::runWorker(juce::File(argv[2]));
+
+    if (argc == 4 && std::strcmp(argv[1], "--magdrum-test-write-plugin-state") == 0)
+    {
+        MagDrumAudioProcessor fixture;
+        if (!fixture.loadSampleForNote(36, juce::File(argv[2]))) return 201;
+        juce::MemoryBlock processorState;
+        fixture.getStateInformation(processorState);
+        if (processorState.isEmpty()) return 202;
+
+        // A host's AudioPluginInstance state wraps processor state in a VST3 envelope.
+        juce::XmlElement hostedState("VST3PluginState");
+        hostedState.createNewChildElement("IComponent")->addTextElement(processorState.toBase64Encoding());
+        juce::MemoryBlock state;
+        juce::AudioProcessor::copyXmlToBinary(hostedState, state);
+        return !state.isEmpty() && juce::File(argv[3]).replaceWithData(state.getData(), state.getSize()) ? 0 : 203;
+    }
+
     const auto root = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumPluginSmokeTest");
     root.deleteRecursively();
     if (!root.createDirectory().wasOk()) return 1;
