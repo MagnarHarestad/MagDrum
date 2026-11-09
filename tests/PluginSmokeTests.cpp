@@ -1,4 +1,5 @@
 #include "plugin/PluginProcessor.h"
+#include "core/ScopedFileAccess.h"
 #include <cmath>
 #include <iostream>
 
@@ -45,19 +46,46 @@ int main()
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
 
+    const auto importFolder = root.getChildFile("imports");
+    const auto sourceBytes = root.getChildFile("url-source.mid");
+    const auto copiedBytes = importFolder.getChildFile("url-copy.mid");
+    const auto roundTripBytes = root.getChildFile("url-round-trip.mid");
+    const auto filesMatch = [](const juce::File& left, const juce::File& right)
+    {
+        juce::MemoryBlock leftData, rightData;
+        return left.loadFileAsData(leftData) && right.loadFileAsData(rightData)
+            && leftData.getSize() == rightData.getSize()
+            && leftData.matches(rightData.getData(), rightData.getSize());
+    };
+    const char midiMarker[] = "MagDrum URL copy fixture";
+    {
+        std::unique_ptr<juce::OutputStream> stream(sourceBytes.createOutputStream());
+        if (stream == nullptr || !stream->write(midiMarker, sizeof(midiMarker))) return 3;
+    }
+    juce::String copyError;
+    if (!MagDrumFiles::copyURLToFile(juce::URL(sourceBytes), copiedBytes, {}, copyError)
+        || !filesMatch(sourceBytes, copiedBytes)) return 4;
+    if (!MagDrumFiles::copyURLToFile(juce::URL(copiedBytes), copiedBytes, {}, copyError)
+        || !filesMatch(sourceBytes, copiedBytes)) return 5;
+    const auto cancelledCopy = importFolder.getChildFile("cancelled.mid");
+    if (MagDrumFiles::copyURLToFile(juce::URL(sourceBytes), cancelledCopy, [] { return true; }, copyError)
+        || cancelledCopy.existsAsFile()) return 6;
+    if (!MagDrumFiles::copyFileToURL(copiedBytes, juce::URL(roundTripBytes), copyError)
+        || !filesMatch(sourceBytes, roundTripBytes)) return 7;
+
     MagDrumAudioProcessor processor;
-    if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 3;
+    if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
     if (processor.loadSampleForNote(-1, sample) || processor.loadSampleForNote(128, sample)
-        || processor.loadSampleForNote(37, root.getChildFile("missing.wav"))) return 4;
-    if (processor.getSamplePathForNote(37).isNotEmpty()) return 5;
+        || processor.loadSampleForNote(37, root.getChildFile("missing.wav"))) return 9;
+    if (processor.getSamplePathForNote(37).isNotEmpty()) return 10;
 
     juce::MemoryBlock state;
     processor.getStateInformation(state);
-    if (state.isEmpty()) return 6;
+    if (state.isEmpty()) return 11;
 
     MagDrumAudioProcessor restored;
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
-    if (restored.getSamplePathForNote(36) != sample.getFullPathName()) return 7;
+    if (restored.getSamplePathForNote(36) != sample.getFullPathName()) return 12;
     restored.prepareToPlay(44100.0, 128);
     const double fullVelocityPeak = renderPeak(restored, 36, 127);
     MagDrumAudioProcessor lowVelocity;
@@ -69,16 +97,16 @@ int main()
     {
         std::cerr << "Velocity render check failed: full=" << fullVelocityPeak << ", low=" << lowVelocityPeak
                   << ", ratio=" << (fullVelocityPeak > 0.0 ? lowVelocityPeak / fullVelocityPeak : 0.0) << '\n';
-        return 8;
+        return 13;
     }
     MagDrumAudioProcessor emptyNote;
     emptyNote.prepareToPlay(44100.0, 128);
-    if (renderPeak(emptyNote, 37, 100) != 0.0) return 9;
+    if (renderPeak(emptyNote, 37, 100) != 0.0) return 14;
 
     restored.releaseResources();
     lowVelocity.releaseResources();
     emptyNote.releaseResources();
     root.deleteRecursively();
-    std::cout << "Plugin sample load, state restore, MIDI playback, velocity and empty-note checks passed.\n";
+    std::cout << "Scoped file copy, cancellation, MIDI playback, velocity and empty-note checks passed.\n";
     return 0;
 }

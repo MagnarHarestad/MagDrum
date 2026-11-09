@@ -13,6 +13,7 @@
 #include "core/SampleFeatureFilter.h"
 #include "core/SampleClassificationReview.h"
 #include "core/StructuredLogger.h"
+#include "core/MagDrumPaths.h"
 #include <atomic>
 #include <array>
 #include <algorithm>
@@ -388,7 +389,7 @@ private:
   }
  private:juce::Component::SafePointer<MainComponent>main;MidiPattern pattern;std::array<juce::File,9>files;juce::File output;std::shared_ptr<std::atomic<bool>>cancellation;std::uint64_t generation;
  };
- void initDb(){auto base=juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("MagDrum");base.createDirectory();pluginListFile=base.getChildFile("vst3-plugins.xml");pluginCrashList=base.getChildFile("RecentlyCrashedPluginsList");databaseFile=base.getChildFile("samples.sqlite3");if(database.open(databaseFile))database.markRunningSampleScansInterrupted();}
+ void initDb(){auto base=getMagDrumDataDirectory();if(!base.isDirectory()&&!base.createDirectory().wasOk()){status.setText("Could not create the MagDrum data directory.",juce::dontSendNotification);return;}pluginListFile=base.getChildFile("vst3-plugins.xml");pluginCrashList=base.getChildFile("RecentlyCrashedPluginsList");databaseFile=base.getChildFile("samples.sqlite3");if(database.open(databaseFile))database.markRunningSampleScansInterrupted();}
  void loadPluginList(){if(auto xml=juce::XmlDocument::parse(pluginListFile))knownPlugins.recreateFromXml(*xml);}
  void syncPluginInventory(){for(const auto& plugin:knownPlugins.getTypes()){if(!plugin.isInstrument)continue;database.upsertPluginInstrument({plugin.createIdentifierString(),plugin.pluginFormatName,plugin.name,plugin.manufacturerName,plugin.category,plugin.fileOrIdentifier,plugin.version});}}
  void changeListenerCallback(juce::ChangeBroadcaster*)override{if(auto xml=knownPlugins.createXml())xml->writeTo(pluginListFile);syncPluginInventory();}
@@ -537,7 +538,7 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 class MagDrumApplication final:public juce::JUCEApplication{
-public:const juce::String getApplicationName()override{return"MagDrum";}const juce::String getApplicationVersion()override{return"0.1.0";}bool moreThanOneInstanceAllowed()override{return true;}void initialise(const juce::String& commandLine)override{juce::StringArray arguments;arguments.addTokens(commandLine,true);if(arguments.size()==2&&arguments[0]=="--magdrum-plugin-scan-worker"){const auto request=juce::File(arguments[1]);if(!juce::Thread::launch([request]{PluginScanProcess::runWorker(request);juce::MessageManager::callAsync([]{if(auto* app=juce::JUCEApplication::getInstance())app->quit();});}))quit();return;}const auto logs=juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("MagDrum").getChildFile("logs");StructuredLogger::initialise(logs);StructuredLogger::log(StructuredLogger::Level::info,"application.started",{{"version",getApplicationVersion()},{"platform",juce::SystemStats::getOperatingSystemName()}});window=std::make_unique<Window>();}void shutdown()override{StructuredLogger::log(StructuredLogger::Level::info,"application.stopped");window.reset();}void systemRequestedQuit()override{quit();}void anotherInstanceStarted(const juce::String&)override{}
+public:const juce::String getApplicationName()override{return"MagDrum";}const juce::String getApplicationVersion()override{return"0.1.0";}bool moreThanOneInstanceAllowed()override{return true;}void initialise(const juce::String& commandLine)override{juce::StringArray arguments;arguments.addTokens(commandLine,true);if(arguments.size()==2&&arguments[0]=="--magdrum-plugin-scan-worker"){const auto request=juce::File(arguments[1]);if(!juce::Thread::launch([request]{PluginScanProcess::runWorker(request);juce::MessageManager::callAsync([]{if(auto* app=juce::JUCEApplication::getInstance())app->quit();});}))quit();return;}const auto logs=getMagDrumDataDirectory().getChildFile("logs");StructuredLogger::initialise(logs);StructuredLogger::log(StructuredLogger::Level::info,"application.started",{{"version",getApplicationVersion()},{"platform",juce::SystemStats::getOperatingSystemName()}});window=std::make_unique<Window>();}void shutdown()override{StructuredLogger::log(StructuredLogger::Level::info,"application.stopped");window.reset();}void systemRequestedQuit()override{quit();}void anotherInstanceStarted(const juce::String&)override{}
 private:class Window final:public juce::DocumentWindow{public:Window():DocumentWindow("MagDrum",juce::Colour(0xff101215),allButtons){setUsingNativeTitleBar(true);setContentOwned(new MainComponent(),true);centreWithSize(1140,790);setVisible(true);}void closeButtonPressed()override{juce::JUCEApplication::getInstance()->systemRequestedQuit();}};std::unique_ptr<Window>window;
 };
 START_JUCE_APPLICATION(MagDrumApplication)

@@ -1,4 +1,6 @@
 #include "PluginEditor.h"
+#include "../core/MagDrumPaths.h"
+#include "../core/ScopedFileAccess.h"
 
 MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p)
     : AudioProcessorEditor(p), processor(p), indexedList("Indexed samples", this)
@@ -22,11 +24,15 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     status.setColour(juce::Label::textColourId, juce::Colour(0xffaaa49b));
     status.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(status);
-    const auto dbFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                            .getChildFile("MagDrum").getChildFile("samples.sqlite3");
-    dbFile.getParentDirectory().createDirectory();
-    database.open(dbFile);
-    indexedSamples = database.searchPaths({}, 100);
+    const auto dataDirectory = getMagDrumDataDirectory();
+    if (dataDirectory == juce::File())
+        status.setText("Shared MagDrum storage is unavailable. Check the signed app-group entitlement.", juce::dontSendNotification);
+    else if (!dataDirectory.createDirectory().wasOk() && !dataDirectory.isDirectory())
+        status.setText("Could not create MagDrum's shared data folder.", juce::dontSendNotification);
+    else if (!database.open(dataDirectory.getChildFile("samples.sqlite3")))
+        status.setText("Could not open MagDrum's shared sound database.", juce::dontSendNotification);
+    else
+        indexedSamples = database.searchPaths({}, 100);
 }
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
@@ -85,14 +91,28 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
         return;
     }
     if(button!=&loadButton)return;
-    chooser = std::make_unique<juce::FileChooser>("Choose a WAV sample", juce::File(), "*.wav;*.aif;*.aiff;*.flac");
+    chooser = std::make_unique<juce::FileChooser>("Choose a WAV sample", juce::File(),
+        "*.wav;*.aif;*.aiff;*.flac", true, false, this);
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [safe, note](const juce::FileChooser& fileChooser)
         {
             if (safe == nullptr) return;
-            const auto file = fileChooser.getResult();
+            juce::File file;
+#if JUCE_IOS
+            const auto url = fileChooser.getURLResult();
+            if (url.isEmpty()) return;
+            const auto selectedFile = juce::File(url.getFileName());
+            const auto importDirectory=getMagDrumDataDirectory().getChildFile("Imported Audio");
+            if(!importDirectory.createDirectory().wasOk()&&!importDirectory.isDirectory()){safe->status.setText("Could not create shared audio storage.",juce::dontSendNotification);return;}
+            const auto importedFile=importDirectory.getNonexistentChildFile(selectedFile.getFileNameWithoutExtension(),selectedFile.getFileExtension(),false);
+            juce::String importError;
+            if(!MagDrumFiles::copyURLToFile(url,importedFile,{},importError)){safe->status.setText(importError,juce::dontSendNotification);return;}
+            file=importedFile;
+#else
+            file = fileChooser.getResult();
             if (file == juce::File()) return;
+#endif
             if (safe->processor.loadSampleForNote(note, file))
                 safe->status.setText("Loaded for MIDI " + juce::String(note) + ": " + file.getFileName(), juce::dontSendNotification);
             else
