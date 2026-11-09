@@ -217,6 +217,23 @@ juce::Array<PluginInstrumentRecord> SampleDatabase::getPluginInstruments() const
     return result;
 }
 
+juce::StringArray SampleDatabase::getPluginKitNames() const
+{
+    juce::StringArray result;
+    if (connection == nullptr) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT DISTINCT p.name || ' / ' || k.name FROM plugin_kits k "
+                      "JOIN plugin_instruments p ON p.id=k.plugin_id ORDER BY p.name COLLATE NOCASE,k.name COLLATE NOCASE";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        if (value != nullptr) result.add(juce::String::fromUTF8(value));
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
 std::optional<std::int64_t> SampleDatabase::savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState)
 {
     if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return std::nullopt;

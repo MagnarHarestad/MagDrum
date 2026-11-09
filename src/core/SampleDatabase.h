@@ -128,6 +128,7 @@ public:
     juce::Array<SampleScanRecord> getRecentSampleScans(int limit = 20) const;
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
+    juce::StringArray getPluginKitNames() const;
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
     std::optional<std::int64_t> getPluginKitId(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;
