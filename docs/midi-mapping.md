@@ -16,4 +16,4 @@ When MIDI import encounters unmapped notes, the app lists each note number and h
 
 - GM mappings are a starter profile, not a guarantee that every instrument follows GM exactly.
 - Ambiguous note assignments are reported, but users must edit the profile and import again to choose another semantic interpretation.
-- The editor diff compares the imported semantic pattern with the current editor state. It does not yet compare timing against a broad collection of third-party MIDI files or report a DAW round-trip diff.
+- Deterministic tests round-trip 24 generated patterns and 1,536 events across custom mappings, velocities, PPQ-grid positions, tempo and time-signature changes. The editor diff has not yet been reviewed against a broad collection of third-party MIDI files or through DAW round-trips.
