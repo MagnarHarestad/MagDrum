@@ -1,4 +1,5 @@
 #include "core/AudioClassifier.h"
+#include "core/SampleClassificationReview.h"
 #include "core/WavScanner.h"
 
 #include <algorithm>
@@ -19,17 +20,24 @@ struct Score
     std::uint64_t samples = 0;
     std::uint64_t correct = 0;
     std::uint64_t skippedWithoutLabel = 0;
+    std::uint64_t aboveReviewThreshold = 0;
+    std::uint64_t correctAboveReviewThreshold = 0;
     std::set<std::string> labels;
     Confusion confusion;
 
-    void add(const std::string& expected, const juce::String& predicted)
+    void add(const std::string& expected, const DrumClassification& predicted)
     {
-        const auto actual = predicted.toStdString();
+        const auto actual = predicted.category.toStdString();
         ++samples;
         ++confusion[{expected, actual}];
         labels.insert(expected);
         labels.insert(actual);
         if (expected == actual) ++correct;
+        if (actual != "Unknown" && predicted.confidence >= sampleClassificationReviewThreshold)
+        {
+            ++aboveReviewThreshold;
+            if (expected == actual) ++correctAboveReviewThreshold;
+        }
     }
 
     void print(const char* title) const
@@ -45,6 +53,18 @@ struct Score
                   << "  Correct: " << correct
                   << "  Accuracy: " << std::fixed << std::setprecision(1)
                   << (100.0 * static_cast<double>(correct) / static_cast<double>(samples)) << "%\n";
+        std::cout << "At the app review threshold (confidence >= "
+                  << std::setprecision(2) << sampleClassificationReviewThreshold << "): "
+                  << aboveReviewThreshold << '/' << samples << " accepted ("
+                  << std::setprecision(1)
+                  << (100.0 * static_cast<double>(aboveReviewThreshold) / static_cast<double>(samples))
+                  << "% coverage), accuracy among accepted: ";
+        if (aboveReviewThreshold == 0)
+            std::cout << "n/a\n";
+        else
+            std::cout << std::setprecision(1)
+                      << (100.0 * static_cast<double>(correctAboveReviewThreshold)
+                          / static_cast<double>(aboveReviewThreshold)) << "%\n";
         std::set<std::string> predictions;
         for (const auto& entry : confusion) predictions.insert(entry.first.second);
         std::cout << "Confusion matrix (rows=actual, columns=predicted)\n"
@@ -180,10 +200,10 @@ int main(int argc, char** argv)
             return true;
         }
 
-        withFilenameCues.add(expected.toStdString(), classifier.classify(sample).category);
+        withFilenameCues.add(expected.toStdString(), classifier.classify(sample));
         auto anonymousSample = sample;
         anonymousSample.file = juce::File("anonymous-audio.wav");
-        withoutFilenameCues.add(expected.toStdString(), classifier.classify(anonymousSample).category);
+        withoutFilenameCues.add(expected.toStdString(), classifier.classify(anonymousSample));
         return true;
     });
 
