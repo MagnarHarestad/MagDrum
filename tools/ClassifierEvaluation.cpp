@@ -1,5 +1,6 @@
 #include "core/AudioClassifier.h"
 #include "core/SampleClassificationReview.h"
+#include "core/SampleDatabase.h"
 #include "core/WavScanner.h"
 
 #include <algorithm>
@@ -10,10 +11,17 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace
 {
 using Confusion = std::map<std::pair<std::string, std::string>, std::uint64_t>;
+
+struct LabeledSample
+{
+    ScannedSample sample;
+    std::string label;
+};
 
 struct Score
 {
@@ -168,6 +176,95 @@ void printUsage()
                  "hi-hats/, open-hats/, toms/, rides/, crashes/ or percs/. Unrecognized\n"
                  "folders are skipped. Reports are local only; audio files are not copied.\n";
 }
+
+bool evaluatePerceptualCandidates(const std::vector<LabeledSample>& samples)
+{
+    if (samples.empty()) return false;
+
+    const auto temporaryDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+        .getChildFile("MagDrumSimilarityEvaluation-" + juce::Uuid().toString());
+    if (!temporaryDirectory.createDirectory().wasOk())
+    {
+        std::cerr << "Could not create a temporary similarity-evaluation database directory.\n";
+        return false;
+    }
+
+    bool succeeded = true;
+    std::uint64_t candidateCount = 0;
+    std::uint64_t sameCategoryCandidates = 0;
+    std::uint64_t queriesWithCandidates = 0;
+    std::uint64_t topCandidateSameCategory = 0;
+    {
+        SampleDatabase database;
+        if (!database.open(temporaryDirectory.getChildFile("similarity.sqlite3")))
+        {
+            std::cerr << "Could not initialize the temporary similarity-evaluation database.\n";
+            succeeded = false;
+        }
+        else
+        {
+            std::map<std::string, std::string> labelsByPath;
+            for (const auto& labeled : samples)
+            {
+                if (!database.insertSample(labeled.sample))
+                {
+                    std::cerr << "Could not index evaluation metadata for "
+                              << labeled.sample.file.getFullPathName() << '\n';
+                    succeeded = false;
+                    break;
+                }
+                labelsByPath.emplace(labeled.sample.file.getFullPathName().toStdString(), labeled.label);
+            }
+
+            if (succeeded)
+            {
+                constexpr int candidateLimit = 10;
+                for (const auto& query : samples)
+                {
+                    const auto candidates = database.findPerceptualDuplicates(query.sample.file, 0.85, candidateLimit);
+                    if (!candidates.empty())
+                    {
+                        ++queriesWithCandidates;
+                        const auto firstLabel = labelsByPath.find(candidates.front().file.getFullPathName().toStdString());
+                        if (firstLabel != labelsByPath.end() && firstLabel->second == query.label)
+                            ++topCandidateSameCategory;
+                    }
+
+                    for (const auto& candidate : candidates)
+                    {
+                        ++candidateCount;
+                        const auto label = labelsByPath.find(candidate.file.getFullPathName().toStdString());
+                        if (label != labelsByPath.end() && label->second == query.label)
+                            ++sameCategoryCandidates;
+                    }
+                }
+            }
+        }
+    }
+    temporaryDirectory.deleteRecursively();
+
+    if (!succeeded) return false;
+    std::cout << "\nPerceptual candidate category agreement (production database search, threshold 0.85, top 10)\n"
+              << "Labeled queries: " << samples.size()
+              << "  Queries with candidates: " << queriesWithCandidates << '\n';
+    if (candidateCount == 0)
+    {
+        std::cout << "No near-duplicate candidates were returned.\n";
+        return true;
+    }
+
+    std::cout << "Returned candidates: " << candidateCount
+              << "  Same-folder-category candidates: " << sameCategoryCandidates
+              << "  Category agreement: " << std::fixed << std::setprecision(1)
+              << (100.0 * static_cast<double>(sameCategoryCandidates) / static_cast<double>(candidateCount)) << "%\n";
+    if (queriesWithCandidates > 0)
+        std::cout << "Top candidate matched the query category: " << topCandidateSameCategory << '/'
+                  << queriesWithCandidates << " queries ("
+                  << (100.0 * static_cast<double>(topCandidateSameCategory) / static_cast<double>(queriesWithCandidates))
+                  << "%)\n";
+    std::cout << "Folder-category agreement is a weak label proxy; it does not verify human-perceived similarity.\n";
+    return true;
+}
 }
 
 int main(int argc, char** argv)
@@ -190,6 +287,7 @@ int main(int argc, char** argv)
     WavScanner::Stats scanStats;
     Score withFilenameCues;
     Score withoutFilenameCues;
+    std::vector<LabeledSample> labeledSamples;
     scanner.scan(root, {}, {}, &scanStats, [&](const ScannedSample& sample)
     {
         const auto expected = labelForSample(sample.file, root);
@@ -204,6 +302,7 @@ int main(int argc, char** argv)
         auto anonymousSample = sample;
         anonymousSample.file = juce::File("anonymous-audio.wav");
         withoutFilenameCues.add(expected.toStdString(), classifier.classify(anonymousSample));
+        labeledSamples.push_back({ sample, expected.toStdString() });
         return true;
     });
 
@@ -215,5 +314,6 @@ int main(int argc, char** argv)
               << "Metrics are for this dataset only. Confidence values are not calibrated.\n";
     withFilenameCues.print("Filename and audio features");
     withoutFilenameCues.print("Audio features only (filename hidden)");
+    if (!evaluatePerceptualCandidates(labeledSamples)) return 1;
     return scanStats.filesAnalyzed > 0 && withFilenameCues.samples > 0 ? 0 : 1;
 }
