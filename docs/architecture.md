@@ -9,3 +9,5 @@ The desktop and mobile sample browsers query SQLite by text and category in stab
 The standalone app writes structured JSON Lines events for application startup/shutdown and sample/plugin scan outcomes to the user's application-data `MagDrum/logs/magdrum.jsonl` file. The active log is capped at 2 MiB; one previous file is retained as `magdrum.previous.jsonl`.
 
 The sequencer preview uses a positionable WAV source that wraps at the rendered file boundary when looping is enabled. Its loop flag is atomic so the GUI can change loop mode while the audio thread is reading without a lock or allocation on that thread.
+
+The library database and audio locations are device-local. Cross-device synchronization has been investigated as versioned metadata operations over a provider-neutral transport; it must not copy a live SQLite database or upload sample/plugin audio by default. Stable content identities and conflict handling require a schema migration and remain unimplemented. See [the synchronization investigation](library-sync.md).
