@@ -30,7 +30,7 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure
 ```
 
-On Windows, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1` builds and tests the standalone app and VST3, then creates the Cubase ZIP under `latest-publish`. Add `-Architecture ARM64` to cross-compile for Windows ARM64 when its Visual Studio toolset is installed. `Build-Unix.sh` builds Linux x64 on Linux/WSL2 and macOS VST3/AU on a Mac. See [local platform builds](docs/local-builds.md) for requirements and limits.
+On Windows, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1` builds and tests the standalone app and VST3, then creates the Cubase ZIP under `latest-publish`. Add `-Architecture ARM64` to cross-compile for Windows ARM64 when its Visual Studio toolset is installed. `Build-Unix.sh` builds Linux x64 on Linux/WSL2 and macOS VST3/AU on a Mac. See [local platform builds](docs/local-builds.md) for requirements and limits, and [classifier evaluation](docs/classifier-evaluation.md) for an optional local labeled-corpus evaluator.
 
 See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The project license is undecided; keep this repository private until licensing is settled. No proprietary SDKs or copyrighted sample libraries are included.
 
