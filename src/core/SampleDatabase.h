@@ -130,6 +130,9 @@ public:
     juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
+    juce::Array<SampleBrowseRecord> searchSampleBrowseRecords(const juce::String& query,
+                                                              const juce::String& category,
+                                                              int limit, int offset = 0) const;
     std::optional<juce::File> getFirstSampleForCategory(const juce::String& category) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;

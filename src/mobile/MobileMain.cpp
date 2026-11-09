@@ -41,6 +41,10 @@ public:
         exportMidi.setButtonText("Export MIDI"); exportMidi.addListener(this); addAndMakeVisible(exportMidi);
         search.setTextToShowWhenEmpty("Search samples", juce::Colour(0xff77736c));
         search.onTextChange = [this] { refresh(); }; addAndMakeVisible(search);
+        loadMore.setButtonText("More");
+        loadMore.onClick = [this] { loadMoreSamples(); };
+        loadMore.setEnabled(false);
+        addAndMakeVisible(loadMore);
         const char* categories[] { "All types", "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion", "Unknown" };
         for (int index = 0; index < 13; ++index) category.addItem(categories[index], index + 1);
         category.setSelectedId(1); category.onChange = [this] { refresh(); }; addAndMakeVisible(category);
@@ -101,7 +105,11 @@ public:
             area.removeFromTop(8); row = area.removeFromTop(42);
             search.setBounds(row.removeFromLeft(400)); row.removeFromLeft(8); category.setBounds(row.removeFromLeft(180));
         }
-        area.removeFromTop(6); status.setBounds(area.removeFromBottom(38)); rows.setBounds(area);
+        area.removeFromTop(6);
+        auto footer = area.removeFromBottom(38);
+        loadMore.setBounds(footer.removeFromRight(92)); footer.removeFromRight(6);
+        status.setBounds(footer);
+        rows.setBounds(area);
     }
 
 private:
@@ -269,13 +277,25 @@ private:
         visible.clear();
         const auto query = search.getText().trim();
         const auto selectedCategory = category.getSelectedId() > 1 ? category.getText() : juce::String();
-        for (const auto& record : database.getSampleBrowseRecords())
-        {
-            if (selectedCategory.isNotEmpty() && record.category != selectedCategory) continue;
-            if (query.isNotEmpty() && !record.file.getFileName().containsIgnoreCase(query)
-                && !record.file.getParentDirectory().getFullPathName().containsIgnoreCase(query)) continue;
-            visible.add(record);
-        }
+        const auto page = database.searchSampleBrowseRecords(query, selectedCategory, samplePageSize + 1, 0);
+        for (int index = 0; index < page.size() && index < samplePageSize; ++index)
+            visible.add(page.getReference(index));
+        hasMoreSamples = page.size() > samplePageSize;
+        loadMore.setEnabled(hasMoreSamples);
+        rows.updateContent(); rows.repaint();
+    }
+
+    void loadMoreSamples()
+    {
+        if (!hasMoreSamples) return;
+        const auto query = search.getText().trim();
+        const auto selectedCategory = category.getSelectedId() > 1 ? category.getText() : juce::String();
+        const auto page = database.searchSampleBrowseRecords(query, selectedCategory,
+            samplePageSize + 1, visible.size());
+        for (int index = 0; index < page.size() && index < samplePageSize; ++index)
+            visible.add(page.getReference(index));
+        hasMoreSamples = page.size() > samplePageSize;
+        loadMore.setEnabled(hasMoreSamples);
         rows.updateContent(); rows.repaint();
     }
 
@@ -352,8 +372,9 @@ private:
             });
     }
 
+    static constexpr int samplePageSize = 250;
     juce::Label title, status;
-    juce::TextButton importFolder, cancelImport, play, stop, importMidi, exportMidi;
+    juce::TextButton importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
     juce::TextEditor search;
     juce::ComboBox category;
     juce::ListBox rows;
@@ -370,6 +391,7 @@ private:
     std::atomic<bool> importCancellation { false };
     bool importRunning = false;
     bool databaseReady = false;
+    bool hasMoreSamples = false;
 };
 
 class MobileApplication final : public juce::JUCEApplication

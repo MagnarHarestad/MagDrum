@@ -1033,6 +1033,55 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
     return records;
 }
 
+juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const juce::String& query,
+                                                                           const juce::String& category,
+                                                                           int limit, int offset) const
+{
+    juce::Array<SampleBrowseRecord> records;
+    if (connection == nullptr || limit <= 0) return records;
+
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>'') "
+                      "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
+                      "WHERE (?1='' OR instr(lower(s.name),lower(?2))>0 OR instr(lower(s.path),lower(?3))>0) "
+                      "AND (?4='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?5 COLLATE NOCASE) "
+                      "ORDER BY s.name COLLATE NOCASE,s.path COLLATE NOCASE LIMIT ?6 OFFSET ?7";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
+
+    const auto trimmedQuery = query.trim();
+    const auto trimmedCategory = category.trim();
+    sqlite3_bind_text(statement, 1, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 4, trimmedCategory.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 5, trimmedCategory.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement, 6, juce::jmin(limit, 1000));
+    sqlite3_bind_int(statement, 7, juce::jmax(0, offset));
+
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto* path = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        if (path == nullptr) continue;
+        SampleBrowseRecord record;
+        record.file = juce::File(juce::String::fromUTF8(path));
+        const auto* categoryText = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
+        record.category = categoryText != nullptr ? juce::String::fromUTF8(categoryText) : juce::String("Unknown");
+        const auto* sourceType = reinterpret_cast<const char*>(sqlite3_column_text(statement, 4));
+        const auto* sourceName = reinterpret_cast<const char*>(sqlite3_column_text(statement, 5));
+        const auto* sourceIdentifier = reinterpret_cast<const char*>(sqlite3_column_text(statement, 6));
+        record.sourceType = sourceType != nullptr ? juce::String::fromUTF8(sourceType) : juce::String();
+        record.sourceName = sourceName != nullptr ? juce::String::fromUTF8(sourceName) : juce::String();
+        record.sourceIdentifier = sourceIdentifier != nullptr ? juce::String::fromUTF8(sourceIdentifier) : juce::String();
+        record.durationSeconds = sqlite3_column_double(statement, 2);
+        record.brightnessHz = sqlite3_column_double(statement, 3);
+        record.classificationConfidence = sqlite3_column_double(statement, 7);
+        record.manuallyClassified = sqlite3_column_int(statement, 8) != 0;
+        records.add(std::move(record));
+    }
+    sqlite3_finalize(statement);
+    return records;
+}
+
 juce::Array<juce::File> SampleDatabase::searchPaths(const juce::String& query,int limit) const
 {
     juce::Array<juce::File> files;if(connection==nullptr||limit<=0)return files;sqlite3_stmt* statement=nullptr;

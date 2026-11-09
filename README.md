@@ -18,6 +18,8 @@ Select a captured plugin preview and choose **Open source kit** to reopen its in
 
 The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Plugin note scans run in a separate process to contain plugin crashes; a child-abort fixture exercises the process supervisor, while an end-to-end fixture with a real third-party instrument remains to be added. An initial iOS/AUv3 source target is present, but it still needs a Mac/Xcode build, signing and device testing.
 
+The iOS source target imports selected local audio files through JUCE's security-scoped URLs into the shared app-group container, then scans them into the shared SQLite library. Its browser uses database-side search/category filters and 250-sample pages, with preview playback and GM semantic MIDI import/export. The shared UI also builds as a Windows desktop preview; that does not verify iOS document-provider or AUv3 runtime behavior.
+
 ## Build
 
 Requires CMake 3.22+, C++20 and Git. JUCE and SQLite are fetched at pinned versions by CMake.
