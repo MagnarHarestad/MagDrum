@@ -459,6 +459,7 @@ int main(int argc,char** argv)
     auto fallback=gm.toMidi(unsupported,true);
     if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
     if(!db.saveMappingProfile("GM test",gm))return 26;
+    if(!db.getMappingProfileNames().contains("GM test"))return 189;
     auto storedProfile=db.loadMappingProfile("GM test");
     if(!storedProfile||storedProfile->toMidi(hat,false).note!=std::optional<std::uint8_t>(42))return 27;
     auto editable=*storedProfile;

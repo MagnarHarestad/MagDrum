@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <atomic>
+#include <thread>
 
 namespace
 {
@@ -160,6 +162,41 @@ int main(int argc, char** argv)
     if (softPeak <= 0.0 || hardPeak <= softPeak * 3.0) return 18;
     if (!restoredLayers.clearSamplesForNote(36) || restoredLayers.clearSamplesForNote(36)
         || restoredLayers.getSamplePathForNote(36).isNotEmpty() || renderPeak(restoredLayers, 36, 96) != 0.0) return 19;
+
+    MagDrumAudioProcessor concurrentSwaps;
+    if (!concurrentSwaps.loadSampleForNote(36, sample)) return 20;
+    concurrentSwaps.prepareToPlay(44100.0, 64);
+    std::atomic<bool> inspectLayers{true}, layersWereValid{true};
+    std::thread layerReader([&]
+    {
+        while (inspectLayers.load(std::memory_order_acquire))
+        {
+            const auto layers = concurrentSwaps.getSampleLayersForNote(36);
+            for (const auto& layer : layers)
+                if (layer.minimumVelocity < 1 || layer.maximumVelocity > 127
+                    || layer.minimumVelocity > layer.maximumVelocity || layer.path.isEmpty())
+                    layersWereValid.store(false, std::memory_order_release);
+        }
+    });
+    std::thread audioCallback([&]
+    {
+        juce::AudioBuffer<float> block(2, 64);
+        juce::MidiBuffer events;
+        while (inspectLayers.load(std::memory_order_acquire))
+        {
+            events.addEvent(juce::MidiMessage::noteOn(1, 36, static_cast<juce::uint8>(96)), 0);
+            concurrentSwaps.processBlock(block, events);
+            events.clear();
+        }
+    });
+    bool swapsSucceeded = true;
+    for (int iteration = 0; iteration < 24; ++iteration)
+        swapsSucceeded = concurrentSwaps.clearSamplesForNote(36)
+            && concurrentSwaps.loadSampleForNote(36, sample) && swapsSucceeded;
+    inspectLayers.store(false, std::memory_order_release);
+    layerReader.join();
+    audioCallback.join();
+    if (!swapsSucceeded || !layersWereValid.load(std::memory_order_acquire)) return 21;
 
     MagDrumAudioProcessor emptyNote;
     emptyNote.prepareToPlay(44100.0, 128);

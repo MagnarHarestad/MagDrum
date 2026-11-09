@@ -1021,6 +1021,22 @@ std::optional<MidiMappingProfile> SampleDatabase::loadMappingProfile(const juce:
     try{return MidiMappingProfile(std::move(entries));}catch(...){return std::nullopt;}
 }
 
+juce::StringArray SampleDatabase::getMappingProfileNames() const
+{
+    juce::StringArray names;
+    if (connection == nullptr) return names;
+    sqlite3_stmt* query = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT name FROM mapping_profiles ORDER BY name COLLATE NOCASE", -1, &query, nullptr) != SQLITE_OK)
+        return names;
+    while (sqlite3_step(query) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+        if (value != nullptr) names.addIfNotAlreadyThere(juce::String::fromUTF8(value));
+    }
+    sqlite3_finalize(query);
+    return names;
+}
+
 bool SampleDatabase::insertSample(const juce::File& file, double duration, int channels, double rate)
 {
     if (connection == nullptr)

@@ -164,6 +164,7 @@ public:
                                                                    int limit = 100) const;
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
+    juce::StringArray getMappingProfileNames() const;
     juce::Array<juce::File> getAllPaths() const;
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;

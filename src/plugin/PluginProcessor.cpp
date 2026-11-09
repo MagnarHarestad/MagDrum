@@ -101,6 +101,7 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
         return false;
     bool removedAny = false;
     const juce::ScopedLock sampleGuard(sampleLock);
+    const juce::ScopedLock stateGuard(stateLock);
     for (int layer = 0; layer < maxVelocityLayers; ++layer)
     {
         auto& owned = ownedSamples[static_cast<size_t>(note)][static_cast<size_t>(layer)];
@@ -115,7 +116,6 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
         sampleSlots[static_cast<size_t>(note)][static_cast<size_t>(layer)].store(nullptr, std::memory_order_release);
         owned.reset();
     }
-    const juce::ScopedLock stateGuard(stateLock);
     for (auto& path : samplePaths[static_cast<size_t>(note)])
         path.clear();
     return removedAny;

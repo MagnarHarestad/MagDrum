@@ -9,7 +9,8 @@ namespace
 {
 class MobileMainComponent final : public juce::AudioAppComponent,
                                  private juce::ListBoxModel,
-                                 private juce::Button::Listener
+                                 private juce::Button::Listener,
+                                 private juce::Timer
 {
 public:
     MobileMainComponent()
@@ -22,7 +23,9 @@ public:
         if (dataDirectory != juce::File()
             && (dataDirectory.createDirectory().wasOk() || dataDirectory.isDirectory()))
         {
-            databaseReady = database.open(dataDirectory.getChildFile("samples.sqlite3"));
+            const auto databaseFile = dataDirectory.getChildFile("samples.sqlite3");
+            databaseReady = database.open(databaseFile);
+            browseDatabaseReady = databaseReady && browseDatabase.open(databaseFile);
             if (databaseReady)
             {
                 importDirectory = dataDirectory.getChildFile("Imported Libraries");
@@ -39,6 +42,23 @@ public:
         stop.setButtonText("Stop"); stop.addListener(this); addAndMakeVisible(stop);
         importMidi.setButtonText("Import MIDI"); importMidi.addListener(this); addAndMakeVisible(importMidi);
         exportMidi.setButtonText("Export MIDI"); exportMidi.addListener(this); addAndMakeVisible(exportMidi);
+        profileName.setTextToShowWhenEmpty("Mapping profile name", juce::Colour(0xff77736c));
+        profileName.setText("General MIDI"); addAndMakeVisible(profileName);
+        savedProfiles.setTextWhenNothingSelected("Saved profiles");
+        savedProfiles.onChange = [this] { loadMappingProfile(); }; addAndMakeVisible(savedProfiles);
+        loadProfile.setButtonText("Load profile"); loadProfile.addListener(this); addAndMakeVisible(loadProfile);
+        saveProfile.setButtonText("Save profile"); saveProfile.addListener(this); addAndMakeVisible(saveProfile);
+        const char* instruments[] { "Kick", "Snare", "Hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion" };
+        for (int index = 0; index < 9; ++index) mappingInstrument.addItem(instruments[index], index + 1);
+        mappingInstrument.setSelectedId(1); addAndMakeVisible(mappingInstrument);
+        const char* articulations[] { "Default", "Center", "Rimshot", "Side stick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge" };
+        for (int index = 0; index < 13; ++index) mappingArticulation.addItem(articulations[index], index + 1);
+        mappingArticulation.setSelectedId(1); addAndMakeVisible(mappingArticulation);
+        mappingNote.setTextToShowWhenEmpty("MIDI note 0–127", juce::Colour(0xff77736c));
+        mappingNote.setInputRestrictions(3, "0123456789"); addAndMakeVisible(mappingNote);
+        setMapping.setButtonText("Set note"); setMapping.addListener(this); addAndMakeVisible(setMapping);
+        removeMapping.setButtonText("Remove"); removeMapping.addListener(this); addAndMakeVisible(removeMapping);
+        if (databaseReady) refreshSavedProfiles();
         search.setTextToShowWhenEmpty("Search samples", juce::Colour(0xff77736c));
         search.onTextChange = [this] { refresh(); }; addAndMakeVisible(search);
         loadMore.setButtonText("More");
@@ -50,7 +70,8 @@ public:
         category.setSelectedId(1); category.onChange = [this] { refresh(); }; addAndMakeVisible(category);
         addAndMakeVisible(rows); rows.setRowHeight(56);
         status.setColour(juce::Label::textColourId, juce::Colour(0xffaaa49b));
-        status.setText(databaseReady ? "Import audio files or search your library."
+        status.setText(databaseReady ? (browseDatabaseReady ? "Import audio files or search your library."
+                                                             : "The sample index is unavailable for browsing.")
             : dataDirectory == juce::File() ? "Shared MagDrum storage is unavailable. Check the signed app-group entitlement."
                                              : "Could not open the MagDrum sound database.", juce::dontSendNotification);
         importFolder.setEnabled(databaseReady);
@@ -63,9 +84,17 @@ public:
 
     ~MobileMainComponent() override
     {
+        stopTimer();
         importCancellation.store(true);
         workers.removeAllJobs(true, -1);
+        browseWorkers.removeAllJobs(true, -1);
         transport.stop(); transport.setSource(nullptr); source.reset(); shutdownAudio();
+    }
+
+    void timerCallback() override
+    {
+        stopTimer();
+        requestBrowsePage(0);
     }
 
     void prepareToPlay(int blockSize, double sampleRate) override { transport.prepareToPlay(blockSize, sampleRate); }
@@ -93,6 +122,15 @@ public:
             importMidi.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); exportMidi.setBounds(row);
             area.removeFromTop(8); row = area.removeFromTop(44);
             search.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); category.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(44);
+            savedProfiles.setBounds(row.removeFromLeft((row.getWidth() - 6) * 2 / 3)); row.removeFromLeft(6); loadProfile.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(44);
+            profileName.setBounds(row.removeFromLeft((row.getWidth() - 6) * 2 / 3)); row.removeFromLeft(6); saveProfile.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(44);
+            mappingInstrument.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); mappingArticulation.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(44);
+            mappingNote.setBounds(row.removeFromLeft((row.getWidth() - 12) / 3)); row.removeFromLeft(6);
+            setMapping.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); removeMapping.setBounds(row);
         }
         else
         {
@@ -104,6 +142,12 @@ public:
             importMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(6); exportMidi.setBounds(row.removeFromLeft(140));
             area.removeFromTop(8); row = area.removeFromTop(42);
             search.setBounds(row.removeFromLeft(400)); row.removeFromLeft(8); category.setBounds(row.removeFromLeft(180));
+            area.removeFromTop(6); row = area.removeFromTop(42);
+            savedProfiles.setBounds(row.removeFromLeft(250)); row.removeFromLeft(6); loadProfile.setBounds(row.removeFromLeft(120)); row.removeFromLeft(8);
+            profileName.setBounds(row.removeFromLeft(240)); row.removeFromLeft(6); saveProfile.setBounds(row.removeFromLeft(120));
+            area.removeFromTop(6); row = area.removeFromTop(42);
+            mappingInstrument.setBounds(row.removeFromLeft(150)); row.removeFromLeft(6); mappingArticulation.setBounds(row.removeFromLeft(150)); row.removeFromLeft(6);
+            mappingNote.setBounds(row.removeFromLeft(130)); row.removeFromLeft(6); setMapping.setBounds(row.removeFromLeft(125)); row.removeFromLeft(6); removeMapping.setBounds(row.removeFromLeft(125));
         }
         area.removeFromTop(6);
         auto footer = area.removeFromBottom(38);
@@ -253,6 +297,94 @@ private:
         else if (button == &stop) transport.stop();
         else if (button == &importMidi) chooseMidiImport();
         else if (button == &exportMidi) chooseMidiExport();
+        else if (button == &loadProfile) loadMappingProfile();
+        else if (button == &saveProfile) saveMappingProfile();
+        else if (button == &setMapping) editMapping(true);
+        else if (button == &removeMapping) editMapping(false);
+    }
+
+    void refreshSavedProfiles(const juce::String& selectName = {})
+    {
+        savedProfiles.clear(juce::dontSendNotification);
+        const auto names = database.getMappingProfileNames();
+        int itemId = 1;
+        for (const auto& name : names)
+        {
+            savedProfiles.addItem(name, itemId);
+            if (name == selectName) savedProfiles.setSelectedId(itemId, juce::dontSendNotification);
+            ++itemId;
+        }
+    }
+
+    void loadMappingProfile()
+    {
+        auto name = savedProfiles.getText().trim();
+        if (name.isEmpty()) name = profileName.getText().trim();
+        auto stored = database.loadMappingProfile(name);
+        if (stored)
+        {
+            mappingProfile = std::move(*stored);
+            profileName.setText(name, juce::dontSendNotification);
+            status.setText("Mapping profile loaded: " + name, juce::dontSendNotification);
+        }
+        else if (name.equalsIgnoreCase("General MIDI"))
+        {
+            mappingProfile = MidiMappingProfile::generalMidi();
+            profileName.setText("General MIDI", juce::dontSendNotification);
+            status.setText("Built-in General MIDI mapping loaded.", juce::dontSendNotification);
+        }
+        else
+            status.setText("Mapping profile not found. Save this profile name to create it.", juce::dontSendNotification);
+    }
+
+    void saveMappingProfile()
+    {
+        const auto name = profileName.getText().trim();
+        if (name.isEmpty())
+        {
+            status.setText("Enter a name for this mapping profile.", juce::dontSendNotification);
+            return;
+        }
+        if (!database.saveMappingProfile(name, mappingProfile))
+        {
+            status.setText("Could not save the mapping profile.", juce::dontSendNotification);
+            return;
+        }
+        refreshSavedProfiles(name);
+        status.setText("Mapping profile saved: " + name, juce::dontSendNotification);
+    }
+
+    void editMapping(bool set)
+    {
+        const auto instrument = static_cast<DrumInstrument>(mappingInstrument.getSelectedId() - 1);
+        const auto articulation = static_cast<DrumArticulation>(mappingArticulation.getSelectedId() - 1);
+        if (set)
+        {
+            const int note = mappingNote.getText().getIntValue();
+            if (mappingNote.getText().trim().isEmpty() || note < 0 || note > 127)
+            {
+                status.setText("Enter a MIDI note from 0 to 127.", juce::dontSendNotification);
+                return;
+            }
+            if (!mappingProfile.setMapping({ instrument, articulation, static_cast<std::uint8_t>(note) }))
+            {
+                status.setText("The MIDI mapping could not be updated.", juce::dontSendNotification);
+                return;
+            }
+        }
+        else if (!mappingProfile.removeMapping(instrument, articulation))
+        {
+            status.setText("That instrument and articulation have no mapping to remove.", juce::dontSendNotification);
+            return;
+        }
+        const auto name = profileName.getText().trim();
+        if (name.isEmpty() || !database.saveMappingProfile(name, mappingProfile))
+        {
+            status.setText("Mapping changed in memory, but the profile could not be saved. Enter a profile name and save it.", juce::dontSendNotification);
+            return;
+        }
+        refreshSavedProfiles(name);
+        status.setText(set ? "MIDI mapping updated and saved." : "MIDI mapping removed and saved.", juce::dontSendNotification);
     }
 
     void beginImport(juce::Array<juce::URL> files)
@@ -276,24 +408,73 @@ private:
 
     void refresh()
     {
+        stopTimer();
+        ++browseGeneration;
+        browsePagePending = false;
         visible.clear();
-        const auto query = search.getText().trim();
-        const auto selectedCategory = category.getSelectedId() > 1 ? category.getText() : juce::String();
-        const auto page = database.searchSampleBrowseRecords(query, selectedCategory, samplePageSize + 1, 0);
-        for (int index = 0; index < page.size() && index < samplePageSize; ++index)
-            visible.add(page.getReference(index));
-        hasMoreSamples = page.size() > samplePageSize;
-        loadMore.setEnabled(hasMoreSamples);
+        hasMoreSamples = false;
+        loadMore.setEnabled(false);
         rows.updateContent(); rows.repaint();
+        startTimer(150);
     }
 
     void loadMoreSamples()
     {
-        if (!hasMoreSamples) return;
-        const auto query = search.getText().trim();
+        if (hasMoreSamples && !browsePagePending)
+            requestBrowsePage(visible.size());
+    }
+
+    class BrowsePageJob final : public juce::ThreadPoolJob
+    {
+    public:
+        BrowsePageJob(MobileMainComponent& ownerIn, SampleDatabase& databaseIn,
+                      juce::String queryIn, juce::String categoryIn,
+                      int offsetIn, std::uint64_t generationIn)
+            : ThreadPoolJob("MagDrum mobile browse page"), owner(&ownerIn), database(databaseIn),
+              query(std::move(queryIn)), selectedCategory(std::move(categoryIn)),
+              offset(offsetIn), generation(generationIn) {}
+
+        JobStatus runJob() override
+        {
+            const auto page = database.searchSampleBrowseRecords(query, selectedCategory,
+                samplePageSize + 1, offset);
+            const auto safe = owner;
+            const auto requestGeneration = generation;
+            const auto requestOffset = offset;
+            juce::MessageManager::callAsync([safe, requestGeneration, requestOffset, page]
+            {
+                if (safe != nullptr)
+                    safe->finishBrowsePage(requestGeneration, requestOffset, page);
+            });
+            return jobHasFinished;
+        }
+
+    private:
+        static constexpr int samplePageSize = 250;
+        juce::Component::SafePointer<MobileMainComponent> owner;
+        SampleDatabase& database;
+        juce::String query, selectedCategory;
+        int offset;
+        std::uint64_t generation;
+    };
+
+    void requestBrowsePage(int offset)
+    {
+        if (browsePagePending || !browseDatabaseReady)
+            return;
         const auto selectedCategory = category.getSelectedId() > 1 ? category.getText() : juce::String();
-        const auto page = database.searchSampleBrowseRecords(query, selectedCategory,
-            samplePageSize + 1, visible.size());
+        browsePagePending = true;
+        loadMore.setEnabled(false);
+        browseWorkers.addJob(new BrowsePageJob(*this, browseDatabase, search.getText().trim(),
+            selectedCategory, offset, browseGeneration), true);
+    }
+
+    void finishBrowsePage(std::uint64_t generation, int offset,
+                          const juce::Array<SampleBrowseRecord>& page)
+    {
+        if (generation != browseGeneration || offset != visible.size())
+            return;
+        browsePagePending = false;
         for (int index = 0; index < page.size() && index < samplePageSize; ++index)
             visible.add(page.getReference(index));
         hasMoreSamples = page.size() > samplePageSize;
@@ -377,22 +558,28 @@ private:
     static constexpr int samplePageSize = 250;
     juce::Label title, status;
     juce::TextButton importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
-    juce::TextEditor search;
-    juce::ComboBox category;
+    juce::TextButton loadProfile, saveProfile, setMapping, removeMapping;
+    juce::TextEditor search, profileName, mappingNote;
+    juce::ComboBox category, savedProfiles, mappingInstrument, mappingArticulation;
     juce::ListBox rows;
     juce::AudioFormatManager formats;
     juce::AudioTransportSource transport;
     std::unique_ptr<juce::AudioFormatReaderSource> source;
     SampleDatabase database;
+    SampleDatabase browseDatabase;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     MidiPattern pattern;
     juce::File dataDirectory, importDirectory;
     juce::Array<SampleBrowseRecord> visible;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::ThreadPool workers { 1 };
+    juce::ThreadPool browseWorkers { 1 };
     std::atomic<bool> importCancellation { false };
+    std::uint64_t browseGeneration = 0;
     bool importRunning = false;
     bool databaseReady = false;
+    bool browseDatabaseReady = false;
+    bool browsePagePending = false;
     bool hasMoreSamples = false;
 };
 
@@ -400,7 +587,7 @@ class MobileApplication final : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName() override { return "MagDrum"; }
-    const juce::String getApplicationVersion() override { return "0.1.0"; }
+    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
     bool moreThanOneInstanceAllowed() override { return true; }
     void initialise(const juce::String&) override { window = std::make_unique<Window>(); }
     void shutdown() override { window.reset(); }
