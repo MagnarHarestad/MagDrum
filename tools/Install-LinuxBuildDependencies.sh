@@ -9,7 +9,7 @@ fi
 if [[ -r /etc/os-release ]]; then
   # shellcheck disable=SC1091
   source /etc/os-release
-  if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *debian* ]]; then
+  if [[ "${ID:-}" != "ubuntu" && "${ID:-}" != "debian" && "${ID_LIKE:-}" != *debian* ]]; then
     echo "This dependency list is intended for Ubuntu (or a compatible Debian derivative)." >&2
     exit 2
   fi
