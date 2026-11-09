@@ -9,6 +9,6 @@
 
 ## Completion criteria
 
-The product is not complete until each supported platform has a reproducible build and install package, library/MIDI behavior has been reviewed against broader real-world collections, candidate similarity has been evaluated on labeled examples, and the advanced planned workflows are implemented. Sample scanning can be safely restarted after an interruption; it does not resume at an exact in-progress file. AUv3/iOS and model-assisted analysis need Apple/mobile and model evaluation work respectively; they are not represented by the desktop CI results. GitHub Pages is not enabled for this private repository, so the checked-in website source is not currently hosted.
+The product is not complete until each supported platform has a reproducible build and install package, library/MIDI behavior has been reviewed against broader real-world collections, candidate similarity has been evaluated on labeled examples, and the advanced planned workflows are implemented. Sample scanning can be safely restarted after an interruption; it does not resume at an exact in-progress file. AUv3/iOS and model-assisted analysis need Apple/mobile and model evaluation work respectively; they are not represented by the desktop CI results. The landing page is deployed privately at https://magdrum-library.cgi.chatgpt.site from the checked-in website source; public GitHub Pages hosting is unavailable for this private repository on the current plan.
 
 Desktop VST3 scanning is not an iOS requirement.
