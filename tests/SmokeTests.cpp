@@ -16,6 +16,7 @@
 #include "core/SampleClassificationReview.h"
 #include "core/StructuredLogger.h"
 #include <iostream>
+#include <array>
 #include <cstring>
 #include <cstdlib>
 #include <chrono>
@@ -418,6 +419,23 @@ int main(int argc,char** argv)
     auto descriptiveTagSample=kickLike;descriptiveTagSample.file=juce::File("Distorted_909_Snare.wav");
     const auto descriptiveTags=AudioClassifier{}.classify(descriptiveTagSample);
     if(descriptiveTags.category!="Snare"||!descriptiveTags.tags.contains("Distorted")||!descriptiveTags.tags.contains("909"))return 196;
+    const std::array<std::pair<const char*, const char*>, 8> sfzNameClasses{{
+        {"hhc_vl1_rr1.flac", "Closed hi-hat"}, {"hho_vl1_rr1.flac", "Open hi-hat"},
+        {"hhp_vl1_rr1.flac", "Pedal hi-hat"}, {"tomhi_vl1_rr1.flac", "Tom"},
+        {"tomlo_vl1_rr1.flac", "Tom"}, {"ridebell_vl1_rr1.flac", "Ride"},
+        {"sidestick_vl1_rr1.flac", "Rimshot"}, {"kick_vl1_rr1.flac", "Kick"}}};
+    for (const auto& [filename, expectedCategory] : sfzNameClasses)
+    {
+        auto mappedName = kickLike; mappedName.file = juce::File(filename);
+        const auto mapped = AudioClassifier{}.classify(mappedName);
+        if (mapped.category != expectedCategory || mapped.confidence < 0.9)
+        {
+            std::cerr << "SFZ family cue failed: " << filename << " => " << mapped.category
+                      << " confidence=" << mapped.confidence << " expected=" << expectedCategory << '\n';
+            return 215;
+        }
+        if (std::strcmp(filename, "ridebell_vl1_rr1.flac") == 0 && !mapped.tags.contains("Articulation: Bell")) return 216;
+    }
     auto sustainedTone=scanned.getFirst();sustainedTone.file=juce::File("tone.wav");
     if(AudioClassifier{}.classify(sustainedTone).category!="Unknown")return 138;
     auto lowCentroidNoise=kickLike;lowCentroidNoise.transientStrength=.02;lowCentroidNoise.fundamentalHz=0;lowCentroidNoise.pitchConfidence=0;

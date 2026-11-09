@@ -31,7 +31,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"roll", "rolls"})) addTag("Articulation: Roll");
     if (has({"brush", "brushes"})) addTag("Articulation: Brushes");
     if (has({"bow", "bowed"})) addTag("Articulation: Bow");
-    if (has({"bell"})) addTag("Articulation: Bell");
+    if (has({"bell", "ridebell"})) addTag("Articulation: Bell");
     if (has({"edge", "rim"})) addTag("Articulation: Edge");
     if (has({"half open", "semi open"})) addTag("Articulation: Half-open");
     if (has({"808"})) { addTag("Electronic"); addTag("808"); }
@@ -60,16 +60,16 @@ DrumClassification classify(const ScannedSample& sample) const override
     juce::StringArray namedCategories;
     if (has({"kick", "bass drum", "bassdrum", "bd"})) namedCategories.add("Kick");
     if (has({"snare", "snr", "sd"})) namedCategories.add("Snare");
-    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat", "hh", "chh", "ohh", "phh"}))
+    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp"}))
     {
-        if (has({"pedal", "foot", "phh"})) namedCategories.add("Pedal hi-hat");
-        else if (has({"open", "ohh"})) namedCategories.add("Open hi-hat");
+        if (has({"pedal", "foot", "phh", "hhp"})) namedCategories.add("Pedal hi-hat");
+        else if (has({"open", "ohh", "hho"})) namedCategories.add("Open hi-hat");
         else namedCategories.add("Closed hi-hat");
     }
     if (has({"clap", "handclap"})) namedCategories.add("Clap");
-    if (has({"tom", "floor tom", "rack tom"})) namedCategories.add("Tom");
+    if (has({"tom", "floor tom", "rack tom", "tomhi", "tomlo"})) namedCategories.add("Tom");
     if (has({"rimshot", "rim shot", "side stick", "sidestick"})) namedCategories.add("Rimshot");
-    if (has({"ride", "ride cymbal"})) namedCategories.add("Ride");
+    if (has({"ride", "ride cymbal", "ridebell", "ride bell"})) namedCategories.add("Ride");
     if (has({"crash", "crash cymbal"})) namedCategories.add("Crash");
     if (has({"percussion", "conga", "bongo", "cowbell", "shaker", "tambourine"})) namedCategories.add("Percussion");
 
@@ -79,7 +79,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        out.confidence = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "tom", "clap", "ride", "crash", "rimshot", "percussion"}) ? 0.92 : 0.82;
+        out.confidence = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"}) ? 0.92 : 0.82;
         return out;
     }
     if (namedCategories.size() > 1)
