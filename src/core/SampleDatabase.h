@@ -72,6 +72,7 @@ struct SampleBrowseRecord
     juce::File file;
     juce::String category, sourceType, sourceName, sourceIdentifier;
     juce::String pluginIdentifier, pluginName, kitName, articulation;
+    juce::StringArray classificationTags;
     double durationSeconds = 0.0, brightnessHz = 0.0;
     double classificationConfidence = 0.0;
     int midiNote = -1, velocity = 0, takeIndex = 1;
@@ -155,6 +156,7 @@ public:
     std::optional<juce::File> getFirstSampleForCategory(const juce::String& category) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;
+    juce::StringArray getClassificationTags(const juce::File& file) const;
     juce::Array<juce::File> findSimilar(const juce::File& file, int limit = 20) const;
     juce::Array<juce::File> findExactDuplicates(const juce::File& file, int limit = 100) const;
     std::vector<PerceptualDuplicateMatch> findPerceptualDuplicates(const juce::File& file,

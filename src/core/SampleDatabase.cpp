@@ -101,6 +101,9 @@ bool SampleDatabase::open(const juce::File& file)
     const char* confirmedSchema = "UPDATE schema_info SET version=max(version,11) WHERE singleton=1; CREATE TABLE IF NOT EXISTS plugin_confirmed_velocity_layers(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),minimum_velocity INTEGER NOT NULL CHECK(minimum_velocity BETWEEN 1 AND 127),maximum_velocity INTEGER NOT NULL CHECK(maximum_velocity BETWEEN minimum_velocity AND 127),PRIMARY KEY(kit_id,midi_note,minimum_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_confirmed_round_robin_takes(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL,velocity INTEGER NOT NULL,take_index INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,velocity,take_index),FOREIGN KEY(kit_id,midi_note,velocity,take_index) REFERENCES plugin_round_robin_takes(kit_id,midi_note,velocity,take_index) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, confirmedSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
+    const char* classificationTagSchema = "UPDATE schema_info SET version=max(version,12) WHERE singleton=1; CREATE TABLE IF NOT EXISTS sample_classification_tags(path TEXT NOT NULL,tag TEXT NOT NULL,PRIMARY KEY(path,tag),FOREIGN KEY(path) REFERENCES samples(path) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS sample_classification_tags_tag ON sample_classification_tags(tag)";
+    if (sqlite3_exec(connection, classificationTagSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
@@ -649,9 +652,14 @@ juce::Array<PluginSoundBrowseRecord> SampleDatabase::getPluginSoundBrowseRecords
 bool SampleDatabase::insertSample(const ScannedSample& sample, std::int64_t sourceId)
 {
     if (connection == nullptr) return false;
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
     sqlite3_stmt* statement = nullptr;
     const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version,analysis_version,source_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version,analysis_version=excluded.analysis_version,source_id=COALESCE(excluded.source_id,samples.source_id)";
-    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
     const auto path = sample.file.getFullPathName(); const auto name = sample.file.getFileName();
     sqlite3_bind_text(statement,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,name.toRawUTF8(),-1,SQLITE_TRANSIENT);
     sqlite3_bind_double(statement,3,sample.durationSeconds); sqlite3_bind_int(statement,4,sample.channels); sqlite3_bind_double(statement,5,sample.sampleRate);
@@ -665,7 +673,41 @@ bool SampleDatabase::insertSample(const ScannedSample& sample, std::int64_t sour
     sqlite3_bind_int(statement,20,sample.acousticFingerprintVersion);
     sqlite3_bind_int(statement,21,sample.analysisVersion);
     if (sourceId > 0) sqlite3_bind_int64(statement,22,sourceId); else sqlite3_bind_null(statement,22);
-    const bool ok=sqlite3_step(statement)==SQLITE_DONE; sqlite3_finalize(statement); return ok;
+    bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    if (ok)
+    {
+        sqlite3_stmt* removeTags = nullptr;
+        ok = sqlite3_prepare_v2(connection, "DELETE FROM sample_classification_tags WHERE path=?", -1, &removeTags, nullptr) == SQLITE_OK;
+        if (ok)
+        {
+            sqlite3_bind_text(removeTags, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            ok = sqlite3_step(removeTags) == SQLITE_DONE;
+        }
+        sqlite3_finalize(removeTags);
+    }
+    if (ok && !sample.classificationTags.isEmpty())
+    {
+        sqlite3_stmt* addTag = nullptr;
+        ok = sqlite3_prepare_v2(connection, "INSERT OR IGNORE INTO sample_classification_tags(path,tag) VALUES(?,?)", -1, &addTag, nullptr) == SQLITE_OK;
+        if (ok)
+        {
+            for (const auto& rawTag : sample.classificationTags)
+            {
+                const auto tag = rawTag.trim();
+                if (tag.isEmpty()) continue;
+                sqlite3_reset(addTag);
+                sqlite3_clear_bindings(addTag);
+                sqlite3_bind_text(addTag, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(addTag, 2, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                if (sqlite3_step(addTag) != SQLITE_DONE) { ok = false; break; }
+            }
+        }
+        sqlite3_finalize(addTag);
+    }
+    const bool committed = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr) == SQLITE_OK;
+    if (ok && !committed) sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && committed;
 }
 
 bool SampleDatabase::isSampleUnchanged(const juce::File& file, std::int64_t sizeBytes,
@@ -812,6 +854,24 @@ juce::StringArray SampleDatabase::getUserTags(const juce::File& file) const
     if(sqlite3_prepare_v2(connection,"SELECT tag FROM sample_tags WHERE path=? ORDER BY tag COLLATE NOCASE",-1,&q,nullptr)!=SQLITE_OK)return tags;
     const auto path=file.getFullPathName();sqlite3_bind_text(q,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
     while(sqlite3_step(q)==SQLITE_ROW){const auto* value=reinterpret_cast<const char*>(sqlite3_column_text(q,0));if(value)tags.add(juce::String::fromUTF8(value));}sqlite3_finalize(q);return tags;
+}
+
+juce::StringArray SampleDatabase::getClassificationTags(const juce::File& file) const
+{
+    juce::StringArray tags;
+    if (connection == nullptr) return tags;
+    sqlite3_stmt* query = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT tag FROM sample_classification_tags WHERE path=? ORDER BY tag COLLATE NOCASE", -1, &query, nullptr) != SQLITE_OK)
+        return tags;
+    const auto path = file.getFullPathName();
+    sqlite3_bind_text(query, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(query) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+        if (value != nullptr) tags.add(juce::String::fromUTF8(value));
+    }
+    sqlite3_finalize(query);
+    return tags;
 }
 
 juce::Array<juce::File> SampleDatabase::findSimilar(const juce::File& file,int limit) const
@@ -1024,7 +1084,7 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
     juce::Array<SampleBrowseRecord> records;
     if (connection == nullptr) return records;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>'') FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id ORDER BY s.name COLLATE NOCASE";
+    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>''),(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id ORDER BY s.name COLLATE NOCASE";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
     while (sqlite3_step(statement) == SQLITE_ROW)
     {
@@ -1044,6 +1104,9 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
         record.brightnessHz = sqlite3_column_double(statement, 3);
         record.classificationConfidence = sqlite3_column_double(statement, 7);
         record.manuallyClassified = sqlite3_column_int(statement, 8) != 0;
+        const auto* encodedTags = reinterpret_cast<const char*>(sqlite3_column_text(statement, 9));
+        if (encodedTags != nullptr) record.classificationTags.addTokens(juce::String::fromUTF8(encodedTags), juce::String::charToString(31), "");
+        record.classificationTags.removeEmptyStrings();
         records.add(std::move(record));
     }
     sqlite3_finalize(statement);
@@ -1058,9 +1121,9 @@ juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const 
     if (connection == nullptr || limit <= 0) return records;
 
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>'') "
+    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>''),(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) "
                       "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
-                      "WHERE (?1='' OR instr(lower(s.name),lower(?2))>0 OR instr(lower(s.path),lower(?3))>0) "
+                      "WHERE (?1='' OR instr(lower(s.name),lower(?2))>0 OR instr(lower(s.path),lower(?3))>0 OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0)) "
                       "AND (?4='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?5 COLLATE NOCASE) "
                       "ORDER BY s.name COLLATE NOCASE,s.path COLLATE NOCASE LIMIT ?6 OFFSET ?7";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
@@ -1093,6 +1156,9 @@ juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const 
         record.brightnessHz = sqlite3_column_double(statement, 3);
         record.classificationConfidence = sqlite3_column_double(statement, 7);
         record.manuallyClassified = sqlite3_column_int(statement, 8) != 0;
+        const auto* encodedTags = reinterpret_cast<const char*>(sqlite3_column_text(statement, 9));
+        if (encodedTags != nullptr) record.classificationTags.addTokens(juce::String::fromUTF8(encodedTags), juce::String::charToString(31), "");
+        record.classificationTags.removeEmptyStrings();
         records.add(std::move(record));
     }
     sqlite3_finalize(statement);
@@ -1119,7 +1185,8 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),"
         "s.classification_confidence,(s.user_category<>''),COALESCE(p.identifier,''),COALESCE(p.name,''),"
         "COALESCE(k.name,''),COALESCE(ps.midi_note,rr.midi_note,-1),COALESCE(ps.velocity,rr.velocity,0),"
-        "COALESCE(ps.articulation,''),COALESCE(rr.take_index,1) "
+        "COALESCE(ps.articulation,''),COALESCE(rr.take_index,1),"
+        "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) "
         "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
         "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
         "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
@@ -1128,7 +1195,8 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "LEFT JOIN plugin_instruments p ON p.id=k.plugin_id "
         "WHERE (?1='' OR instr(lower(s.name),lower(?1))>0 OR instr(lower(s.path),lower(?1))>0 "
         "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
-        "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0)) "
+        "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
+        "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0)) "
         "AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
         "AND (?3='' OR src.source_type=?3) AND (?4='' OR src.identifier=?4) "
         "AND (?5='' OR p.name=?5 COLLATE NOCASE) AND (?6='' OR k.name=?6 COLLATE NOCASE) "
@@ -1173,6 +1241,8 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         record.pluginIdentifier = text(9); record.pluginName = text(10); record.kitName = text(11);
         record.midiNote = sqlite3_column_int(statement, 12); record.velocity = sqlite3_column_int(statement, 13);
         record.articulation = text(14); record.takeIndex = sqlite3_column_int(statement, 15);
+        record.classificationTags.addTokens(text(16), juce::String::charToString(31), "");
+        record.classificationTags.removeEmptyStrings();
         page.records.add(std::move(record));
     }
     sqlite3_finalize(statement);

@@ -2,7 +2,7 @@
 
 MagDrum stores the local library in `samples.sqlite3` under the user's application data directory. The database is local to the user and is not synchronized or uploaded.
 
-The database evolves with additive migrations. `schema_info.version` records the current schema level (version 11); SQLite's `user_version` is not used. Existing sample paths and manual categories are retained while columns are added. Rows without acoustic fingerprint version 1 or the current sample analysis version are rescanned once so updated measurements are populated.
+The database evolves with additive migrations. `schema_info.version` records the current schema level (version 12); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns or tables are added. Rows without acoustic fingerprint version 1 or the current sample analysis version are rescanned once so updated measurements are populated.
 
 ## Current tables
 
@@ -12,6 +12,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `sample_sources` | Stable folder and plugin source identities, display names and folder roots, separate from individual sample paths. Existing folder scans are backfilled when the database opens. |
 | `sample_scan_history` | Sample-folder scan start/end, outcome, counts of considered/skipped/indexed files, errors and restart interruptions. |
 | `sample_tags` | User tags attached to a sample path. |
+| `sample_classification_tags` | Automatic descriptive tags produced by the classifier, stored separately from user-edited tags and searchable in the browser. |
 | `plugin_instruments` | Discovered plugin instrument identity, format, vendor, category, install reference and version. The format-independent JUCE identifier is unique. |
 | `plugin_kits` | Kit/preset records tied to a discovered instrument, including a place for user-approved saved plugin state. |
 | `plugin_sounds` | Captured note/velocity sounds tied to a kit, with silence flag, preview reference, analysis and pitch fields, classification, exact and acoustic fingerprints. |
@@ -22,7 +23,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `plugin_confirmed_round_robin_takes` | The exact captured takes the user has confirmed as one repeated-trigger group; membership is removed automatically when those takes are rescanned or deleted. |
 | `mapping_profiles` | Named semantic MIDI mapping profiles. |
 | `mapping_entries` | Instrument/articulation to MIDI-note mappings within a profile. |
-| `schema_info` | Single-row schema version marker, currently version 11. |
+| `schema_info` | Single-row schema version marker, currently version 12. |
 
 Database APIs can upsert plugin instruments, named kits with opaque plugin state, recall saved kit state, note/velocity sound captures with metadata and versioned velocity-boundary candidates. Manual category corrections to generated previews update both their sample row and the linked plugin sound. The desktop scanner populates kits and captures. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
 

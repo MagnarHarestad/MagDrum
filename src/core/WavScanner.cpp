@@ -310,6 +310,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.acousticFingerprintVersion = sample.acousticFingerprint.length() == 128 ? 1 : 0;
         const auto classification = AudioClassifier{}.classify(sample);
         sample.category = classification.category;
+        sample.classificationTags = classification.tags;
         sample.classificationConfidence = classification.confidence;
         if (sampleConsumer)
         {

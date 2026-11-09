@@ -26,6 +26,7 @@ struct ScannedSample
     juce::String acousticFingerprint;
     int acousticFingerprintVersion = 0;
     juce::String category = "Unknown";
+    juce::StringArray classificationTags;
     double classificationConfidence = 0.0;
 };
 

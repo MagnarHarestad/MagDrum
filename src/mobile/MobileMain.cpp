@@ -221,8 +221,10 @@ private:
         graphics.setColour(juce::Colour(0xfff0eee9)); graphics.setFont(16.0f);
         graphics.drawText(record.file.getFileName(), 12, 5, width - 24, 24, juce::Justification::centredLeft, true);
         graphics.setColour(juce::Colour(0xffaaa49b)); graphics.setFont(12.0f);
-        graphics.drawText(record.category + "  ·  " + juce::String(record.durationSeconds, 2) + " s  ·  "
-            + record.file.getParentDirectory().getFileName(), 12, 29, width - 24, height - 30,
+        auto details = record.category + "  ·  " + juce::String(record.durationSeconds, 2) + " s  ·  "
+            + record.file.getParentDirectory().getFileName();
+        if (!record.classificationTags.isEmpty()) details += "  ·  " + record.classificationTags.joinIntoString(", ");
+        graphics.drawText(details, 12, 29, width - 24, height - 30,
             juce::Justification::centredLeft, true);
     }
 
