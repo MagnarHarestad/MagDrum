@@ -23,6 +23,7 @@ struct PluginScanProcessManifest
     juce::String error;
     bool succeeded = false;
     bool cancelled = false;
+    bool partial = false;
 };
 
 struct PluginScanProcessExecution
@@ -41,8 +42,10 @@ public:
     using Progress = std::function<void(int completed, int total, int midiNote, int velocity)>;
 
     static bool readManifest(const juce::File& file, PluginScanProcessManifest& result);
+    static bool readCaptureLog(const juce::File& file, PluginScanProcessManifest& result);
     static PluginScanProcessExecution monitorWorker(const juce::StringArray& command,
         const juce::File& progressFile, const juce::File& resultFile, const juce::File& cancellationFile,
-        ShouldCancel shouldCancel = {}, Progress progress = {}, int cancellationGraceMilliseconds = 10000);
+        ShouldCancel shouldCancel = {}, Progress progress = {}, int cancellationGraceMilliseconds = 10000,
+        const juce::File& captureLogFile = {});
     static int runWorker(const juce::File& requestFile);
 };

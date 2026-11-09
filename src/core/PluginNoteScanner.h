@@ -39,9 +39,12 @@ class PluginNoteScanner
 public:
     using ShouldCancel = std::function<bool()>;
     using Progress = std::function<void(int completed, int total, int midiNote, int velocity)>;
+    // When provided, captures are delivered immediately and are not retained in the result vector.
+    using CaptureConsumer = std::function<bool(const PluginNoteCapture&)>;
 
     PluginNoteScanResult scan(juce::AudioProcessor& plugin,
                               const PluginNoteScanSettings& settings = {},
                               ShouldCancel shouldCancel = {},
-                              Progress progress = {}) const;
+                              Progress progress = {},
+                              CaptureConsumer captureConsumer = {}) const;
 };

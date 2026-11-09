@@ -39,7 +39,7 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-The Windows x64 app and VST3 built locally with Visual Studio 2026. Both CTest targets passed (2/2), including a synthetic 50,000-row paged-browse check and interrupted-scan recovery. `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip` with SHA-256 `f3da0354851211e6a7c0242dec65a1f7e64eff69e9e2886a986f724b4130a479`. It is published as [v0.1.1-test.43](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.43), whose uploaded ZIP has the same GitHub SHA-256 digest. It was built and published locally without starting GitHub Actions.
+The Windows x64 app and VST3 built locally with Visual Studio 2026. Both CTest targets passed (2/2), including a synthetic 50,000-row paged-browse check, sample-scan restart recovery and plugin-worker crash recovery. `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip` with SHA-256 `cf16864e6a7bc914860d187cddff463cc2bedfe40cadfb6a5ba3daf56f9fc049`. It is published as [v0.1.1-test.44](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.44), whose uploaded ZIP has the same digest. It was built and published locally without starting GitHub Actions.
 
 The `MagDrumMobilePreview` Windows target also compiled successfully from the shared mobile UI sources. CTest passed both existing suites (2/2), including file-URL import/export copying, cancellation, self-copy protection, and paged database search/filter behavior. This verifies shared C++ code only; iOS document-provider access, AUv3 signing, app-group sharing, and device audio still need an Apple build and device validation.
 
@@ -53,7 +53,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Publish-LocalRelease.ps1 `
   -Tag v0.1.1-test.N -Asset $assets
 ```
 
-The package arguments are explicit by design. A release may contain only the platforms available for that test; its generated notes identify the missing packages. Windows x64 is currently available. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`. The current Windows package was rebuilt and tested locally, but is not yet uploaded as a new GitHub release.
+The package arguments are explicit by design. A release may contain only the platforms available for that test; its generated notes identify the missing packages. Windows x64 is currently available. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 

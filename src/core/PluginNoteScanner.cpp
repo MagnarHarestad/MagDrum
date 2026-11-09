@@ -6,7 +6,8 @@
 PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                                              const PluginNoteScanSettings& settings,
                                              ShouldCancel shouldCancel,
-                                             Progress progress) const
+                                             Progress progress,
+                                             CaptureConsumer captureConsumer) const
 {
     PluginNoteScanResult result;
     if (!std::isfinite(settings.sampleRate) || settings.sampleRate < 8000.0 || settings.sampleRate > 192000.0
@@ -47,9 +48,9 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     const int processChannels = juce::jmax(1, juce::jmax(inputChannels, outputChannels));
     const auto totalCaptureCount = static_cast<juce::int64>(128) * static_cast<juce::int64>(settings.velocityLevels.size()) * settings.repeatCount;
     const auto estimatedBytes = totalCaptureCount * captureSamples * outputChannels * static_cast<int>(sizeof(float));
-    if (estimatedBytes > 512 * 1024 * 1024)
+    if (!captureConsumer && estimatedBytes > 512 * 1024 * 1024)
     {
-        result.error = "The requested scan would require more than 512 MiB of capture memory. Reduce velocity levels, repeats, or capture length.";
+        result.error = "The in-memory scan result would exceed 512 MiB. Use a streaming capture consumer or reduce velocity levels, repeats, or capture length.";
         return result;
     }
 
@@ -77,7 +78,8 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         plugin.prepareToPlay(settings.sampleRate, settings.blockSize);
         prepared = true;
         const int totalScans = static_cast<int>(totalCaptureCount);
-        result.notes.reserve(static_cast<size_t>(totalScans));
+        if (!captureConsumer)
+            result.notes.reserve(static_cast<size_t>(totalScans));
         int completed = 0;
 
         for (const auto velocity : settings.velocityLevels)
@@ -138,15 +140,24 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 
                     capture.rms = measuredSamples > 0 ? std::sqrt(sumSquares / static_cast<double>(measuredSamples)) : 0.0;
                     capture.silent = capture.peak <= settings.silencePeakThreshold;
-                    result.notes.push_back(std::move(capture));
+                    if (captureConsumer)
+                    {
+                        if (!captureConsumer(capture))
+                        {
+                            result.error = "A completed plugin capture could not be saved.";
+                            break;
+                        }
+                    }
+                    else
+                        result.notes.push_back(std::move(capture));
                     ++completed;
                     if (progress)
                         progress(completed, totalScans, note, velocity);
                 }
-                if (result.cancelled)
+                if (result.cancelled || result.error.isNotEmpty())
                     break;
             }
-            if (result.cancelled)
+            if (result.cancelled || result.error.isNotEmpty())
                 break;
         }
     }
