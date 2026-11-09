@@ -110,7 +110,7 @@ try {
     Copy-Item -LiteralPath $zipPath -Destination $latestZipPath -Force
 
     $hash = (Get-FileHash -LiteralPath $latestZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    Write-Host "Windows x64 package: $latestZipPath"
+    Write-Host "Windows $Architecture package: $latestZipPath"
     Write-Host "SHA-256: $hash"
     Write-Host 'Publish this archive with gh release create when it is ready for distribution.'
 }

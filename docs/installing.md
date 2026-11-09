@@ -4,7 +4,7 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The currently available archive is the [Windows x64 test build v0.1.1-test.23](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.23). It was built, tested and uploaded locally without GitHub Actions. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The currently available archive is the [Windows x64 test build v0.1.1-test.24](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.24). It was built, tested and uploaded locally without GitHub Actions. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
 ## Windows x64 and Cubase
 
@@ -18,8 +18,9 @@ archive also contains the standalone sample library app.
 ## Windows ARM64
 
 Windows ARM64 can be built locally from Windows x64 with Visual Studio's ARM64
-C++ tools. Those tools are not installed on the machine that produced v0.1.1-test.23,
-so an ARM64 package is not available yet. Use the x64 package only on systems
+C++ tools. The current Visual Studio installation does not include the required
+ARM64 C++ component, so the local ARM64 build stopped before compilation and no
+ARM64 package is available yet. Use the x64 package only on systems
 that support x64 applications until an ARM64 release is available.
 
 ## macOS Intel and Apple Silicon
