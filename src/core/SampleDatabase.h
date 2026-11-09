@@ -29,6 +29,11 @@ struct PluginVelocityLayerBoundary
     int algorithmVersion = 1;
 };
 
+struct PluginConfirmedVelocityLayerRange
+{
+    int midiNote = 0, minimumVelocity = 1, maximumVelocity = 127;
+};
+
 struct PluginRoundRobinTake
 {
     int midiNote = 0, velocity = 100, takeIndex = 1;
@@ -41,6 +46,12 @@ struct PluginRoundRobinCandidate
     int midiNote = 0, velocity = 100, takeCount = 0, distinctVariants = 0;
     double maximumSpectralDistance = 0.0;
     int algorithmVersion = 1;
+};
+
+struct PluginConfirmedRoundRobinGroup
+{
+    int midiNote = 0, velocity = 100;
+    std::vector<int> takeIndices;
 };
 
 struct PluginSoundBrowseRecord
@@ -102,14 +113,20 @@ public:
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
+    std::optional<std::int64_t> getPluginKitId(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     bool upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound);
     bool replacePluginVelocityLayerCandidates(std::int64_t kitId, const std::vector<PluginVelocityLayerBoundary>& candidates);
     std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(std::int64_t kitId) const;
     std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(const juce::String& pluginIdentifier, const juce::String& kitName) const;
+    bool replaceConfirmedPluginVelocityLayers(std::int64_t kitId, const std::vector<PluginConfirmedVelocityLayerRange>& ranges);
+    std::vector<PluginConfirmedVelocityLayerRange> getConfirmedPluginVelocityLayers(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     bool replacePluginRoundRobinData(std::int64_t kitId, const std::vector<PluginRoundRobinTake>& takes,
                                      const std::vector<PluginRoundRobinCandidate>& candidates);
     std::vector<PluginRoundRobinCandidate> getPluginRoundRobinCandidates(const juce::String& pluginIdentifier, const juce::String& kitName) const;
+    bool confirmPluginRoundRobinGroup(std::int64_t kitId, int midiNote, int velocity);
+    bool removeConfirmedPluginRoundRobinGroup(std::int64_t kitId, int midiNote, int velocity);
+    std::vector<PluginConfirmedRoundRobinGroup> getConfirmedPluginRoundRobinGroups(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;

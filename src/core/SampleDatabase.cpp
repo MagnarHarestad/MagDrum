@@ -98,6 +98,9 @@ bool SampleDatabase::open(const juce::File& file)
     const char* roundRobinSchema = "UPDATE schema_info SET version=max(version,9) WHERE singleton=1; CREATE TABLE IF NOT EXISTS plugin_round_robin_takes(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_index INTEGER NOT NULL CHECK(take_index BETWEEN 1 AND 8),silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',acoustic_fingerprint TEXT NOT NULL DEFAULT '',PRIMARY KEY(kit_id,midi_note,velocity,take_index),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_round_robin_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_count INTEGER NOT NULL CHECK(take_count>=2),distinct_variants INTEGER NOT NULL CHECK(distinct_variants BETWEEN 2 AND take_count),maximum_spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, roundRobinSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
+    const char* confirmedSchema = "UPDATE schema_info SET version=max(version,11) WHERE singleton=1; CREATE TABLE IF NOT EXISTS plugin_confirmed_velocity_layers(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),minimum_velocity INTEGER NOT NULL CHECK(minimum_velocity BETWEEN 1 AND 127),maximum_velocity INTEGER NOT NULL CHECK(maximum_velocity BETWEEN minimum_velocity AND 127),PRIMARY KEY(kit_id,midi_note,minimum_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_confirmed_round_robin_takes(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL,velocity INTEGER NOT NULL,take_index INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,velocity,take_index),FOREIGN KEY(kit_id,midi_note,velocity,take_index) REFERENCES plugin_round_robin_takes(kit_id,midi_note,velocity,take_index) ON DELETE CASCADE)";
+    if (sqlite3_exec(connection, confirmedSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN fundamental_hz REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN pitch_confidence REAL NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
@@ -266,6 +269,21 @@ std::optional<juce::MemoryBlock> SampleDatabase::loadPluginKitState(const juce::
     return result;
 }
 
+std::optional<std::int64_t> SampleDatabase::getPluginKitId(const juce::String& pluginIdentifier, const juce::String& kitName) const
+{
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT k.id FROM plugin_kits k JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=?";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return std::nullopt;
+    const auto identifier = pluginIdentifier.trim(), name = kitName.trim();
+    sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const auto result = sqlite3_step(statement) == SQLITE_ROW
+        ? std::optional<std::int64_t>(sqlite3_column_int64(statement, 0)) : std::nullopt;
+    sqlite3_finalize(statement);
+    return result;
+}
+
 bool SampleDatabase::upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound)
 {
     if (connection == nullptr || kitId <= 0 || sound.midiNote < 0 || sound.midiNote > 127 || sound.velocity < 1 || sound.velocity > 127 || sound.duration < 0.0 || sound.sampleRate < 0.0 || sound.channels < 0 || sound.peak < 0.0 || sound.rms < 0.0 || sound.fundamentalHz < 0.0 || sound.pitchConfidence < 0.0 || sound.pitchConfidence > 1.0 || sound.confidence < 0.0 || sound.confidence > 1.0) return false;
@@ -362,6 +380,75 @@ std::vector<PluginVelocityLayerBoundary> SampleDatabase::getPluginVelocityLayerC
     return result;
 }
 
+bool SampleDatabase::replaceConfirmedPluginVelocityLayers(
+    std::int64_t kitId, const std::vector<PluginConfirmedVelocityLayerRange>& ranges)
+{
+    if (connection == nullptr || kitId <= 0) return false;
+    auto sorted = ranges;
+    std::sort(sorted.begin(), sorted.end(), [](const auto& left, const auto& right)
+    {
+        return left.midiNote < right.midiNote
+            || (left.midiNote == right.midiNote && left.minimumVelocity < right.minimumVelocity);
+    });
+    for (size_t index = 0; index < sorted.size(); ++index)
+    {
+        const auto& range = sorted[index];
+        if (range.midiNote < 0 || range.midiNote > 127 || range.minimumVelocity < 1
+            || range.maximumVelocity > 127 || range.minimumVelocity > range.maximumVelocity)
+            return false;
+        if (index > 0 && sorted[index - 1].midiNote == range.midiNote
+            && sorted[index - 1].maximumVelocity >= range.minimumVelocity)
+            return false;
+    }
+
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
+    bool ok = true;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "DELETE FROM plugin_confirmed_velocity_layers WHERE kit_id=?", -1, &statement, nullptr) != SQLITE_OK)
+        ok = false;
+    if (ok)
+    {
+        sqlite3_bind_int64(statement, 1, kitId);
+        ok = sqlite3_step(statement) == SQLITE_DONE;
+    }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    statement = nullptr;
+    if (ok && sqlite3_prepare_v2(connection, "INSERT INTO plugin_confirmed_velocity_layers(kit_id,midi_note,minimum_velocity,maximum_velocity) VALUES(?,?,?,?)", -1, &statement, nullptr) != SQLITE_OK)
+        ok = false;
+    if (ok)
+        for (const auto& range : sorted)
+        {
+            sqlite3_bind_int64(statement, 1, kitId);
+            sqlite3_bind_int(statement, 2, range.midiNote);
+            sqlite3_bind_int(statement, 3, range.minimumVelocity);
+            sqlite3_bind_int(statement, 4, range.maximumVelocity);
+            if (sqlite3_step(statement) != SQLITE_DONE) { ok = false; break; }
+            sqlite3_reset(statement);
+            sqlite3_clear_bindings(statement);
+        }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && transactionResult == SQLITE_OK;
+}
+
+std::vector<PluginConfirmedVelocityLayerRange> SampleDatabase::getConfirmedPluginVelocityLayers(
+    const juce::String& pluginIdentifier, const juce::String& kitName) const
+{
+    std::vector<PluginConfirmedVelocityLayerRange> result;
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT r.midi_note,r.minimum_velocity,r.maximum_velocity FROM plugin_confirmed_velocity_layers r JOIN plugin_kits k ON k.id=r.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=? ORDER BY r.midi_note,r.minimum_velocity";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    const auto identifier = pluginIdentifier.trim(), name = kitName.trim();
+    sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(statement) == SQLITE_ROW)
+        result.push_back({sqlite3_column_int(statement, 0), sqlite3_column_int(statement, 1),
+                          sqlite3_column_int(statement, 2)});
+    sqlite3_finalize(statement);
+    return result;
+}
+
 bool SampleDatabase::replacePluginRoundRobinData(
     std::int64_t kitId, const std::vector<PluginRoundRobinTake>& takes,
     const std::vector<PluginRoundRobinCandidate>& candidates)
@@ -447,6 +534,78 @@ std::vector<PluginRoundRobinCandidate> SampleDatabase::getPluginRoundRobinCandid
         result.push_back({sqlite3_column_int(statement, 0), sqlite3_column_int(statement, 1),
                           sqlite3_column_int(statement, 2), sqlite3_column_int(statement, 3),
                           sqlite3_column_double(statement, 4), sqlite3_column_int(statement, 5)});
+    sqlite3_finalize(statement);
+    return result;
+}
+
+bool SampleDatabase::confirmPluginRoundRobinGroup(std::int64_t kitId, int midiNote, int velocity)
+{
+    if (connection == nullptr || kitId <= 0 || midiNote < 0 || midiNote > 127 || velocity < 1 || velocity > 127)
+        return false;
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
+    sqlite3_stmt* statement = nullptr;
+    bool ok = sqlite3_prepare_v2(connection,
+        "DELETE FROM plugin_confirmed_round_robin_takes WHERE kit_id=? AND midi_note=? AND velocity=?",
+        -1, &statement, nullptr) == SQLITE_OK;
+    if (ok)
+    {
+        sqlite3_bind_int64(statement, 1, kitId);
+        sqlite3_bind_int(statement, 2, midiNote);
+        sqlite3_bind_int(statement, 3, velocity);
+        ok = sqlite3_step(statement) == SQLITE_DONE;
+    }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    statement = nullptr;
+    if (ok)
+        ok = sqlite3_prepare_v2(connection,
+            "INSERT INTO plugin_confirmed_round_robin_takes(kit_id,midi_note,velocity,take_index) SELECT t.kit_id,t.midi_note,t.velocity,t.take_index FROM plugin_round_robin_takes t WHERE t.kit_id=? AND t.midi_note=? AND t.velocity=? AND t.silent=0 AND t.preview_path<>'' AND EXISTS(SELECT 1 FROM plugin_round_robin_candidates c WHERE c.kit_id=t.kit_id AND c.midi_note=t.midi_note AND c.velocity=t.velocity)",
+            -1, &statement, nullptr) == SQLITE_OK;
+    if (ok)
+    {
+        sqlite3_bind_int64(statement, 1, kitId);
+        sqlite3_bind_int(statement, 2, midiNote);
+        sqlite3_bind_int(statement, 3, velocity);
+        ok = sqlite3_step(statement) == SQLITE_DONE && sqlite3_changes(connection) >= 2;
+    }
+    if (statement != nullptr) sqlite3_finalize(statement);
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && transactionResult == SQLITE_OK;
+}
+
+bool SampleDatabase::removeConfirmedPluginRoundRobinGroup(std::int64_t kitId, int midiNote, int velocity)
+{
+    if (connection == nullptr || kitId <= 0 || midiNote < 0 || midiNote > 127 || velocity < 1 || velocity > 127)
+        return false;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection,
+        "DELETE FROM plugin_confirmed_round_robin_takes WHERE kit_id=? AND midi_note=? AND velocity=?",
+        -1, &statement, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int64(statement, 1, kitId);
+    sqlite3_bind_int(statement, 2, midiNote);
+    sqlite3_bind_int(statement, 3, velocity);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    return ok;
+}
+
+std::vector<PluginConfirmedRoundRobinGroup> SampleDatabase::getConfirmedPluginRoundRobinGroups(
+    const juce::String& pluginIdentifier, const juce::String& kitName) const
+{
+    std::vector<PluginConfirmedRoundRobinGroup> result;
+    if (connection == nullptr || pluginIdentifier.trim().isEmpty() || kitName.trim().isEmpty()) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT c.midi_note,c.velocity,c.take_index FROM plugin_confirmed_round_robin_takes c JOIN plugin_kits k ON k.id=c.kit_id JOIN plugin_instruments p ON p.id=k.plugin_id WHERE p.identifier=? AND k.name=? ORDER BY c.midi_note,c.velocity,c.take_index";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    const auto identifier = pluginIdentifier.trim(), name = kitName.trim();
+    sqlite3_bind_text(statement, 1, identifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const int note = sqlite3_column_int(statement, 0), velocity = sqlite3_column_int(statement, 1);
+        if (result.empty() || result.back().midiNote != note || result.back().velocity != velocity)
+            result.push_back({note, velocity, {}});
+        result.back().takeIndices.push_back(sqlite3_column_int(statement, 2));
+    }
     sqlite3_finalize(statement);
     return result;
 }
