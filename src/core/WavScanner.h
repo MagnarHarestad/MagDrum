@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <juce_audio_formats/juce_audio_formats.h>
 
-inline constexpr int currentSampleAnalysisVersion = 3;
+inline constexpr int currentSampleAnalysisVersion = 4;
 
 struct ScannedSample
 {

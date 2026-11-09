@@ -305,6 +305,15 @@ int main(int argc,char** argv)
     ScannedSample namedHat=kickLike;namedHat.file=juce::File("808_Open_HiHat_deep.wav");
     const auto namedPrediction=AudioClassifier{}.classify(namedHat);
     if(namedPrediction.category!="Open hi-hat"||namedPrediction.confidence<0.9||!namedPrediction.tags.contains("808")||!namedPrediction.tags.contains("Electronic")||!namedPrediction.tags.contains("Deep"))return 64;
+    ScannedSample articulationSample=namedHat;articulationSample.file=juce::File("Snare_Ghost_Note_Flam_Cross_Stick_Brush.wav");const auto articulationPrediction=AudioClassifier{}.classify(articulationSample);
+    if(articulationPrediction.category!="Snare"||!articulationPrediction.tags.contains("Articulation: Ghost note")||!articulationPrediction.tags.contains("Articulation: Flam")||!articulationPrediction.tags.contains("Articulation: Cross stick")||!articulationPrediction.tags.contains("Articulation: Brushes"))return 173;
+    articulationSample.file=juce::File("Half_Open_HiHat_Bell_Edge.wav");const auto cymbalArticulationPrediction=AudioClassifier{}.classify(articulationSample);
+    if(cymbalArticulationPrediction.category!="Open hi-hat"||!cymbalArticulationPrediction.tags.contains("Articulation: Half-open")||!cymbalArticulationPrediction.tags.contains("Articulation: Bell")||!cymbalArticulationPrediction.tags.contains("Articulation: Edge"))return 174;
+    const auto articulationRoot=root.getSiblingFile("MagDrumArticulationTagTest");articulationRoot.deleteRecursively();if(!articulationRoot.createDirectory().wasOk())return 175;
+    const auto articulationFile=articulationRoot.getChildFile("Snare_Ghost_Note_Flam_Cross_Stick_Brush.wav");if(!waveFile.copyFileTo(articulationFile))return 176;
+    const auto articulationScans=scanner.scan(articulationRoot);if(articulationScans.size()!=1||!articulationScans.getFirst().classificationTags.contains("Articulation: Ghost note")||!articulationScans.getFirst().classificationTags.contains("Articulation: Flam"))return 177;
+    SampleDatabase articulationDb;if(!articulationDb.open(articulationRoot.getChildFile("articulations.sqlite3"))||!articulationDb.insertSample(articulationScans.getFirst())||!articulationDb.getClassificationTags(articulationFile).contains("Articulation: Flam"))return 178;
+    SampleBrowseFilter articulationFilter;articulationFilter.query="Articulation: Flam";const auto articulationSearch=articulationDb.searchSampleBrowseRecords(articulationFilter,10,0);if(articulationSearch.records.size()!=1||!articulationSearch.records[0].classificationTags.contains("Articulation: Flam"))return 179;
     ScannedSample filenameOnly;filenameOnly.durationSeconds=.5;filenameOnly.rms=.2;filenameOnly.peak=.8;filenameOnly.spectralCentroidHz=2500;filenameOnly.transientStrength=.01;
     filenameOnly.file=juce::File("Kick_01.wav");const auto tokenKick=AudioClassifier{}.classify(filenameOnly);
     if(tokenKick.category!="Kick"||tokenKick.confidence<0.9)return 141;

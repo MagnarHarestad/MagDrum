@@ -22,6 +22,18 @@ DrumClassification classify(const ScannedSample& sample) const override
         });
     };
     const auto addTag = [&out](const char* tag) { if (!out.tags.contains(tag)) out.tags.add(tag); };
+    if (has({"rimshot", "rim shot"})) addTag("Articulation: Rimshot");
+    if (has({"side stick", "sidestick"})) addTag("Articulation: Side stick");
+    if (has({"cross stick", "cross-stick", "x-stick"})) addTag("Articulation: Cross stick");
+    if (has({"ghost", "ghost note", "ghosted"})) addTag("Articulation: Ghost note");
+    if (has({"flam", "flammed"})) addTag("Articulation: Flam");
+    if (has({"drag", "ruff"})) addTag("Articulation: Drag");
+    if (has({"roll", "rolls"})) addTag("Articulation: Roll");
+    if (has({"brush", "brushes"})) addTag("Articulation: Brushes");
+    if (has({"bow", "bowed"})) addTag("Articulation: Bow");
+    if (has({"bell"})) addTag("Articulation: Bell");
+    if (has({"edge", "rim"})) addTag("Articulation: Edge");
+    if (has({"half open", "semi open"})) addTag("Articulation: Half-open");
     if (has({"808"})) { addTag("Electronic"); addTag("808"); }
     if (has({"909"})) { addTag("Electronic"); addTag("909"); }
     if (has({"electronic", "synth", "drum machine"})) addTag("Electronic");
