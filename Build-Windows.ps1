@@ -79,7 +79,7 @@ try {
     & $cmakePath @configureArguments
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
 
-    & $cmakePath --build $buildDirectory --config Release --target MagDrum MagDrumPlugin_VST3 MagDrumTests --parallel 4
+    & $cmakePath --build $buildDirectory --config Release --target MagDrum MagDrumPlugin_VST3 MagDrumTests MagDrumPluginTests --parallel 4
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
 
     if (-not $SkipTests) {

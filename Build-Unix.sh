@@ -47,12 +47,12 @@ if [[ "$host_os" == "Darwin" ]]; then
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_OSX_ARCHITECTURES="$arch" \
     -DBUILD_TESTING=ON
-  targets=(MagDrum MagDrumPlugin_VST3 MagDrumPlugin_AU MagDrumTests)
+  targets=(MagDrum MagDrumPlugin_VST3 MagDrumPlugin_AU MagDrumTests MagDrumPluginTests)
 else
   cmake -S "$repo_root" -B "$build_dir" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=ON
-  targets=(MagDrum MagDrumPlugin_VST3 MagDrumTests)
+  targets=(MagDrum MagDrumPlugin_VST3 MagDrumTests MagDrumPluginTests)
 fi
 
 cmake --build "$build_dir" --config Release --parallel "${BUILD_JOBS:-2}" --target "${targets[@]}"
