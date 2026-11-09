@@ -1,0 +1,213 @@
+#include "PluginScanProcess.h"
+#include "PluginNoteScanner.h"
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <cmath>
+#include <limits>
+
+namespace
+{
+juce::var readJson(const juce::File& file)
+{
+    return file.existsAsFile() ? juce::JSON::parse(file.loadFileAsString()) : juce::var();
+}
+
+bool writeJson(const juce::File& file, const juce::var& value)
+{
+    return file.replaceWithText(juce::JSON::toString(value, true));
+}
+
+bool writeCapture(const juce::File& file, const PluginNoteCapture& capture, double sampleRate)
+{
+    std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());
+    if (stream == nullptr)
+        return false;
+
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(
+        stream.get(), sampleRate, static_cast<unsigned int>(capture.audio.getNumChannels()), 24, {}, 0));
+    if (writer == nullptr)
+        return false;
+
+    stream.release();
+    return writer->writeFromAudioSampleBuffer(capture.audio, 0, capture.audio.getNumSamples());
+}
+
+juce::var makeCaptureValue(const PluginNoteCapture& capture, const juce::String& fileName)
+{
+    auto* value = new juce::DynamicObject();
+    value->setProperty("midiNote", capture.midiNote);
+    value->setProperty("velocity", capture.velocity);
+    value->setProperty("takeIndex", capture.takeIndex);
+    value->setProperty("channels", capture.audio.getNumChannels());
+    value->setProperty("sampleCount", capture.audio.getNumSamples());
+    value->setProperty("peak", capture.peak);
+    value->setProperty("rms", capture.rms);
+    value->setProperty("silent", capture.silent);
+    value->setProperty("fileName", fileName);
+    return juce::var(value);
+}
+
+juce::var makeErrorManifest(const juce::String& error)
+{
+    auto* value = new juce::DynamicObject();
+    value->setProperty("ok", false);
+    value->setProperty("error", error);
+    value->setProperty("cancelled", false);
+    value->setProperty("captures", juce::Array<juce::var>());
+    return juce::var(value);
+}
+}
+
+bool PluginScanProcess::readManifest(const juce::File& file, PluginScanProcessManifest& result)
+{
+    result = {};
+    const auto value = readJson(file);
+    if (!value.isObject())
+        return false;
+
+    const auto* object = value.getDynamicObject();
+    result.succeeded = static_cast<bool>(object->getProperty("ok"));
+    result.error = object->getProperty("error").toString();
+    result.cancelled = static_cast<bool>(object->getProperty("cancelled"));
+    const auto capturesValue = object->getProperty("captures");
+    const auto* captures = capturesValue.getArray();
+    if (captures == nullptr)
+        return false;
+
+    result.captures.reserve(static_cast<size_t>(captures->size()));
+    for (const auto& item : *captures)
+    {
+        if (!item.isObject())
+            return false;
+        const auto* capture = item.getDynamicObject();
+        PluginScanProcessCapture record;
+        record.midiNote = static_cast<int>(capture->getProperty("midiNote"));
+        record.velocity = static_cast<int>(capture->getProperty("velocity"));
+        record.takeIndex = static_cast<int>(capture->getProperty("takeIndex"));
+        record.channels = static_cast<int>(capture->getProperty("channels"));
+        record.sampleCount = static_cast<int>(capture->getProperty("sampleCount"));
+        record.peak = static_cast<double>(capture->getProperty("peak"));
+        record.rms = static_cast<double>(capture->getProperty("rms"));
+        record.silent = static_cast<bool>(capture->getProperty("silent"));
+        record.fileName = capture->getProperty("fileName").toString();
+        const auto expectedFileName = "note_" + juce::String(record.midiNote).paddedLeft('0', 3)
+            + "_velocity_" + juce::String(record.velocity).paddedLeft('0', 3)
+            + "_take_" + juce::String(record.takeIndex).paddedLeft('0', 3) + ".wav";
+        if (record.midiNote < 0 || record.midiNote > 127 || record.velocity < 1 || record.velocity > 127
+            || record.takeIndex < 1 || record.channels < 1 || record.channels > 8 || record.sampleCount < 1
+            || !std::isfinite(record.peak) || record.peak < 0.0 || !std::isfinite(record.rms) || record.rms < 0.0
+            || (!record.silent && record.fileName != expectedFileName)
+            || (record.silent && record.fileName.isNotEmpty()))
+            return false;
+        result.captures.push_back(std::move(record));
+    }
+    return true;
+}
+
+int PluginScanProcess::runWorker(const juce::File& requestFile)
+{
+    const auto requestValue = readJson(requestFile);
+    if (!requestValue.isObject())
+        return 2;
+
+    const auto* request = requestValue.getDynamicObject();
+    const auto descriptionFile = juce::File(request->getProperty("descriptionFile").toString());
+    const auto stateFile = juce::File(request->getProperty("stateFile").toString());
+    const auto outputDirectory = juce::File(request->getProperty("outputDirectory").toString());
+    const auto cancellationFile = juce::File(request->getProperty("cancellationFile").toString());
+    const auto progressFile = juce::File(request->getProperty("progressFile").toString());
+    const auto resultFile = juce::File(request->getProperty("resultFile").toString());
+    const double sampleRate = request->getProperty("sampleRate");
+    const int blockSize = request->getProperty("blockSize");
+    if (!descriptionFile.existsAsFile() || !stateFile.existsAsFile() || !outputDirectory.isDirectory()
+        || !resultFile.getParentDirectory().isDirectory())
+        return 3;
+
+    const auto xml = juce::XmlDocument::parse(descriptionFile);
+    juce::PluginDescription description;
+    if (xml == nullptr || !description.loadFromXml(*xml))
+    {
+        writeJson(resultFile, makeErrorManifest("The plugin description could not be loaded in the scanner process."));
+        return 4;
+    }
+
+    juce::AudioPluginFormatManager formats;
+    juce::addHeadlessDefaultFormatsToManager(formats);
+    juce::String loadError;
+    auto plugin = formats.createPluginInstance(description, sampleRate, blockSize, loadError);
+    if (plugin == nullptr)
+    {
+        writeJson(resultFile, makeErrorManifest("Could not load the plugin in the isolated scanner process: " + loadError));
+        return 5;
+    }
+
+    juce::MemoryBlock state;
+    if (!stateFile.loadFileAsData(state) || state.isEmpty() || state.getSize() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        writeJson(resultFile, makeErrorManifest("The saved plugin kit state could not be read."));
+        return 6;
+    }
+    plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+
+    PluginNoteScanSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.blockSize = blockSize;
+    settings.repeatCount = request->getProperty("repeatCount");
+    settings.noteDurationSeconds = request->getProperty("noteDurationSeconds");
+    settings.releaseSeconds = request->getProperty("releaseSeconds");
+    settings.captureLengthSeconds = request->getProperty("captureLengthSeconds");
+    const auto velocitiesValue = request->getProperty("velocityLevels");
+    const auto* velocities = velocitiesValue.getArray();
+    if (velocities == nullptr)
+    {
+        writeJson(resultFile, makeErrorManifest("The velocity list is missing from the scanner request."));
+        return 7;
+    }
+    for (const auto& velocity : *velocities)
+        settings.velocityLevels.push_back(static_cast<int>(velocity));
+
+    PluginNoteScanner scanner;
+    auto scan = scanner.scan(*plugin, settings,
+        [&cancellationFile] { return cancellationFile.existsAsFile(); },
+        [&progressFile](int completed, int total, int midiNote, int velocity)
+        {
+            auto* progress = new juce::DynamicObject();
+            progress->setProperty("completed", completed);
+            progress->setProperty("total", total);
+            progress->setProperty("midiNote", midiNote);
+            progress->setProperty("velocity", velocity);
+            writeJson(progressFile, juce::var(progress));
+        });
+
+    if (scan.error.isNotEmpty())
+    {
+        writeJson(resultFile, makeErrorManifest(scan.error));
+        return 8;
+    }
+
+    juce::Array<juce::var> captures;
+    captures.ensureStorageAllocated(static_cast<int>(scan.notes.size()));
+    for (const auto& capture : scan.notes)
+    {
+        juce::String fileName;
+        if (!capture.silent)
+        {
+            fileName = "note_" + juce::String(capture.midiNote).paddedLeft('0', 3)
+                + "_velocity_" + juce::String(capture.velocity).paddedLeft('0', 3)
+                + "_take_" + juce::String(capture.takeIndex).paddedLeft('0', 3) + ".wav";
+            if (!writeCapture(outputDirectory.getChildFile(fileName), capture, sampleRate))
+            {
+                writeJson(resultFile, makeErrorManifest("The isolated scanner could not write an audio preview."));
+                return 9;
+            }
+        }
+        captures.add(makeCaptureValue(capture, fileName));
+    }
+
+    auto* manifest = new juce::DynamicObject();
+    manifest->setProperty("ok", true);
+    manifest->setProperty("error", juce::String());
+    manifest->setProperty("cancelled", scan.cancelled);
+    manifest->setProperty("captures", captures);
+    return writeJson(resultFile, juce::var(manifest)) ? 0 : 10;
+}

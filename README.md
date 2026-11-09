@@ -2,7 +2,7 @@
 
 MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Browse WAV sample libraries alongside sounds from drum instruments, audition them, and transfer drum patterns through semantic MIDI mappings.
 
-**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. Windows x64 is the current test build; Windows ARM64 is now included in CI/package configuration but remains unverified.
+**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. Windows x64 is the current test build. Windows ARM64 is configured for cross-compilation but still needs its Visual Studio toolset and package verification.
 
 **Website source:** [docs/index.html](docs/index.html). The repository is private and GitHub Pages is not enabled, so this source is not currently hosted.
 
@@ -16,7 +16,7 @@ The browser filters by sample folder, scanned instrument, kit, category, measure
 
 Select a captured plugin preview and choose **Open source kit** to reopen its instrument with the saved kit state, when the instrument is still installed. See [the plugin scanning guide](docs/plugin-scanning.md) for the manual kit capture workflow, VST3 preset loading and their current limits.
 
-The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Third-party plugin scanning still runs in-process, so a crashing plugin can terminate MagDrum. AUv3 and iOS remain roadmap work.
+The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Plugin note scans run in a separate process to contain plugin crashes; an end-to-end crash fixture with third-party instruments remains to be added. AUv3 and iOS remain roadmap work.
 
 ## Build
 

@@ -4,6 +4,7 @@
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
 #include "core/PluginNoteScanner.h"
+#include "core/PluginScanProcess.h"
 #include "core/PluginPrograms.h"
 #include "core/PluginPresetFiles.h"
 #include "core/PatternAudioRenderer.h"
@@ -82,6 +83,11 @@ int main()
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    const auto workerManifestFile=root.getChildFile("worker-result.json");
+    if(!workerManifestFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[{"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"},{"midiNote":60,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"peak":0.0,"rms":0.0,"silent":true,"fileName":""}]})"))return 131;
+    PluginScanProcessManifest workerManifest;
+    if(!PluginScanProcess::readManifest(workerManifestFile,workerManifest)||!workerManifest.succeeded||workerManifest.error.isNotEmpty()||workerManifest.cancelled||workerManifest.captures.size()!=2||workerManifest.captures[0].midiNote!=36||workerManifest.captures[0].fileName!="note_036_velocity_100_take_001.wav"||workerManifest.captures[1].midiNote!=60||!workerManifest.captures[1].silent)return 132;
+    if(!workerManifestFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[{"midiNote":128,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"peak":0.5,"rms":0.2,"silent":false,"fileName":"bad.wav"}]})")||PluginScanProcess::readManifest(workerManifestFile,workerManifest))return 133;
     const auto presetFolder=root.getChildFile("presets");if(!presetFolder.createDirectory().wasOk())return 124;const auto presetA=presetFolder.getChildFile("A Kit.vstpreset");const auto presetB=presetFolder.getChildFile("nested").getChildFile("B Kit.VSTPRESET");if(!presetB.getParentDirectory().createDirectory().wasOk()||!presetA.replaceWithText("fixture")||!presetB.replaceWithText("fixture")||!presetFolder.getChildFile("ignore.fxp").replaceWithText("fixture"))return 125;const auto foundPresets=findVst3PresetFiles(presetFolder);if(!foundPresets.rootIsDirectory||foundPresets.cancelled||foundPresets.files.size()!=2||foundPresets.files[0].getFileName()!="A Kit.vstpreset"||foundPresets.files[1].getFileName()!="B Kit.VSTPRESET")return 126;const auto cancelledPresetSearch=findVst3PresetFiles(presetFolder,[]{return true;});if(!cancelledPresetSearch.cancelled||!cancelledPresetSearch.files.isEmpty())return 127;
     auto waveFile=root.getChildFile("kick.wav");
     juce::WavAudioFormat wav;

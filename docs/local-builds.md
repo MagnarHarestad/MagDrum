@@ -30,24 +30,19 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-The Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.28, its SHA-256 is `405baccd41afc831b1dabe7077b461cf88b61e20e792037c9417c2c345eec388`. This build adds the Open source kit action to reopen a plugin-generated preview's instrument and recall its saved kit state. It also includes browser visibility and review filtering for heuristic classification confidence. The threshold is a triage aid and is not calibrated. It also includes VST3 preset-file discovery/loading, looped sequencer preview playback, and clear reporting for missing or unreadable sample previews. The package can be published with GitHub CLI without starting Actions.
+The Windows x64 app and VST3 built successfully locally, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. The current local archive has SHA-256 `196c3585b7a95bdca009902a5d3f1a84ae05e43cf16aea5a7ba51b2ab0da0abc`. It includes plugin note scanning in a separate worker process, source-kit recall for plugin previews, classification-confidence review, VST3 preset discovery/loading, looped sequencer preview, and the PowerShell VST3 installer. The worker process was launched in a bounded smoke check; a real third-party plugin crash fixture remains outstanding. The archive can be uploaded through the GitHub Releases API without starting Actions.
 
 GitHub Actions attempts for all five configured platforms were blocked by the same billing limit before any job steps began. The local build scripts do not consume Actions minutes. On this Windows computer, x64 is available and verified; ARM64 preflight fails because the Visual Studio ARM64 C++ component is missing; Linux x64 needs a usable Linux host or WSL distribution (none is currently available); and both macOS targets need a Mac with Xcode. Thus local builds can replace the hosted process, but this computer alone cannot produce all five platform packages.
 
-When archives are available from each host, collect them in `latest-publish` and publish them from a local machine with GitHub CLI. GitHub release creation uses the GitHub API; it does not start a hosted build. The workflow is manual-only, so local commits and release tags do not launch the hosted build matrix:
+When archives are available from each host, collect them in `latest-publish`. Publish only the archives you have just built and checked, naming them explicitly so a stale archive cannot slip into a release. `Publish-LocalRelease.ps1` calculates SHA-256 values, attaches a checksum file, lists platforms that are missing, and uploads the selected packages through GitHub's Releases API. It does not start Actions. The repository workflow is `workflow_dispatch` only, so neither local commits nor release tags launch its build matrix:
 
 ```powershell
-$tag = 'v0.1.1-test.N' # Replace N with the next unused test number.
-gh release create $tag `
-  .\latest-publish\MagDrum-Windows-x64.zip `
-  .\latest-publish\MagDrum-Windows-ARM64.zip `
-  .\latest-publish\MagDrum-macOS-Intel.zip `
-  .\latest-publish\MagDrum-macOS-AppleSilicon.zip `
-  .\latest-publish\MagDrum-Linux-x64.tar.gz `
-  --prerelease --generate-notes
+$assets = @('MagDrum-Windows-x64.zip') # Add only packages built and checked on their target hosts.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Publish-LocalRelease.ps1 `
+  -Tag v0.1.1-test.N -Asset $assets
 ```
 
-Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.28 package contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
+The package arguments are explicit by design. A release may contain only the platforms available for that test; its generated notes identify the missing packages. Windows x64 is currently available. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 
@@ -56,4 +51,4 @@ Only include archives that exist and have passed their host-side checks. A relea
 - **macOS Intel and Apple Silicon, AU:** use `Build-Unix.sh` on a Mac with compatible Xcode and the required SDKs. Those Apple targets cannot be built on the current Windows host.
 - **iOS/iPadOS AUv3:** requires a separate Apple mobile target, AUv3 implementation, signing setup, and device testing; the current project does not contain that target.
 
-**Recommended local release flow:** build and test each package on its native host with `Build-Windows.ps1` or `Build-Unix.sh`, copy the resulting archives into `latest-publish`, verify each SHA-256, then create a release from a machine with `gh` authenticated. This does not dispatch the repository's workflow: `.github/workflows/build.yml` only runs for `workflow_dispatch`, and `gh release create` uploads the packages through GitHub's release API rather than starting build runners. This avoids the current Actions billing block while keeping GitHub Releases as the download location. Native Windows, macOS and Linux machines are still needed to produce and validate all five targets; Windows ARM64 can be cross-compiled from Windows x64 with the extra toolset. Self-hosted Actions runners are a separate option, but remain tied to Actions orchestration and are not needed for this manual process.
+**Local release flow:** build and test a package on its available host using `Build-Windows.ps1` or `Build-Unix.sh`, then use `Publish-LocalRelease.ps1` with the explicit archive name(s). GitHub Releases remains the download location, but build, test and packaging run locally, outside Actions billing. One Windows x64 computer cannot produce all five packages: ARM64 needs its Visual Studio cross-toolchain; Linux needs an available Linux/WSL host; Intel and Apple Silicon macOS need a Mac (Apple Silicon can cross-build Intel). Self-hosted Actions runners are unnecessary for this manual process.
