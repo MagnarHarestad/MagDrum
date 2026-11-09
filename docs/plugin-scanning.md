@@ -4,7 +4,7 @@ The desktop app can discover installed audio plugins using JUCE's plugin list. U
 
 ## Capture a kit
 
-1. Select an instrument plugin and load it. MagDrum opens the plugin's own editor.
+1. Select an instrument plugin and load it. MagDrum opens the plugin's own editor. In the sample browser, select a captured preview and use **Open source kit** to load the same instrument and recall its saved kit state. The instrument must still be installed and discoverable.
 2. Choose a kit or preset in that editor. MagDrum does not assume that the plugin exposes a list of presets.
 3. Close the editor, enter a kit name, and save the current plugin state. The state can later be recalled by loading the same instrument and choosing that kit name.
 4. Choose velocity levels, note duration, release time, total capture length and repeat count (1–8), then start the scan. MagDrum sends MIDI notes 0–127 at each selected velocity and renders each repeat offline.

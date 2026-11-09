@@ -30,7 +30,7 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-The Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.27, its SHA-256 is `53e9320517e265c545b8043504a540cb5c01a45983eb0a4c7ef565de5e8f31a1`. This build adds browser visibility and review filtering for heuristic classification confidence. The threshold is a triage aid and is not calibrated. It also includes VST3 preset-file discovery/loading, looped sequencer preview playback, and clear reporting for missing or unreadable sample previews. The package can be published with GitHub CLI without starting Actions.
+The Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.28, its SHA-256 is `405baccd41afc831b1dabe7077b461cf88b61e20e792037c9417c2c345eec388`. This build adds the Open source kit action to reopen a plugin-generated preview's instrument and recall its saved kit state. It also includes browser visibility and review filtering for heuristic classification confidence. The threshold is a triage aid and is not calibrated. It also includes VST3 preset-file discovery/loading, looped sequencer preview playback, and clear reporting for missing or unreadable sample previews. The package can be published with GitHub CLI without starting Actions.
 
 GitHub Actions attempts for all five configured platforms were blocked by the same billing limit before any job steps began. The local build scripts do not consume Actions minutes. On this Windows computer, x64 is available and verified; ARM64 preflight fails because the Visual Studio ARM64 C++ component is missing; Linux x64 needs a usable Linux host or WSL distribution (none is currently available); and both macOS targets need a Mac with Xcode. Thus local builds can replace the hosted process, but this computer alone cannot produce all five platform packages.
 
@@ -47,7 +47,7 @@ gh release create $tag `
   --prerelease --generate-notes
 ```
 
-Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.27 package contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
+Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.28 package contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 
