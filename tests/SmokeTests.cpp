@@ -6,6 +6,7 @@
 #include "core/PluginNoteScanner.h"
 #include "core/PluginPrograms.h"
 #include "core/PatternAudioRenderer.h"
+#include "core/LoopingAudioSource.h"
 #include "core/PluginVelocityLayerAnalyzer.h"
 #include "core/PluginRoundRobinAnalyzer.h"
 #include "core/SampleFeatureFilter.h"
@@ -243,6 +244,7 @@ int main()
     MidiPattern previewPattern;previewPattern.lengthBeats=4.0;previewPattern.tempoAndSignature={{0.0,juce::MidiMessage::tempoMetaEvent(500000)},{2.0,juce::MidiMessage::tempoMetaEvent(600000)}};previewPattern.events={{DrumInstrument::Kick,DrumArticulation::Default,127,0.0,0.1},{DrumInstrument::Snare,DrumArticulation::Default,80,1.0,0.1}};
     const auto previewFile=root.getChildFile("pattern-preview.wav");const auto previewResult=PatternAudioRenderer{}.render(previewPattern,previewSamples,previewFile);if(!previewResult.ok||std::abs(previewResult.durationSeconds-2.2)>0.00001)return 75;
     juce::AudioFormatManager previewFormats;previewFormats.registerBasicFormats();std::unique_ptr<juce::AudioFormatReader> previewReader(previewFormats.createReaderFor(previewFile));if(!previewReader||std::abs(previewReader->lengthInSamples/previewReader->sampleRate-2.2)>0.00003)return 76;juce::AudioBuffer<float> previewAudio(2,static_cast<int>(previewReader->lengthInSamples));if(!previewReader->read(previewAudio.getArrayOfWritePointers(),2,0,static_cast<int>(previewReader->lengthInSamples))||previewAudio.getRMSLevel(0,0,previewAudio.getNumSamples())<0.01f)return 77;
+    LoopingAudioSource loopingSource(previewFormats.createReaderFor(previewFile));const auto loopLength=loopingSource.getTotalLength();if(loopLength!=previewReader->lengthInSamples)return 120;loopingSource.setLooping(true);loopingSource.setNextReadPosition(loopLength-32);juce::AudioBuffer<float> loopBlock(2,64);loopingSource.getNextAudioBlock({&loopBlock,0,64});if(loopingSource.getNextReadPosition()!=32)return 121;for(int channel=0;channel<2;++channel)for(int i=0;i<64;++i){const int expectedIndex=i<32?static_cast<int>(loopLength)-32+i:i-32;if(std::abs(loopBlock.getSample(channel,i)-previewAudio.getSample(channel,expectedIndex))>0.00001f)return 122;}loopingSource.setLooping(false);loopingSource.setNextReadPosition(loopLength-8);loopBlock.clear();loopingSource.getNextAudioBlock({&loopBlock,0,16});for(int channel=0;channel<2;++channel)for(int i=8;i<16;++i)if(std::abs(loopBlock.getSample(channel,i))>0.00001f)return 123;
     int previewCancelChecks=0;const auto cancelledPreviewFile=root.getChildFile("cancelled-preview.wav");const auto cancelledPreview=PatternAudioRenderer{}.render(previewPattern,previewSamples,cancelledPreviewFile,[&]{return ++previewCancelChecks>=3;});if(cancelledPreview.ok||cancelledPreview.error!="Preview cancelled."||cancelledPreviewFile.existsAsFile())return 78;
     return 0;
 }

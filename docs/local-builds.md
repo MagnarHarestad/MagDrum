@@ -30,7 +30,7 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-The Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.24, its SHA-256 is `4d1e0acdfd6cfb0870b0fcfa6e3edd0d25b39caf531955ec3d6973b3c5ef928b`. The change also reports a missing or unreadable sample when preview playback is requested and records the path in the structured log. The package can be published with GitHub CLI without starting Actions.
+The Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.25, its SHA-256 is `3a1af2c900244c186b4fabcd3448c1ce9c9413f0f44969050d68539c2614ca45`. The sequencer now supports looped preview playback; the same build also reports a missing or unreadable sample and records its path in the structured log. The package can be published with GitHub CLI without starting Actions.
 
 GitHub Actions attempts for all five configured platforms were blocked by the same billing limit before any job steps began. The local build scripts do not consume Actions minutes. On this Windows computer, x64 is available and verified; ARM64 preflight fails because the Visual Studio ARM64 C++ component is missing; Linux x64 needs a usable Linux host or WSL distribution (none is currently available); and both macOS targets need a Mac with Xcode. Thus local builds can replace the hosted process, but this computer alone cannot produce all five platform packages.
 
@@ -47,7 +47,7 @@ gh release create $tag `
   --prerelease --generate-notes
 ```
 
-Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.24 release contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
+Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.25 release contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 
