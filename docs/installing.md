@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published archive is the [Windows x64 test build v0.1.1-test.63](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.63). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner and synthetic spectral-flatness classification fixtures. The app and VST3 both report version 0.1.1. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The latest published archive is the [Windows x64 test build v0.1.1-test.64](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.64). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner, spectral-flatness classification fixtures, and an analyzed pitched-tom WAV fixture. The app and VST3 both report version 0.1.1. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
-The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `7a2fd58ab4b4d079a5b3e38fb7e66324c3ec2470adec1df11a656175fd57ed84`, matching the v0.1.1-test.63 release asset. It contains the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.56 package had SHA-256 `f6794b7960c59d70c5b43ccd1a5703def7c2e362be7543172c9a20aee9d0505f`.
+The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `a01d69229d8fe7b35014bd4232ce4eb7880929ddd4735443fc97e1b0ce001d9c`, matching the v0.1.1-test.64 release asset. It contains the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.56 package had SHA-256 `f6794b7960c59d70c5b43ccd1a5703def7c2e362be7543172c9a20aee9d0505f`.
 
 ## Windows x64 and Cubase
 

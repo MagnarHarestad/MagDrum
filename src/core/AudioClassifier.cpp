@@ -87,21 +87,32 @@ DrumClassification classify(const ScannedSample& sample) const override
 
     // Classification intentionally stays Unknown when the available measurements
     // do not separate likely drum families with useful confidence.
-    const bool hasLowKickPitch = sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 220.0;
-    if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1300.0
-        && sample.durationSeconds < 1.2 && transientRatio > 0.45 && hasLowKickPitch)
+    const bool hasReliablePitch = sample.pitchConfidence >= 0.65 && sample.fundamentalHz > 0.0;
+    const bool hasTomLikePitch = hasReliablePitch && sample.fundamentalHz >= 125.0 && sample.fundamentalHz <= 380.0;
+    if (hasTomLikePitch && sample.spectralCentroidHz >= 300.0 && sample.spectralCentroidHz < 1600.0
+        && sample.durationSeconds >= 0.25 && sample.durationSeconds <= 1.5 && transientRatio > 0.45)
     {
-        out.category = "Kick";
-        out.confidence = juce::jlimit(0.35, 0.72, 0.62 - sample.spectralCentroidHz / 12000.0 + (transientRatio > 1.0 ? 0.04 : 0.0));
+        out.category = "Tom";
+        out.confidence = juce::jlimit(0.38, 0.68, 0.42 + juce::jmin(0.18, transientRatio * 0.06) + (crest > 4.0 ? 0.04 : 0.0));
     }
-    else if (sample.spectralCentroidHz >= 1800.0 && transientRatio > 0.45)
+    else
     {
-        const bool noiseLikeUnpitchedHit = sample.spectralFlatness >= 0.55
-            && (sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 0.0);
-        out.category = noiseLikeUnpitchedHit
-            ? (sample.durationSeconds < 0.32 ? "Closed hi-hat" : "Open hi-hat")
-            : "Snare";
-        out.confidence = juce::jlimit(0.30, 0.68, 0.42 + juce::jmin(0.2, transientRatio * 0.08) + (crest > 4.0 ? 0.04 : 0.0));
+        const bool hasLowKickPitch = sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 120.0;
+        if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1300.0
+            && sample.durationSeconds < 1.2 && transientRatio > 0.45 && hasLowKickPitch)
+        {
+            out.category = "Kick";
+            out.confidence = juce::jlimit(0.35, 0.72, 0.62 - sample.spectralCentroidHz / 12000.0 + (transientRatio > 1.0 ? 0.04 : 0.0));
+        }
+        else if (sample.spectralCentroidHz >= 1800.0 && transientRatio > 0.45)
+        {
+            const bool noiseLikeUnpitchedHit = sample.spectralFlatness >= 0.55
+                && (sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 0.0);
+            out.category = noiseLikeUnpitchedHit
+                ? (sample.durationSeconds < 0.32 ? "Closed hi-hat" : "Open hi-hat")
+                : "Snare";
+            out.confidence = juce::jlimit(0.30, 0.68, 0.42 + juce::jmin(0.2, transientRatio * 0.08) + (crest > 4.0 ? 0.04 : 0.0));
+        }
     }
     return out;
 }
