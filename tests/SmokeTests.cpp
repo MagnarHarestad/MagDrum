@@ -273,6 +273,11 @@ int main(int argc,char** argv)
     ScannedSample namedHat=kickLike;namedHat.file=juce::File("808_Open_HiHat_deep.wav");
     const auto namedPrediction=AudioClassifier{}.classify(namedHat);
     if(namedPrediction.category!="Open hi-hat"||namedPrediction.confidence<0.9||!namedPrediction.tags.contains("808")||!namedPrediction.tags.contains("Electronic")||!namedPrediction.tags.contains("Deep"))return 64;
+    ScannedSample filenameOnly;filenameOnly.durationSeconds=.5;filenameOnly.rms=.2;filenameOnly.peak=.8;filenameOnly.spectralCentroidHz=2500;filenameOnly.transientStrength=.01;
+    filenameOnly.file=juce::File("Kick_01.wav");const auto tokenKick=AudioClassifier{}.classify(filenameOnly);
+    if(tokenKick.category!="Kick"||tokenKick.confidence<0.9)return 141;
+    filenameOnly.file=juce::File("pride.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 142;
+    filenameOnly.file=juce::File("sidekick.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 143;
     ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");
     if(AudioClassifier{}.classify(ambiguousName).category!="Unknown")return 65;
     const AudioClassifier modelClassifier(std::make_shared<FixtureClassificationModel>());

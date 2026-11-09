@@ -10,10 +10,16 @@ public:
 DrumClassification classify(const ScannedSample& sample) const override
 {
     DrumClassification out;
-    const auto name = sample.file.getFileNameWithoutExtension().toLowerCase();
+    auto name = sample.file.getFileNameWithoutExtension().toLowerCase();
+    constexpr char filenameSeparators[] = "-_.,;()[]{}+";
+    for (const auto* separator = filenameSeparators; *separator != '\0'; ++separator)
+        name = name.replaceCharacter(*separator, ' ');
     const auto has = [&name](std::initializer_list<const char*> words)
     {
-        return std::any_of(words.begin(), words.end(), [&name](const char* word) { return name.contains(juce::String(word)); });
+        return std::any_of(words.begin(), words.end(), [&name](const char* word)
+        {
+            return name.containsWholeWordIgnoreCase(word);
+        });
     };
     const auto addTag = [&out](const char* tag) { if (!out.tags.contains(tag)) out.tags.add(tag); };
     if (has({"808"})) { addTag("Electronic"); addTag("808"); }
