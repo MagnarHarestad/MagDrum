@@ -7,7 +7,8 @@
 enum class PluginNoteRenderMode
 {
     offline,
-    realtimePaced
+    realtimePaced,
+    audioDevice
 };
 
 struct PluginNoteScanSettings
@@ -28,6 +29,7 @@ struct PluginNoteCapture
     int midiNote = 0;
     int velocity = 100;
     int takeIndex = 1;
+    double sampleRate = 0.0;
     juce::AudioBuffer<float> audio;
     double peak = 0.0;
     double rms = 0.0;

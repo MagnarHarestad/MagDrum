@@ -1,4 +1,5 @@
 #include "PluginNoteScanner.h"
+#include "DeviceRealtimeRenderer.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -37,10 +38,22 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         return result;
     }
 
-    const auto noteSamples = static_cast<juce::int64>(std::llround(settings.noteDurationSeconds * settings.sampleRate));
-    const auto releaseSamples = juce::jmax<juce::int64>(1, static_cast<juce::int64>(std::llround(settings.releaseSeconds * settings.sampleRate)));
-    const auto captureSamples64 = juce::jmax(noteSamples + releaseSamples, static_cast<juce::int64>(std::llround(settings.captureLengthSeconds * settings.sampleRate)));
-    if (captureSamples64 > static_cast<juce::int64>(settings.sampleRate * 20.0) || captureSamples64 > std::numeric_limits<int>::max())
+    double sampleRate = settings.sampleRate;
+    int blockSize = settings.blockSize;
+    std::unique_ptr<DeviceRealtimeRenderer> deviceRenderer;
+    if (settings.renderMode == PluginNoteRenderMode::audioDevice)
+    {
+        deviceRenderer = std::make_unique<DeviceRealtimeRenderer>(plugin);
+        if (!deviceRenderer->open(result.error))
+            return result;
+        sampleRate = deviceRenderer->getSampleRate();
+        blockSize = deviceRenderer->getBlockSize();
+    }
+
+    const auto noteSamples = static_cast<juce::int64>(std::llround(settings.noteDurationSeconds * sampleRate));
+    const auto releaseSamples = juce::jmax<juce::int64>(1, static_cast<juce::int64>(std::llround(settings.releaseSeconds * sampleRate)));
+    const auto captureSamples64 = juce::jmax(noteSamples + releaseSamples, static_cast<juce::int64>(std::llround(settings.captureLengthSeconds * sampleRate)));
+    if (captureSamples64 > static_cast<juce::int64>(sampleRate * 20.0) || captureSamples64 > std::numeric_limits<int>::max())
     {
         result.error = "The requested capture is too long.";
         return result;
@@ -69,7 +82,11 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     const auto restorePlugin = [&]()
     {
         if (prepared)
+        {
+            if (deviceRenderer != nullptr)
+                deviceRenderer->detach();
             plugin.releaseResources();
+        }
         if (!previousState.isEmpty())
             plugin.setStateInformation(previousState.getData(), static_cast<int>(previousState.getSize()));
         plugin.setNonRealtime(wasNonRealtime);
@@ -77,8 +94,10 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 
     try
     {
-        plugin.prepareToPlay(settings.sampleRate, settings.blockSize);
+        plugin.prepareToPlay(sampleRate, blockSize);
         prepared = true;
+        if (deviceRenderer != nullptr)
+            deviceRenderer->attach();
         const int totalScans = static_cast<int>(totalCaptureCount);
         if (!captureConsumer)
             result.notes.reserve(static_cast<size_t>(totalScans));
@@ -107,17 +126,43 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                     capture.midiNote = note;
                     capture.velocity = velocity;
                     capture.takeIndex = take;
+                    capture.sampleRate = sampleRate;
                     capture.audio.setSize(outputChannels, captureSamples, false, true, false);
 
-                    juce::AudioBuffer<float> block(processChannels, settings.blockSize);
+                    juce::AudioBuffer<float> block(processChannels, blockSize);
                     juce::MidiBuffer midi;
                     double sumSquares = 0.0;
                     juce::int64 measuredSamples = 0;
                     const auto captureStart = std::chrono::steady_clock::now();
 
-                    for (int offset = 0; offset < captureSamples; offset += settings.blockSize)
+                    bool deviceCancelled = false;
+                    if (deviceRenderer != nullptr)
                     {
-                        const int count = juce::jmin(settings.blockSize, captureSamples - offset);
+                        if (!deviceRenderer->render(note, velocity, static_cast<int>(noteSamples), capture.audio,
+                            shouldCancel, deviceCancelled))
+                        {
+                            if (deviceCancelled)
+                                result.cancelled = true;
+                            else
+                                result.error = "The default audio device stopped or timed out during real-time plugin rendering.";
+                        }
+                        for (int channel = 0; channel < outputChannels && !result.cancelled && result.error.isEmpty(); ++channel)
+                        {
+                            float* samples = capture.audio.getWritePointer(channel);
+                            for (int i = 0; i < captureSamples; ++i)
+                            {
+                                const double value = std::isfinite(samples[i]) ? samples[i] : 0.0;
+                                capture.peak = juce::jmax(capture.peak, std::abs(value));
+                                sumSquares += value * value;
+                                if (!std::isfinite(samples[i]))
+                                    samples[i] = 0.0f;
+                                ++measuredSamples;
+                            }
+                        }
+                    }
+                    else for (int offset = 0; offset < captureSamples; offset += blockSize)
+                    {
+                        const int count = juce::jmin(blockSize, captureSamples - offset);
                         block.clear();
                         midi.clear();
                         if (offset == 0)
@@ -130,7 +175,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                         {
                             const auto samplesThroughBlock = static_cast<double>(offset + count);
                             const auto deadline = captureStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                                std::chrono::duration<double>(samplesThroughBlock / settings.sampleRate));
+                                std::chrono::duration<double>(samplesThroughBlock / sampleRate));
                             std::this_thread::sleep_until(deadline);
                         }
                         for (int channel = 0; channel < outputChannels; ++channel)
@@ -148,6 +193,8 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                         }
                     }
 
+                    if (result.cancelled || result.error.isNotEmpty())
+                        break;
                     capture.rms = measuredSamples > 0 ? std::sqrt(sumSquares / static_cast<double>(measuredSamples)) : 0.0;
                     capture.silent = capture.peak <= settings.silencePeakThreshold;
                     if (captureConsumer)

@@ -11,6 +11,7 @@ struct PluginScanProcessCapture
     int takeIndex = 1;
     int channels = 0;
     int sampleCount = 0;
+    double sampleRate = 0.0;
     double peak = 0.0;
     double rms = 0.0;
     bool silent = true;

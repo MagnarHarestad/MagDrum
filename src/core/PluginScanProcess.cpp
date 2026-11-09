@@ -24,7 +24,8 @@ bool writeCapture(const juce::File& file, const PluginNoteCapture& capture, doub
 
     juce::WavAudioFormat wav;
     std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(
-        stream.get(), sampleRate, static_cast<unsigned int>(capture.audio.getNumChannels()), 24, {}, 0));
+        stream.get(), capture.sampleRate > 0.0 ? capture.sampleRate : sampleRate,
+        static_cast<unsigned int>(capture.audio.getNumChannels()), 24, {}, 0));
     if (writer == nullptr)
         return false;
 
@@ -40,6 +41,7 @@ juce::var makeCaptureValue(const PluginNoteCapture& capture, const juce::String&
     value->setProperty("takeIndex", capture.takeIndex);
     value->setProperty("channels", capture.audio.getNumChannels());
     value->setProperty("sampleCount", capture.audio.getNumSamples());
+    value->setProperty("sampleRate", capture.sampleRate);
     value->setProperty("peak", capture.peak);
     value->setProperty("rms", capture.rms);
     value->setProperty("silent", capture.silent);
@@ -57,6 +59,7 @@ bool parseCaptureValue(const juce::var& item, PluginScanProcessCapture& record)
     record.takeIndex = static_cast<int>(capture->getProperty("takeIndex"));
     record.channels = static_cast<int>(capture->getProperty("channels"));
     record.sampleCount = static_cast<int>(capture->getProperty("sampleCount"));
+    record.sampleRate = static_cast<double>(capture->getProperty("sampleRate"));
     record.peak = static_cast<double>(capture->getProperty("peak"));
     record.rms = static_cast<double>(capture->getProperty("rms"));
     record.silent = static_cast<bool>(capture->getProperty("silent"));
@@ -67,6 +70,7 @@ bool parseCaptureValue(const juce::var& item, PluginScanProcessCapture& record)
     return record.midiNote >= 0 && record.midiNote <= 127
         && record.velocity >= 1 && record.velocity <= 127
         && record.takeIndex >= 1 && record.channels >= 1 && record.channels <= 8 && record.sampleCount >= 1
+        && std::isfinite(record.sampleRate) && (record.sampleRate == 0.0 || (record.sampleRate >= 8000.0 && record.sampleRate <= 192000.0))
         && std::isfinite(record.peak) && record.peak >= 0.0 && std::isfinite(record.rms) && record.rms >= 0.0
         && (record.silent ? record.fileName.isEmpty() : record.fileName == expectedFileName);
 }
@@ -281,6 +285,8 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     settings.captureLengthSeconds = request->getProperty("captureLengthSeconds");
     settings.renderMode = static_cast<bool>(request->getProperty("realtimePaced"))
         ? PluginNoteRenderMode::realtimePaced : PluginNoteRenderMode::offline;
+    if (static_cast<bool>(request->getProperty("audioDeviceRealtime")))
+        settings.renderMode = PluginNoteRenderMode::audioDevice;
     const auto velocitiesValue = request->getProperty("velocityLevels");
     const auto* velocities = velocitiesValue.getArray();
     if (velocities == nullptr)
