@@ -14,6 +14,7 @@ struct MidiPattern
 {
     std::vector<DrumEvent> events;
     std::vector<MidiMetaEvent> tempoAndSignature;
+    double lengthBeats = 0.0;
 };
 
 bool setPatternTempo(MidiPattern&, int beatsPerMinute, double positionBeats = 0.0);
