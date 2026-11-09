@@ -2,13 +2,13 @@
 
 MagDrum stores the local library in `samples.sqlite3` under the user's application data directory. The database is local to the user and is not synchronized or uploaded.
 
-The database evolves with additive migrations. `schema_info.version` records the current schema level (version 14); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns or tables are added. Rows without acoustic fingerprint version 1 or the current sample analysis version (version 5) are rescanned once so updated measurements and filename-derived classifier and articulation tags are populated.
+The database evolves with additive migrations. `schema_info.version` records the current schema level (version 15); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns, indexes or tables are added. Rows without acoustic fingerprint version 1 or the current sample analysis version (version 5) are rescanned once so updated measurements and filename-derived classifier and articulation tags are populated.
 
 ## Current tables
 
 | Table | Purpose |
 | --- | --- |
-| `samples` | Native files and generated previews, audio metadata including a pitch estimate/confidence when measurable, four-window spectral centroid and spectral flatness, heuristic category/confidence, exact file SHA-256, a four-segment/16-band normalized acoustic fingerprint and its algorithm version, analysis version, manual category override, file size and modification time, and a nullable source relationship. |
+| `samples` | Native files and generated previews, audio metadata including a pitch estimate/confidence when measurable, four-window spectral centroid and spectral flatness, heuristic category/confidence, exact file SHA-256, a four-segment/16-band normalized acoustic fingerprint and its algorithm version, analysis version, manual category override, file size and modification time, and a nullable source relationship. Composite indexes support stable name, duration and centroid ordering in paginated browsing. |
 | `sample_sources` | Stable folder and plugin source identities, display names and folder roots, separate from individual sample paths. Existing folder scans are backfilled when the database opens. |
 | `sample_scan_history` | Sample-folder scan start/end, outcome, counts of considered/skipped/indexed files, errors and restart interruptions. |
 | `sample_tags` | User tags attached to a sample path. |
@@ -23,7 +23,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `plugin_confirmed_round_robin_takes` | The exact captured takes the user has confirmed as one repeated-trigger group; membership is removed automatically when those takes are rescanned or deleted. |
 | `mapping_profiles` | Named semantic MIDI mapping profiles. |
 | `mapping_entries` | Instrument/articulation to MIDI-note mappings within a profile. |
-| `schema_info` | Single-row schema version marker, currently version 14. |
+| `schema_info` | Single-row schema version marker, currently version 15. |
 
 Database APIs can upsert plugin instruments, named kits with opaque plugin state, recall saved kit state, note/velocity sound captures with metadata and versioned velocity-boundary candidates. Manual category corrections to generated previews update both their sample row and the linked plugin sound. The desktop scanner populates kits and captures. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
 
