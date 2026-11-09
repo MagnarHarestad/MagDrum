@@ -8,6 +8,7 @@
 #include "core/PluginVelocityLayerAnalyzer.h"
 #include "core/PluginRoundRobinAnalyzer.h"
 #include "core/SampleFeatureFilter.h"
+#include "core/StructuredLogger.h"
 #include <atomic>
 #include <array>
 #include <algorithm>
@@ -216,13 +217,14 @@ private:
  public:
   PluginNoteScanJob(MainComponent& owner,juce::AudioProcessor& processor,PluginNoteScanSettings scanSettings,juce::File dbFile,juce::File previewRoot,juce::String identifier,std::int64_t kit,std::atomic<bool>& cancel):ThreadPoolJob("MagDrum plugin MIDI note scan"),main(&owner),plugin(processor),settings(std::move(scanSettings)),databaseFile(std::move(dbFile)),previewBase(std::move(previewRoot)),pluginIdentifier(std::move(identifier)),kitId(kit),cancellation(cancel){}
   JobStatus runJob()override{
+   StructuredLogger::log(StructuredLogger::Level::info,"plugin_scan.started",{{"plugin",pluginIdentifier},{"kit_id",juce::String(static_cast<juce::int64>(kitId))},{"repeat_count",juce::String(settings.repeatCount)}});
    SampleDatabase db;if(!db.open(databaseFile)){finish(0,0,0,1,false,"Could not open the sound database.");return jobHasFinished;}
    juce::String pluginName=pluginIdentifier;for(const auto& instrument:db.getPluginInstruments())if(instrument.identifier==pluginIdentifier){pluginName=instrument.name;break;}const auto sourceId=db.ensureSampleSource("plugin",pluginIdentifier,pluginName);if(!sourceId){finish(0,0,0,1,false,"Could not save the plugin source record.");return jobHasFinished;}
    const auto session=previewBase.getChildFile(juce::String(pluginIdentifier.hashCode64())).getChildFile(juce::String(static_cast<juce::int64>(kitId)));
    if(!session.isDirectory()&&!session.createDirectory().wasOk()){finish(0,0,0,1,false,"Could not create the plugin preview folder.");return jobHasFinished;}
    auto safe=main;PluginNoteScanner scanner;
    auto result=scanner.scan(plugin,settings,[this]{return shouldExit()||cancellation.load();},[safe](int done,int total,int note,int velocity){if(done%24==0||done==total)juce::MessageManager::callAsync([safe,done,total,note,velocity]{if(safe!=nullptr)safe->setPluginScanProgress(done,total,note,velocity);});});
-   if(!result.error.isEmpty()){finish(0,0,0,1,false,result.error);return jobHasFinished;}
+   if(!result.error.isEmpty()){StructuredLogger::log(StructuredLogger::Level::error,"plugin_scan.failed",{{"plugin",pluginIdentifier},{"error",result.error}});finish(0,0,0,1,false,result.error);return jobHasFinished;}
    juce::Array<juce::File> files;files.resize(static_cast<int>(result.notes.size()));int failures=0;juce::WavAudioFormat wav;
    for(int i=0;i<static_cast<int>(result.notes.size());++i){const auto&capture=result.notes[static_cast<size_t>(i)];if(capture.silent)continue;const auto file=session.getChildFile("note_"+juce::String(capture.midiNote).paddedLeft('0',3)+"_velocity_"+juce::String(capture.velocity).paddedLeft('0',3)+"_take_"+juce::String(capture.takeIndex).paddedLeft('0',3)+".wav");std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());if(!stream){++failures;continue;}std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(stream.get(),settings.sampleRate,static_cast<unsigned int>(capture.audio.getNumChannels()),24,{},0));if(!writer){++failures;continue;}stream.release();if(!writer->writeFromAudioSampleBuffer(capture.audio,0,capture.audio.getNumSamples())){++failures;continue;}files.set(i,file);}
    const auto analyzed=WavScanner{}.scan(session);std::unordered_map<std::string,const ScannedSample*> samplesByPath;samplesByPath.reserve(static_cast<size_t>(analyzed.size()));for(const auto&sample:analyzed)samplesByPath.emplace(sample.file.getFullPathName().toStdString(),&sample);int sounding=0,silent=0,saved=0;std::vector<PluginSoundRecord> analyzedRecords;std::vector<PluginRoundRobinTake> roundRobinTakes;
@@ -231,6 +233,7 @@ private:
    const auto roundRobinCandidates=PluginRoundRobinAnalyzer{}.analyze(roundRobinTakes);if(!db.replacePluginRoundRobinData(kitId,roundRobinTakes,roundRobinCandidates))++failures;
    juce::String layerSummary;if(layerCandidates.empty())layerSummary="No strong timbral changes were detected between the sampled velocity levels.";else{layerSummary=juce::String(layerCandidates.size())+" possible velocity layer boundary candidate(s): ";const int shown=juce::jmin(12,static_cast<int>(layerCandidates.size()));for(int index=0;index<shown;++index){if(index>0)layerSummary+="; ";const auto&candidate=layerCandidates[static_cast<size_t>(index)];layerSummary+="note "+juce::String(candidate.midiNote)+" v"+juce::String(candidate.lowerVelocity)+"→v"+juce::String(candidate.upperVelocity);}if(layerCandidates.size()>static_cast<size_t>(shown))layerSummary+="; …";layerSummary+=" (heuristic; review by ear)";}
    juce::String roundRobinSummary;if(roundRobinCandidates.empty())roundRobinSummary="No repeated-trigger variation candidates were detected.";else roundRobinSummary=juce::String(static_cast<int>(roundRobinCandidates.size()))+" possible repeated-trigger variation candidate(s); review by ear.";
+   StructuredLogger::log(result.cancelled?StructuredLogger::Level::warning:StructuredLogger::Level::info,"plugin_scan.finished",{{"plugin",pluginIdentifier},{"saved_note_records",juce::String(saved)},{"audible_takes",juce::String(sounding)},{"silent_takes",juce::String(silent)},{"errors",juce::String(failures)},{"cancelled",result.cancelled?"true":"false"}});
    finish(saved,sounding,silent,failures,result.cancelled,result.cancelled?"Scan cancelled after the current note.":juce::String(),layerSummary+" "+roundRobinSummary);return jobHasFinished;
   }
  private:
@@ -242,6 +245,7 @@ private:
   ScanJob(MainComponent& component,juce::File directory,juce::File dbFile,std::atomic<bool>& cancelFlag):ThreadPoolJob("MagDrum sample scan"),owner(&component),root(std::move(directory)),databaseFile(std::move(dbFile)),cancellation(cancelFlag){}
   JobStatus runJob()override
   {
+   StructuredLogger::log(StructuredLogger::Level::info,"sample_scan.started",{{"root",root.getFullPathName()}});
    WavScanner::Stats stats;std::int64_t indexed=0,scanId=0;juce::String error;SampleDatabase scanDatabase;
    if(!scanDatabase.open(databaseFile))error="Could not open the sample database for scanning.";
    const auto rootPath=root.getFullPathName();const auto sourceId=error.isEmpty()?scanDatabase.ensureSampleSource("folder",rootPath,root.getFileName().isNotEmpty()?root.getFileName():rootPath,rootPath):std::optional<std::int64_t>();if(error.isEmpty()&&!sourceId)error="Could not save the sample folder source record.";
@@ -265,6 +269,7 @@ private:
     if(!scanDatabase.finishSampleScan(scanId,state,stats.filesConsidered,stats.filesSkippedUnchanged,indexed,stats.errors))
      error="The sample scan finished, but its history record could not be updated.";
    }
+   StructuredLogger::log(error.isNotEmpty()?StructuredLogger::Level::error:(stats.cancelled?StructuredLogger::Level::warning:StructuredLogger::Level::info),"sample_scan.finished",{{"root",root.getFullPathName()},{"indexed",juce::String(static_cast<juce::int64>(indexed))},{"skipped_unchanged",juce::String(stats.filesSkippedUnchanged)},{"errors",juce::String(stats.errors)},{"cancelled",stats.cancelled?"true":"false"},{"error",error}});
    auto safe=owner;
    juce::MessageManager::callAsync([safe,stats,indexed,error]{if(safe!=nullptr)safe->finishScan(stats,indexed,error);});
    return jobHasFinished;
@@ -326,7 +331,7 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 class MagDrumApplication final:public juce::JUCEApplication{
-public:const juce::String getApplicationName()override{return"MagDrum";}const juce::String getApplicationVersion()override{return"0.1.0";}bool moreThanOneInstanceAllowed()override{return true;}void initialise(const juce::String&)override{window=std::make_unique<Window>();}void shutdown()override{window.reset();}void systemRequestedQuit()override{quit();}void anotherInstanceStarted(const juce::String&)override{}
+public:const juce::String getApplicationName()override{return"MagDrum";}const juce::String getApplicationVersion()override{return"0.1.0";}bool moreThanOneInstanceAllowed()override{return true;}void initialise(const juce::String&)override{const auto logs=juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("MagDrum").getChildFile("logs");StructuredLogger::initialise(logs);StructuredLogger::log(StructuredLogger::Level::info,"application.started",{{"version",getApplicationVersion()},{"platform",juce::SystemStats::getOperatingSystemName()}});window=std::make_unique<Window>();}void shutdown()override{StructuredLogger::log(StructuredLogger::Level::info,"application.stopped");window.reset();}void systemRequestedQuit()override{quit();}void anotherInstanceStarted(const juce::String&)override{}
 private:class Window final:public juce::DocumentWindow{public:Window():DocumentWindow("MagDrum",juce::Colour(0xff101215),allButtons){setUsingNativeTitleBar(true);setContentOwned(new MainComponent(),true);centreWithSize(1140,790);setVisible(true);}void closeButtonPressed()override{juce::JUCEApplication::getInstance()->systemRequestedQuit();}};std::unique_ptr<Window>window;
 };
 START_JUCE_APPLICATION(MagDrumApplication)

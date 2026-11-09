@@ -30,7 +30,7 @@ Linux needs CMake, Git, a C++ compiler, and JUCE's Linux development dependencie
 
 The five configured matrix targets are Windows x64, Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64. Build and test on the target OS where possible. Windows ARM64 may be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS packages require macOS and Xcode; neither macOS architecture can be built on this Windows computer. A single Windows computer therefore cannot produce and verify all five platform packages.
 
-The local Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.22, its SHA-256 is `be485decdc5fca0ca62bac35989715d267b57b83efdcce049179432f1f40b03f`. GitHub CLI uploaded this package to Releases; no Actions run was started for the release.
+The local Windows x64 app and VST3 built successfully, CTest passed (1/1), and `Build-Windows.ps1` created `latest-publish/MagDrum-Windows-x64.zip`. For v0.1.1-test.23, its SHA-256 is `804f8bdd6914af09b26b5acb381a14503086299ea1a0e10ff05d1b499acf0f11`. GitHub CLI uploaded this package to Releases; no Actions run was started for the release.
 
 When archives are available from each host, collect them in `latest-publish` and publish them from a local machine with GitHub CLI. GitHub release creation uses the GitHub API; it does not start a hosted build. The workflow is manual-only, so local commits and release tags do not launch the hosted build matrix:
 
@@ -45,7 +45,7 @@ gh release create $tag `
   --prerelease --generate-notes
 ```
 
-Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.22 release contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
+Only include archives that exist and have passed their host-side checks. A release may contain only the platforms available for that test; its notes must identify the missing packages. The v0.1.1-test.23 release contains Windows x64. Windows ARM64, macOS Intel, macOS Apple Silicon, and Linux x64 packages are not present in `latest-publish`.
 
 ## Other platform builds
 
