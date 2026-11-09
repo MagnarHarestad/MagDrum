@@ -258,6 +258,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
                                     / static_cast<juce::int64>(centroidOffsets.size() - 1);
         std::sort(centroidOffsets.begin(), centroidOffsets.end());
         double centroidMagnitude = 0.0, centroidWeightedMagnitude = 0.0;
+        double spectralFlatnessTotal = 0.0;
+        int spectralWindowCount = 0;
         juce::int64 previousCentroidOffset = -1;
         for (const auto offset : centroidOffsets)
         {
@@ -288,11 +290,24 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
                 fftData[i] = static_cast<float>(mono * window);
             }
             fft.performFrequencyOnlyForwardTransform(fftData.getData());
+            double windowMagnitude = 0.0;
+            double windowLogMagnitude = 0.0;
+            int windowBinCount = 0;
             for (int bin = 1; bin < fftSize / 2; ++bin)
             {
                 const double magnitude = fftData[bin];
                 centroidWeightedMagnitude += static_cast<double>(bin) * reader->sampleRate / fftSize * magnitude;
                 centroidMagnitude += magnitude;
+                windowMagnitude += magnitude;
+                windowLogMagnitude += std::log(juce::jmax(magnitude, 1.0e-12));
+                ++windowBinCount;
+            }
+            if (windowBinCount > 0 && windowMagnitude > 0.0)
+            {
+                const double arithmeticMean = windowMagnitude / windowBinCount;
+                const double geometricMean = std::exp(windowLogMagnitude / windowBinCount);
+                spectralFlatnessTotal += juce::jlimit(0.0, 1.0, geometricMean / arithmeticMean);
+                ++spectralWindowCount;
             }
         }
         if (cancelledDuringFile)
@@ -305,6 +320,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
         sample.spectralCentroidHz = centroidMagnitude > 0.0 ? centroidWeightedMagnitude / centroidMagnitude : 0.0;
+        sample.spectralFlatness = spectralWindowCount > 0 ? spectralFlatnessTotal / spectralWindowCount : 0.0;
         sample.fingerprint = juce::SHA256(file).toHexString();
         sample.acousticFingerprint = createAcousticFingerprint(*reader, fft, fftData, buffer, channelData.getData(), fftSize);
         sample.acousticFingerprintVersion = sample.acousticFingerprint.length() == 128 ? 1 : 0;

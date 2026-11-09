@@ -96,7 +96,11 @@ DrumClassification classify(const ScannedSample& sample) const override
     }
     else if (sample.spectralCentroidHz >= 1800.0 && transientRatio > 0.45)
     {
-        out.category = sample.durationSeconds < 0.32 ? "Closed hi-hat" : "Snare";
+        const bool noiseLikeUnpitchedHit = sample.spectralFlatness >= 0.55
+            && (sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 0.0);
+        out.category = noiseLikeUnpitchedHit
+            ? (sample.durationSeconds < 0.32 ? "Closed hi-hat" : "Open hi-hat")
+            : "Snare";
         out.confidence = juce::jlimit(0.30, 0.68, 0.42 + juce::jmin(0.2, transientRatio * 0.08) + (crest > 4.0 ? 0.04 : 0.0));
     }
     return out;

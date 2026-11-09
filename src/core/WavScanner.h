@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <juce_audio_formats/juce_audio_formats.h>
 
-inline constexpr int currentSampleAnalysisVersion = 4;
+inline constexpr int currentSampleAnalysisVersion = 5;
 
 struct ScannedSample
 {
@@ -16,6 +16,7 @@ struct ScannedSample
     double peak = 0.0;
     double rms = 0.0;
     double spectralCentroidHz = 0.0;
+    double spectralFlatness = 0.0;
     double transientStrength = 0.0;
     double fundamentalHz = 0.0;
     double pitchConfidence = 0.0;
