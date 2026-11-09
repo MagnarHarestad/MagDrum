@@ -320,7 +320,7 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
                     return false;
             }
             const auto captureValue = makeCaptureValue(capture, fileName);
-            if (!captureLog->writeText(juce::JSON::toString(captureValue, false), false, false, nullptr)
+            if (!captureLog->writeText(juce::JSON::toString(captureValue, true), false, false, nullptr)
                 || !captureLog->writeText("\n", false, false, nullptr))
                 return false;
             captureLog->flush();

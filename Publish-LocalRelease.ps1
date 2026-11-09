@@ -79,7 +79,7 @@ $noteLines = @(
     'Included packages:',
     ($includedNames | ForEach-Object { "- $_" }),
     '',
-    'SHA-256 checksums are attached as ' + $checksumName + '.'
+    "SHA-256 checksums are attached as $checksumName."
 )
 if ($missingNames.Count -gt 0) {
     $noteLines += @('', 'Not included in this release:', ($missingNames | ForEach-Object { "- $_" }))
