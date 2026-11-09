@@ -76,6 +76,31 @@ PitchEstimate estimateFundamental(const juce::AudioBuffer<float>& buffer, unsign
     return {effectiveRate / (selectedLag + adjustment), juce::jlimit(0.0, 1.0, correlation[static_cast<size_t>(selectedLag)])};
 }
 
+int countTransientAttacks(const std::vector<double>& envelope, double sampleRate, double overallRms)
+{
+    if (envelope.size() < 2 || sampleRate <= 0.0) return 0;
+    const auto peak = *std::max_element(envelope.begin(), envelope.end());
+    if (peak <= 1.0e-8) return 0;
+    constexpr int envelopeFrameSamples = 256;
+    const auto minimumSeparationFrames = juce::jmax(1, static_cast<int>(std::lround(sampleRate * 0.012 / envelopeFrameSamples)));
+    const auto minimumLevel = juce::jmax(peak * 0.15, overallRms * 0.10);
+    int attacks = 0;
+    int lastAttack = -minimumSeparationFrames;
+    for (size_t index = 0; index + 1 < envelope.size(); ++index)
+    {
+        const auto previous = index == 0 ? 0.0 : envelope[index - 1];
+        const auto current = envelope[index];
+        const auto next = envelope[index + 1];
+        if (current >= minimumLevel && current > previous * 1.8 && current >= next
+            && static_cast<int>(index) - lastAttack >= minimumSeparationFrames)
+        {
+            ++attacks;
+            lastAttack = static_cast<int>(index);
+        }
+    }
+    return attacks;
+}
+
 juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::dsp::FFT& fft,
                                        juce::HeapBlock<float>& fftData, juce::AudioBuffer<float>& buffer,
                                        float** channelData, int fftSize)
@@ -195,6 +220,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         double sumSquares = 0.0;
         double previousMean = 0.0;
         double transientMax = 0.0;
+        constexpr int transientFrameSize = 256;
+        std::vector<double> transientEnvelope;
         bool pitchMeasured = false;
         constexpr int fftOrder = 10;
         constexpr int fftSize = 1 << fftOrder;
@@ -238,6 +265,18 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             const double mean = std::sqrt(frameEnergy / juce::jmax(1, count * static_cast<int>(reader->numChannels)));
             transientMax = juce::jmax(transientMax, juce::jmax(0.0, mean - previousMean));
             previousMean = mean;
+            for (int frameOffset = 0; frameOffset < count; frameOffset += transientFrameSize)
+            {
+                const int transientCount = juce::jmin(transientFrameSize, count - frameOffset);
+                double transientEnergy = 0.0;
+                for (unsigned int channel = 0; channel < reader->numChannels; ++channel)
+                    for (int i = 0; i < transientCount; ++i)
+                    {
+                        const auto value = buffer.getSample(static_cast<int>(channel), frameOffset + i);
+                        transientEnergy += value * value;
+                    }
+                transientEnvelope.push_back(std::sqrt(transientEnergy / juce::jmax(1, transientCount * static_cast<int>(reader->numChannels))));
+            }
         }
         if (cancelledDuringFile)
             break;
@@ -319,6 +358,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
+        sample.transientCount = countTransientAttacks(transientEnvelope, reader->sampleRate, sample.rms);
         sample.spectralCentroidHz = centroidMagnitude > 0.0 ? centroidWeightedMagnitude / centroidMagnitude : 0.0;
         sample.spectralFlatness = spectralWindowCount > 0 ? spectralFlatnessTotal / spectralWindowCount : 0.0;
         sample.fingerprint = juce::SHA256(file).toHexString();

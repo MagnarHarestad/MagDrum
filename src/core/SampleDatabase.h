@@ -19,7 +19,7 @@ struct PluginSoundRecord
     juce::String articulation, previewPath, fingerprint, acousticFingerprint, category = "Unknown";
     bool silent = false;
     double duration = 0.0, sampleRate = 0.0, peak = 0.0, rms = 0.0, spectralCentroid = 0.0, spectralFlatness = 0.0, transientStrength = 0.0, fundamentalHz = 0.0, pitchConfidence = 0.0, confidence = 0.0;
-    int channels = 0;
+    int channels = 0, transientCount = 0;
 };
 
 struct PluginVelocityLayerBoundary

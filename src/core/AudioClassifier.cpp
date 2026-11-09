@@ -89,7 +89,14 @@ DrumClassification classify(const ScannedSample& sample) const override
     // do not separate likely drum families with useful confidence.
     const bool hasReliablePitch = sample.pitchConfidence >= 0.65 && sample.fundamentalHz > 0.0;
     const bool hasTomLikePitch = hasReliablePitch && sample.fundamentalHz >= 125.0 && sample.fundamentalHz <= 380.0;
-    if (hasTomLikePitch && sample.spectralCentroidHz >= 300.0 && sample.spectralCentroidHz < 1600.0
+    if (sample.transientCount >= 3 && sample.spectralCentroidHz >= 1800.0 && sample.spectralFlatness >= 0.20
+        && sample.durationSeconds >= 0.05 && sample.durationSeconds <= 0.6 && transientRatio > 0.45)
+    {
+        out.category = "Clap";
+        out.confidence = juce::jlimit(0.42, 0.68, 0.42 + juce::jmin(0.15, (sample.transientCount - 2) * 0.025)
+            + juce::jmin(0.08, sample.spectralFlatness * 0.08) + (crest > 4.0 ? 0.03 : 0.0));
+    }
+    else if (hasTomLikePitch && sample.spectralCentroidHz >= 300.0 && sample.spectralCentroidHz < 1600.0
         && sample.durationSeconds >= 0.25 && sample.durationSeconds <= 1.5 && transientRatio > 0.45)
     {
         out.category = "Tom";
