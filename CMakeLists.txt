@@ -55,7 +55,7 @@ target_link_libraries(MagDrumPlugin PRIVATE sqlite3 juce::juce_audio_utils juce:
 if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp)
  target_include_directories(MagDrumTests PRIVATE src)
- target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+ target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 MAGDRUM_TESTING=1)
  target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_audio_basics juce::juce_audio_devices juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_core)
  add_test(NAME MagDrumTests COMMAND MagDrumTests)
 

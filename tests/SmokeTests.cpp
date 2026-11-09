@@ -4,6 +4,7 @@
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
 #include "core/PluginNoteScanner.h"
+#include "core/DeviceRealtimeRenderer.h"
 #include "core/PluginScanProcess.h"
 #include "core/PluginPrograms.h"
 #include "core/PluginPresetFiles.h"
@@ -18,6 +19,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <chrono>
+#include <atomic>
+#include <thread>
 #include <memory>
 #include <limits>
 #include <utility>
@@ -349,6 +352,7 @@ int main(int argc,char** argv)
     scanSettings.repeatCount=3;int repeatedProgress=0;auto repeatedScan=PluginNoteScanner{}.scan(synthetic,scanSettings,{},[&](int done,int total,int,int){if(done<1||done>total)repeatedProgress=-1000;else ++repeatedProgress;});if(!repeatedScan.error.isEmpty()||repeatedScan.notes.size()!=768||repeatedProgress!=768)return 105;for(size_t index=0;index<repeatedScan.notes.size();index+=3)if(repeatedScan.notes[index].takeIndex!=1||repeatedScan.notes[index+1].takeIndex!=2||repeatedScan.notes[index+2].takeIndex!=3||repeatedScan.notes[index].midiNote!=repeatedScan.notes[index+2].midiNote||repeatedScan.notes[index].velocity!=repeatedScan.notes[index+2].velocity)return 106;scanSettings.repeatCount=1;
     auto cancelledScan=PluginNoteScanner{}.scan(synthetic,scanSettings,[]{return true;});if(!cancelledScan.cancelled||!cancelledScan.notes.empty()||synthetic.getCurrentProgram()!=1)return 41;
     auto realtimeSettings=scanSettings;realtimeSettings.velocityLevels={100};realtimeSettings.noteDurationSeconds=.005;realtimeSettings.releaseSeconds=.005;realtimeSettings.captureLengthSeconds=.01;realtimeSettings.renderMode=PluginNoteRenderMode::realtimePaced;synthetic.clearRenderModeObservations();synthetic.setNonRealtime(true);bool stopRealtimeAfterCapture=false;int realtimeCaptures=0;const auto realtimeStart=std::chrono::steady_clock::now();const auto realtimeScan=PluginNoteScanner{}.scan(synthetic,realtimeSettings,[&]{return stopRealtimeAfterCapture;},{},[&](const PluginNoteCapture&){++realtimeCaptures;stopRealtimeAfterCapture=true;return true;});const auto realtimeElapsed=std::chrono::steady_clock::now()-realtimeStart;if(!realtimeScan.error.isEmpty()||!realtimeScan.cancelled||realtimeCaptures!=1||!synthetic.observedRealtimeProcessing()||!synthetic.isNonRealtime()||realtimeElapsed<std::chrono::milliseconds(8))return 184;synthetic.setNonRealtime(false);
+    SyntheticInstrument deviceSynthetic;deviceSynthetic.prepareToPlay(8000,64);DeviceRealtimeRenderer deviceRenderer(deviceSynthetic);if(!deviceRenderer.prepareForTesting(8000,64))return 187;juce::AudioBuffer<float> deviceCapture(2,160);deviceCapture.clear();std::atomic<bool> stopDeviceDriver{false};std::thread deviceDriver([&]{float left[64]{},right[64]{};float* outputs[]{left,right};while(!stopDeviceDriver.load(std::memory_order_acquire)&&!deviceRenderer.hasActiveTestRequest())std::this_thread::sleep_for(std::chrono::milliseconds(1));while(!stopDeviceDriver.load(std::memory_order_acquire)){deviceRenderer.invokeTestCallback(outputs,2,64);std::this_thread::sleep_for(std::chrono::milliseconds(1));}});bool deviceCancelled=false;const bool deviceRendered=deviceRenderer.render(36,100,80,deviceCapture,{},deviceCancelled);stopDeviceDriver.store(true,std::memory_order_release);deviceDriver.join();deviceSynthetic.releaseResources();if(!deviceRendered||deviceCancelled||!deviceSynthetic.observedRealtimeProcessing()||deviceCapture.getRMSLevel(0,0,deviceCapture.getNumSamples())<=0.01f)return 188;
     PluginNoteScanSettings largeStreamingSettings;largeStreamingSettings.sampleRate=192000;largeStreamingSettings.blockSize=8192;largeStreamingSettings.velocityLevels={1,8,16,24,32,40,48,56,64,72,80,88,96,104,112,127};largeStreamingSettings.repeatCount=8;largeStreamingSettings.noteDurationSeconds=10;largeStreamingSettings.releaseSeconds=10;largeStreamingSettings.captureLengthSeconds=20;const auto largeStreamingScan=PluginNoteScanner{}.scan(synthetic,largeStreamingSettings,[]{return true;},{},[](const PluginNoteCapture&){return true;});if(!largeStreamingScan.cancelled||!largeStreamingScan.error.isEmpty())return 182;
     PatternAudioRenderer::Samples previewSamples;for(int instrument=0;instrument<2;++instrument){auto& audio=previewSamples[static_cast<size_t>(instrument)].audio;audio.setSize(1,4410);audio.clear();for(int sample=0;sample<audio.getNumSamples();++sample)audio.setSample(0,sample,0.2f);previewSamples[static_cast<size_t>(instrument)].sampleRate=44100.0;}
     MidiPattern previewPattern;previewPattern.lengthBeats=4.0;previewPattern.tempoAndSignature={{0.0,juce::MidiMessage::tempoMetaEvent(500000)},{2.0,juce::MidiMessage::tempoMetaEvent(600000)}};previewPattern.events={{DrumInstrument::Kick,DrumArticulation::Default,127,0.0,0.1},{DrumInstrument::Snare,DrumArticulation::Default,80,1.0,0.1}};
