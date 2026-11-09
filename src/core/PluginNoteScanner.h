@@ -4,6 +4,12 @@
 #include <functional>
 #include <vector>
 
+enum class PluginNoteRenderMode
+{
+    offline,
+    realtimePaced
+};
+
 struct PluginNoteScanSettings
 {
     double sampleRate = 44100.0;
@@ -14,6 +20,7 @@ struct PluginNoteScanSettings
     double releaseSeconds = 0.5;
     double captureLengthSeconds = 0.75;
     double silencePeakThreshold = 1.0e-5;
+    PluginNoteRenderMode renderMode = PluginNoteRenderMode::offline;
 };
 
 struct PluginNoteCapture

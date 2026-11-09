@@ -1,7 +1,9 @@
 #include "PluginNoteScanner.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
+#include <thread>
 
 PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                                              const PluginNoteScanSettings& settings,
@@ -62,7 +64,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         return result;
     }
     const bool wasNonRealtime = plugin.isNonRealtime();
-    plugin.setNonRealtime(true);
+    plugin.setNonRealtime(settings.renderMode == PluginNoteRenderMode::offline);
     bool prepared = false;
     const auto restorePlugin = [&]()
     {
@@ -111,6 +113,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                     juce::MidiBuffer midi;
                     double sumSquares = 0.0;
                     juce::int64 measuredSamples = 0;
+                    const auto captureStart = std::chrono::steady_clock::now();
 
                     for (int offset = 0; offset < captureSamples; offset += settings.blockSize)
                     {
@@ -123,6 +126,13 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                             midi.addEvent(juce::MidiMessage::noteOff(1, note), static_cast<int>(noteSamples - offset));
 
                         plugin.processBlock(block, midi);
+                        if (settings.renderMode == PluginNoteRenderMode::realtimePaced)
+                        {
+                            const auto samplesThroughBlock = static_cast<double>(offset + count);
+                            const auto deadline = captureStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                std::chrono::duration<double>(samplesThroughBlock / settings.sampleRate));
+                            std::this_thread::sleep_until(deadline);
+                        }
                         for (int channel = 0; channel < outputChannels; ++channel)
                         {
                             const float* source = block.getReadPointer(channel);

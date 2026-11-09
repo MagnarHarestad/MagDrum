@@ -279,6 +279,8 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     settings.noteDurationSeconds = request->getProperty("noteDurationSeconds");
     settings.releaseSeconds = request->getProperty("releaseSeconds");
     settings.captureLengthSeconds = request->getProperty("captureLengthSeconds");
+    settings.renderMode = static_cast<bool>(request->getProperty("realtimePaced"))
+        ? PluginNoteRenderMode::realtimePaced : PluginNoteRenderMode::offline;
     const auto velocitiesValue = request->getProperty("velocityLevels");
     const auto* velocities = velocitiesValue.getArray();
     if (velocities == nullptr)
