@@ -16,10 +16,17 @@ struct PluginInstrumentRecord
 struct PluginSoundRecord
 {
     int midiNote = 0, velocity = 100;
-    juce::String articulation, previewPath, fingerprint, category = "Unknown";
+    juce::String articulation, previewPath, fingerprint, acousticFingerprint, category = "Unknown";
     bool silent = false;
     double duration = 0.0, sampleRate = 0.0, peak = 0.0, rms = 0.0, spectralCentroid = 0.0, transientStrength = 0.0, fundamentalHz = 0.0, pitchConfidence = 0.0, confidence = 0.0;
     int channels = 0;
+};
+
+struct PluginVelocityLayerBoundary
+{
+    int midiNote = 0, lowerVelocity = 0, upperVelocity = 0;
+    double spectralDistance = 0.0;
+    int algorithmVersion = 1;
 };
 
 struct PluginSoundBrowseRecord
@@ -71,6 +78,9 @@ public:
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
     std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     bool upsertPluginSound(std::int64_t kitId, const PluginSoundRecord& sound);
+    bool replacePluginVelocityLayerCandidates(std::int64_t kitId, const std::vector<PluginVelocityLayerBoundary>& candidates);
+    std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(std::int64_t kitId) const;
+    std::vector<PluginVelocityLayerBoundary> getPluginVelocityLayerCandidates(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
