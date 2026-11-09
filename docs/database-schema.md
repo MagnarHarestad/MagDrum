@@ -22,7 +22,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `mapping_entries` | Instrument/articulation to MIDI-note mappings within a profile. |
 | `schema_info` | Single-row schema version marker, currently version 10. |
 
-Database APIs can upsert plugin instruments, named kits with opaque plugin state, recall saved kit state, note/velocity sound captures with metadata and versioned velocity-boundary candidates. The desktop scanner populates kits and captures. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
+Database APIs can upsert plugin instruments, named kits with opaque plugin state, recall saved kit state, note/velocity sound captures with metadata and versioned velocity-boundary candidates. Manual category corrections to generated previews update both their sample row and the linked plugin sound. The desktop scanner populates kits and captures. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
 
 ## Planned additions
 

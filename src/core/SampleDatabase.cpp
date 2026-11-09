@@ -582,11 +582,26 @@ juce::Array<SampleScanRecord> SampleDatabase::getRecentSampleScans(int limit) co
 bool SampleDatabase::setUserCategory(const juce::File& file, const juce::String& category)
 {
     if (connection == nullptr) return false;
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(connection, "UPDATE samples SET user_category=?,category=? WHERE path=?", -1, &statement, nullptr) != SQLITE_OK) return false;
+    if (sqlite3_prepare_v2(connection, "UPDATE samples SET user_category=?,category=? WHERE path=?", -1, &statement, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
     const auto value=category.trim(); const auto path=file.getFullPathName();
     sqlite3_bind_text(statement,1,value.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,value.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,3,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
-    const bool ok=sqlite3_step(statement)==SQLITE_DONE && sqlite3_changes(connection)>0; sqlite3_finalize(statement); return ok;
+    bool ok=sqlite3_step(statement)==SQLITE_DONE && sqlite3_changes(connection)>0; sqlite3_finalize(statement);
+    if (ok && sqlite3_prepare_v2(connection, "UPDATE plugin_sounds SET category=? WHERE preview_path=?", -1, &statement, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_text(statement, 1, value.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 2, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        ok = sqlite3_step(statement) == SQLITE_DONE;
+        sqlite3_finalize(statement);
+    }
+    else if (ok) ok = false;
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && transactionResult == SQLITE_OK;
 }
 
 juce::String SampleDatabase::getCategory(const juce::File& file) const

@@ -189,6 +189,7 @@ int main()
     if(invalidModelClassifier.classify(kickLike).category!="Unknown")return 55;
     if(!db.setUserCategory(waveFile,"Snare"))return 14;
     if(db.getFirstSampleForCategory("Snare")!=std::optional<juce::File>(waveFile))return 74;
+    if(sqlite3_open(dbFile.getFullPathName().toRawUTF8(),&legacy)!=SQLITE_OK)return 111;sqlite3_stmt* correctedPluginSound=nullptr;if(sqlite3_prepare_v2(legacy,"SELECT count(*) FROM plugin_sounds WHERE preview_path=? AND category='Snare'",-1,&correctedPluginSound,nullptr)!=SQLITE_OK)return 112;sqlite3_bind_text(correctedPluginSound,1,waveFile.getFullPathName().toRawUTF8(),-1,SQLITE_TRANSIENT);const bool pluginCategoryCorrected=sqlite3_step(correctedPluginSound)==SQLITE_ROW&&sqlite3_column_int(correctedPluginSound,0)==1;sqlite3_finalize(correctedPluginSound);sqlite3_close(legacy);if(!pluginCategoryCorrected)return 113;
     ScannedSample related=sample; related.file=root.getChildFile("related.wav"); related.durationSeconds+=0.02;
     if(!db.insertSample(related))return 15;
     const auto duplicates=db.findExactDuplicates(waveFile);
