@@ -1082,6 +1082,86 @@ juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const 
     return records;
 }
 
+SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFilter& filter,
+                                                            int limit, int offset) const
+{
+    SampleBrowsePage page;
+    if (connection == nullptr || limit <= 0) return page;
+
+    const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";
+    switch (filter.sort)
+    {
+        case 2: ordering = "s.duration ASC,s.name COLLATE NOCASE,s.path COLLATE NOCASE"; break;
+        case 3: ordering = "s.duration DESC,s.name COLLATE NOCASE,s.path COLLATE NOCASE"; break;
+        case 4: ordering = "s.spectral_centroid DESC,s.name COLLATE NOCASE,s.path COLLATE NOCASE"; break;
+        case 5: ordering = "s.spectral_centroid ASC,s.name COLLATE NOCASE,s.path COLLATE NOCASE"; break;
+        default: break;
+    }
+    const auto sql = juce::String(
+        "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,"
+        "COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),"
+        "s.classification_confidence,(s.user_category<>''),COALESCE(p.identifier,''),COALESCE(p.name,''),"
+        "COALESCE(k.name,''),COALESCE(ps.midi_note,rr.midi_note,-1),COALESCE(ps.velocity,rr.velocity,0),"
+        "COALESCE(ps.articulation,''),COALESCE(rr.take_index,1) "
+        "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
+        "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
+        "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
+        "FROM plugin_round_robin_takes WHERE silent=0 AND preview_path<>'' GROUP BY preview_path) rr ON rr.preview_path=s.path "
+        "LEFT JOIN plugin_kits k ON k.id=COALESCE(ps.kit_id,rr.kit_id) "
+        "LEFT JOIN plugin_instruments p ON p.id=k.plugin_id "
+        "WHERE (?1='' OR instr(lower(s.name),lower(?1))>0 OR instr(lower(s.path),lower(?1))>0 "
+        "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
+        "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0)) "
+        "AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
+        "AND (?3='' OR src.source_type=?3) AND (?4='' OR src.identifier=?4) "
+        "AND (?5='' OR p.name=?5 COLLATE NOCASE) AND (?6='' OR k.name=?6 COLLATE NOCASE) "
+        "AND (?7=0 OR (s.user_category='' AND (s.category='Unknown' OR s.classification_confidence<0.75))) "
+        "AND (?8=1 OR (?8=2 AND s.duration<0.1) OR (?8=3 AND s.duration>=0.1 AND s.duration<0.5) "
+        "OR (?8=4 AND s.duration>=0.5 AND s.duration<2.0) OR (?8=5 AND s.duration>=2.0) "
+        "OR (?8=6 AND s.spectral_centroid>0 AND s.spectral_centroid<1000) "
+        "OR (?8=7 AND s.spectral_centroid>=1000 AND s.spectral_centroid<3000) "
+        "OR (?8=8 AND s.spectral_centroid>=3000)) ORDER BY ") + ordering
+        + " LIMIT ?9 OFFSET ?10";
+
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, sql.toRawUTF8(), -1, &statement, nullptr) != SQLITE_OK) return page;
+    const auto bindText = [statement](int index, const juce::String& value)
+    {
+        const auto trimmed = value.trim();
+        sqlite3_bind_text(statement, index, trimmed.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    };
+    bindText(1, filter.query); bindText(2, filter.category); bindText(3, filter.sourceType);
+    bindText(4, filter.sourceIdentifier); bindText(5, filter.pluginName); bindText(6, filter.kitName);
+    sqlite3_bind_int(statement, 7, filter.needsReview ? 1 : 0);
+    sqlite3_bind_int(statement, 8, juce::jlimit(1, 8, filter.feature));
+    const int pageLimit = juce::jlimit(1, 1000, limit);
+    sqlite3_bind_int(statement, 9, pageLimit + 1);
+    sqlite3_bind_int(statement, 10, juce::jmax(0, offset));
+
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        if (page.records.size() == pageLimit) { page.hasMore = true; break; }
+        const auto text = [statement](int column)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column));
+            return value != nullptr ? juce::String::fromUTF8(value) : juce::String();
+        };
+        SampleBrowseRecord record;
+        record.file = juce::File(text(0)); record.category = text(1);
+        record.durationSeconds = sqlite3_column_double(statement, 2);
+        record.brightnessHz = sqlite3_column_double(statement, 3);
+        record.sourceType = text(4); record.sourceName = text(5); record.sourceIdentifier = text(6);
+        record.classificationConfidence = sqlite3_column_double(statement, 7);
+        record.manuallyClassified = sqlite3_column_int(statement, 8) != 0;
+        record.pluginIdentifier = text(9); record.pluginName = text(10); record.kitName = text(11);
+        record.midiNote = sqlite3_column_int(statement, 12); record.velocity = sqlite3_column_int(statement, 13);
+        record.articulation = text(14); record.takeIndex = sqlite3_column_int(statement, 15);
+        page.records.add(std::move(record));
+    }
+    sqlite3_finalize(statement);
+    return page;
+}
+
 juce::Array<juce::File> SampleDatabase::searchPaths(const juce::String& query,int limit) const
 {
     juce::Array<juce::File> files;if(connection==nullptr||limit<=0)return files;sqlite3_stmt* statement=nullptr;

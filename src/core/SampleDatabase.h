@@ -71,9 +71,25 @@ struct SampleBrowseRecord
 {
     juce::File file;
     juce::String category, sourceType, sourceName, sourceIdentifier;
+    juce::String pluginIdentifier, pluginName, kitName, articulation;
     double durationSeconds = 0.0, brightnessHz = 0.0;
     double classificationConfidence = 0.0;
+    int midiNote = -1, velocity = 0, takeIndex = 1;
     bool manuallyClassified = false;
+};
+
+struct SampleBrowseFilter
+{
+    juce::String query, category, sourceType, sourceIdentifier, pluginName, kitName;
+    int feature = 1; // 1=all, 2-5 duration bands, 6-8 spectral brightness bands
+    int sort = 1; // 1=name, 2=shortest, 3=longest, 4=brightest, 5=darkest
+    bool needsReview = false;
+};
+
+struct SampleBrowsePage
+{
+    juce::Array<SampleBrowseRecord> records;
+    bool hasMore = false;
 };
 
 struct SampleScanRecord
@@ -133,6 +149,8 @@ public:
     juce::Array<SampleBrowseRecord> searchSampleBrowseRecords(const juce::String& query,
                                                               const juce::String& category,
                                                               int limit, int offset = 0) const;
+    SampleBrowsePage searchSampleBrowseRecords(const SampleBrowseFilter& filter,
+                                               int limit, int offset = 0) const;
     std::optional<juce::File> getFirstSampleForCategory(const juce::String& category) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;
