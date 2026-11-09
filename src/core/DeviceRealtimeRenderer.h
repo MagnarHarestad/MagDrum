@@ -22,6 +22,11 @@ public:
     void detach();
     bool render(int midiNote, int velocity, int noteSamples, juce::AudioBuffer<float>& capture,
                 ShouldCancel shouldCancel, bool& cancelled);
+#if defined(MAGDRUM_TESTING)
+    bool prepareForTesting(double testSampleRate, int testBlockSize);
+    void invokeTestCallback(float* const* outputs, int outputChannels, int numSamples);
+    bool hasActiveTestRequest() const noexcept { return requestActive.load(std::memory_order_acquire); }
+#endif
 
 private:
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int totalNumInputChannels,
@@ -30,6 +35,7 @@ private:
     void audioDeviceAboutToStart(juce::AudioIODevice*) override;
     void audioDeviceStopped() override;
     void finishFromAudioThread(bool wasCancelled, bool failed = false) noexcept;
+    bool prepareBuffers(double rate, int size);
 
     juce::AudioProcessor& plugin;
     juce::AudioDeviceManager deviceManager;
@@ -51,4 +57,7 @@ private:
     std::mutex waitMutex;
     std::condition_variable waitCondition;
     bool callbackAttached = false;
+#if defined(MAGDRUM_TESTING)
+    bool testCallbackReady = false;
+#endif
 };

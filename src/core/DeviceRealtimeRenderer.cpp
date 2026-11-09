@@ -29,13 +29,21 @@ bool DeviceRealtimeRenderer::open(juce::String& error)
 
     sampleRate = device->getCurrentSampleRate();
     blockSize = device->getCurrentBufferSizeSamples();
-    if (!std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 192000.0
-        || blockSize < 16 || blockSize > 8192)
+    if (!prepareBuffers(sampleRate, blockSize))
     {
         error = "The selected audio device reported an unsupported sample rate or buffer size.";
         return false;
     }
 
+    return true;
+}
+
+bool DeviceRealtimeRenderer::prepareBuffers(double rate, int size)
+{
+    if (!std::isfinite(rate) || rate < 8000.0 || rate > 192000.0 || size < 16 || size > 8192)
+        return false;
+    sampleRate = rate;
+    blockSize = size;
     const int processChannels = juce::jmax(1, juce::jmax(plugin.getTotalNumInputChannels(), plugin.getTotalNumOutputChannels()));
     processBuffer.setSize(processChannels, blockSize);
     processView.setSize(processChannels, blockSize);
@@ -43,6 +51,19 @@ bool DeviceRealtimeRenderer::open(juce::String& error)
     midiBuffer.ensureSize(256);
     return true;
 }
+
+#if defined(MAGDRUM_TESTING)
+bool DeviceRealtimeRenderer::prepareForTesting(double testSampleRate, int testBlockSize)
+{
+    testCallbackReady = prepareBuffers(testSampleRate, testBlockSize);
+    return testCallbackReady;
+}
+
+void DeviceRealtimeRenderer::invokeTestCallback(float* const* outputs, int outputChannels, int numSamples)
+{
+    audioDeviceIOCallbackWithContext(nullptr, 0, outputs, outputChannels, numSamples, {});
+}
+#endif
 
 void DeviceRealtimeRenderer::attach()
 {
@@ -68,7 +89,11 @@ bool DeviceRealtimeRenderer::render(int midiNote, int midiVelocity, int noteSamp
     juce::AudioBuffer<float>& capture, ShouldCancel shouldCancel, bool& cancelled)
 {
     cancelled = false;
-    if (!callbackAttached || capture.getNumChannels() != plugin.getTotalNumOutputChannels()
+    bool callbackReady = callbackAttached;
+#if defined(MAGDRUM_TESTING)
+    callbackReady = callbackReady || testCallbackReady;
+#endif
+    if (!callbackReady || capture.getNumChannels() != plugin.getTotalNumOutputChannels()
         || capture.getNumSamples() <= 0 || noteSamples < 1)
         return false;
 
