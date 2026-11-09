@@ -16,6 +16,7 @@
 #include "core/StructuredLogger.h"
 #include <iostream>
 #include <cstring>
+#include <cstdlib>
 #include <memory>
 #include <limits>
 #include <utility>
@@ -75,14 +76,18 @@ private:
     double confidence;
 };
 
-int main()
+int main(int argc,char** argv)
 {
+    if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::abort();
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;
     if(!matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.099,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.1,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.1,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::mediumSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::longSample,2.0,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,999.9)||matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::midBrightness,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,3000.0)||matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,0.0))return 110;
     const auto logLine=StructuredLogger::formatEvent(StructuredLogger::Level::warning,"test.event",{{"detail","quoted \"text\"\nline"}},"2026-01-02T03:04:05Z");const auto parsedLog=juce::JSON::parse(logLine);if(!parsedLog.isObject()||parsedLog.getDynamicObject()->getProperty("level").toString()!="warning"||parsedLog.getDynamicObject()->getProperty("event").toString()!="test.event"||parsedLog.getDynamicObject()->getProperty("detail").toString()!="quoted \"text\"\nline")return 114;
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    juce::StringArray crashCommand;crashCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());crashCommand.add("--magdrum-test-crash-fixture");
+    const auto crashExecution=PluginScanProcess::monitorWorker(crashCommand,root.getChildFile("crash-progress.json"),root.getChildFile("crash-result.json"),root.getChildFile("crash-cancel"));
+    if(!crashExecution.started||crashExecution.manifestRead||crashExecution.terminatedForCancellation||crashExecution.exitCode==0)return 144;
     const auto workerManifestFile=root.getChildFile("worker-result.json");
     if(!workerManifestFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[{"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"},{"midiNote":60,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"peak":0.0,"rms":0.0,"silent":true,"fileName":""}]})"))return 131;
     PluginScanProcessManifest workerManifest;

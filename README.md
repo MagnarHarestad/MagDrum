@@ -16,7 +16,7 @@ The browser filters by sample folder, scanned instrument, kit, category, measure
 
 Select a captured plugin preview and choose **Open source kit** to reopen its instrument with the saved kit state, when the instrument is still installed. See [the plugin scanning guide](docs/plugin-scanning.md) for the manual kit capture workflow, VST3 preset loading and their current limits.
 
-The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Plugin note scans run in a separate process to contain plugin crashes; an end-to-end crash fixture with third-party instruments remains to be added. AUv3 and iOS remain roadmap work.
+The classifier is an early heuristic. Its review filter surfaces Unknown and low-confidence results, but confidence has not been calibrated against a labeled sound corpus. Near-duplicate fingerprints are versioned and gain-normalized, but have not been evaluated against labeled examples. Plugin note scans run in a separate process to contain plugin crashes; a child-abort fixture exercises the process supervisor, while an end-to-end fixture with a real third-party instrument remains to be added. AUv3 and iOS remain roadmap work.
 
 ## Build
 
@@ -34,4 +34,4 @@ See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). The pro
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
 
-The current [Windows x64 test package v0.1.1-test.35](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.35) contains the standalone app, VST3 and PowerShell installer. It was built and tested locally; GitHub Actions billing prevents hosted builds. Windows ARM64, both macOS targets and Linux x64 have not yet been packaged. See the [local build guide](docs/local-builds.md) and [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS is not available yet.
+The current [Windows x64 test package v0.1.1-test.36](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.36) contains the standalone app, VST3 and PowerShell installer. It was built and tested locally; GitHub Actions billing prevents hosted builds. Windows ARM64, both macOS targets and Linux x64 have not yet been packaged. See the [local build guide](docs/local-builds.md) and [install guide](docs/installing.md). Packages are unsigned test builds; AUv3/iOS is not available yet.

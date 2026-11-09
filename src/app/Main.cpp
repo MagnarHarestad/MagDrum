@@ -308,27 +308,17 @@ private:
    const auto cancellationFile=requestDirectory.getChildFile("cancel"),progressFile=requestDirectory.getChildFile("progress.json"),resultFile=requestDirectory.getChildFile("result.json"),requestFile=requestDirectory.getChildFile("request.json");
    auto* request=new juce::DynamicObject();request->setProperty("descriptionFile",descriptionFile.getFullPathName());request->setProperty("stateFile",stateFile.getFullPathName());request->setProperty("outputDirectory",outputDirectory.getFullPathName());request->setProperty("cancellationFile",cancellationFile.getFullPathName());request->setProperty("progressFile",progressFile.getFullPathName());request->setProperty("resultFile",resultFile.getFullPathName());request->setProperty("sampleRate",settings.sampleRate);request->setProperty("blockSize",settings.blockSize);request->setProperty("repeatCount",settings.repeatCount);request->setProperty("noteDurationSeconds",settings.noteDurationSeconds);request->setProperty("releaseSeconds",settings.releaseSeconds);request->setProperty("captureLengthSeconds",settings.captureLengthSeconds);juce::Array<juce::var> velocities;for(const auto velocity:settings.velocityLevels)velocities.add(velocity);request->setProperty("velocityLevels",velocities);
    if(!requestFile.replaceWithText(juce::JSON::toString(juce::var(request),true))){requestDirectory.deleteRecursively();finish(0,0,0,1,false,"Could not write the isolated scan request.");return jobHasFinished;}
-   juce::ChildProcess child;juce::StringArray command;command.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());command.add("--magdrum-plugin-scan-worker");command.add(requestFile.getFullPathName());
-   if(!child.start(command)){requestDirectory.deleteRecursively();finish(0,0,0,1,false,"Could not start the isolated plugin scanner process.");return jobHasFinished;}
-   auto safe=main;bool cancelTimerStarted=false;juce::uint32 cancelStartedAt=0;int lastProgress=-1;bool terminatedForCancel=false;
-   while(child.isRunning()){
-    if(shouldExit()||cancellation.load()){
-     if(!cancellationFile.existsAsFile())cancellationFile.create();
-     if(!cancelTimerStarted){cancelTimerStarted=true;cancelStartedAt=juce::Time::getMillisecondCounter();}
-     else if(static_cast<juce::uint32>(juce::Time::getMillisecondCounter()-cancelStartedAt)>10000){child.kill();terminatedForCancel=true;break;}
-    }
-    const auto progressValue=progressFile.existsAsFile()?juce::JSON::parse(progressFile.loadFileAsString()):juce::var();
-    if(progressValue.isObject()){
-     const auto* progress=progressValue.getDynamicObject();const int done=static_cast<int>(progress->getProperty("completed"));const int total=static_cast<int>(progress->getProperty("total"));
-     if(done>lastProgress&&(done%24==0||done==total)){lastProgress=done;const int note=static_cast<int>(progress->getProperty("midiNote"));const int velocity=static_cast<int>(progress->getProperty("velocity"));juce::MessageManager::callAsync([safe,done,total,note,velocity]{if(safe!=nullptr)safe->setPluginScanProgress(done,total,note,velocity);});}
-    }
-    juce::Thread::sleep(50);
-   }
-   PluginScanProcessManifest result;
-   if(terminatedForCancel){requestDirectory.deleteRecursively();finish(0,0,0,0,true,"Plugin scan cancelled after the isolated instrument stopped responding.");return jobHasFinished;}
-   if(!PluginScanProcess::readManifest(resultFile,result)){
-    const auto message=child.getExitCode()!=0?"The instrument crashed in the isolated scanner process. MagDrum is still running.":"The isolated scanner exited without a valid result.";
-    StructuredLogger::log(StructuredLogger::Level::error,"plugin_scan.worker_failed",{{"plugin",pluginIdentifier},{"exit_code",juce::String(child.getExitCode())}});requestDirectory.deleteRecursively();finish(0,0,0,1,false,message);return jobHasFinished;
+    juce::StringArray command;command.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());command.add("--magdrum-plugin-scan-worker");command.add(requestFile.getFullPathName());
+    auto safe=main;
+    const auto execution=PluginScanProcess::monitorWorker(command,progressFile,resultFile,cancellationFile,
+     [this]{return shouldExit()||cancellation.load();},
+     [safe](int done,int total,int note,int velocity){juce::MessageManager::callAsync([safe,done,total,note,velocity]{if(safe!=nullptr)safe->setPluginScanProgress(done,total,note,velocity);});});
+    if(!execution.started){requestDirectory.deleteRecursively();finish(0,0,0,1,false,"Could not start the isolated plugin scanner process.");return jobHasFinished;}
+    if(execution.terminatedForCancellation){requestDirectory.deleteRecursively();finish(0,0,0,0,true,"Plugin scan cancelled after the isolated instrument stopped responding.");return jobHasFinished;}
+    const auto& result=execution.manifest;
+    if(!execution.manifestRead){
+     const auto message=execution.exitCode!=0?"The instrument crashed in the isolated scanner process. MagDrum is still running.":"The isolated scanner exited without a valid result.";
+     StructuredLogger::log(StructuredLogger::Level::error,"plugin_scan.worker_failed",{{"plugin",pluginIdentifier},{"exit_code",juce::String(execution.exitCode)}});requestDirectory.deleteRecursively();finish(0,0,0,1,false,message);return jobHasFinished;
    }
    if(!result.succeeded||result.error.isNotEmpty()){
     const auto message=result.error.isNotEmpty()?result.error:"The isolated scanner reported an unsuccessful scan.";StructuredLogger::log(StructuredLogger::Level::error,"plugin_scan.failed",{{"plugin",pluginIdentifier},{"error",message}});requestDirectory.deleteRecursively();finish(0,0,0,1,false,message);return jobHasFinished;

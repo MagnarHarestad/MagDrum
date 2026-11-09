@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <functional>
 #include <vector>
 
 struct PluginScanProcessCapture
@@ -24,9 +25,24 @@ struct PluginScanProcessManifest
     bool cancelled = false;
 };
 
+struct PluginScanProcessExecution
+{
+    PluginScanProcessManifest manifest;
+    bool started = false;
+    bool manifestRead = false;
+    bool terminatedForCancellation = false;
+    int exitCode = -1;
+};
+
 class PluginScanProcess
 {
 public:
+    using ShouldCancel = std::function<bool()>;
+    using Progress = std::function<void(int completed, int total, int midiNote, int velocity)>;
+
     static bool readManifest(const juce::File& file, PluginScanProcessManifest& result);
+    static PluginScanProcessExecution monitorWorker(const juce::StringArray& command,
+        const juce::File& progressFile, const juce::File& resultFile, const juce::File& cancellationFile,
+        ShouldCancel shouldCancel = {}, Progress progress = {}, int cancellationGraceMilliseconds = 10000);
     static int runWorker(const juce::File& requestFile);
 };

@@ -104,6 +104,64 @@ bool PluginScanProcess::readManifest(const juce::File& file, PluginScanProcessMa
     return true;
 }
 
+PluginScanProcessExecution PluginScanProcess::monitorWorker(const juce::StringArray& command,
+    const juce::File& progressFile, const juce::File& resultFile, const juce::File& cancellationFile,
+    ShouldCancel shouldCancel, Progress progress, int cancellationGraceMilliseconds)
+{
+    PluginScanProcessExecution result;
+    if (command.isEmpty() || cancellationGraceMilliseconds < 0)
+        return result;
+
+    juce::ChildProcess child;
+    result.started = child.start(command);
+    if (!result.started)
+        return result;
+
+    bool cancellationObserved = false;
+    juce::uint32 cancellationStartedAt = 0;
+    int lastReportedProgress = -1;
+    while (child.isRunning())
+    {
+        if (shouldCancel && shouldCancel())
+        {
+            if (!cancellationFile.existsAsFile()) cancellationFile.create();
+            if (!cancellationObserved)
+            {
+                cancellationObserved = true;
+                cancellationStartedAt = juce::Time::getMillisecondCounter();
+            }
+            else if (static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - cancellationStartedAt)
+                     > static_cast<juce::uint32>(cancellationGraceMilliseconds))
+            {
+                child.kill();
+                result.terminatedForCancellation = true;
+                break;
+            }
+        }
+
+        const auto progressValue = progressFile.existsAsFile() ? juce::JSON::parse(progressFile.loadFileAsString()) : juce::var();
+        if (progress && progressValue.isObject())
+        {
+            const auto* progressObject = progressValue.getDynamicObject();
+            const int completed = static_cast<int>(progressObject->getProperty("completed"));
+            const int total = static_cast<int>(progressObject->getProperty("total"));
+            if (completed > lastReportedProgress && (completed % 24 == 0 || completed == total))
+            {
+                lastReportedProgress = completed;
+                progress(completed, total, static_cast<int>(progressObject->getProperty("midiNote")),
+                         static_cast<int>(progressObject->getProperty("velocity")));
+            }
+        }
+        juce::Thread::sleep(50);
+    }
+
+    if (result.terminatedForCancellation)
+        return result;
+    result.exitCode = child.getExitCode();
+    result.manifestRead = readManifest(resultFile, result.manifest);
+    return result;
+}
+
 int PluginScanProcess::runWorker(const juce::File& requestFile)
 {
     const auto requestValue = readJson(requestFile);
