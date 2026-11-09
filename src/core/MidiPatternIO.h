@@ -17,6 +17,17 @@ struct MidiPattern
     double lengthBeats = 0.0;
 };
 
+struct MidiPatternDiff
+{
+    std::vector<DrumEvent> removedEvents;
+    std::vector<DrumEvent> addedEvents;
+    std::vector<MidiMetaEvent> removedMetadata;
+    std::vector<MidiMetaEvent> addedMetadata;
+    bool lengthChanged = false;
+};
+
+MidiPatternDiff compareMidiPatterns(const MidiPattern& original, const MidiPattern& current);
+
 struct MidiAmbiguousNote
 {
     int note = 0;

@@ -8,7 +8,7 @@ The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride,
 
 The standalone app provides MIDI import/export buttons, save/load controls for named profiles, entry set/remove controls by instrument and articulation, and CSV profile import/export. The CSV format has the header `instrument,articulation,note`; instrument and articulation names are case-sensitive enum names such as `HiHat,Closed,42`. Invalid names, duplicate semantic entries and notes outside 0–127 are rejected. Import replaces the active profile and saves it by the CSV filename.
 
-After importing a MIDI file, open **Edit pattern** to review drum events and change instrument, articulation, velocity, beat position and duration, or delete an event. The editor sorts events by beat position after edits. It also lists imported tempo and time-signature events and lets users set or remove either type at any non-negative beat without changing the other metadata events.
+After importing a MIDI file, open **Edit pattern** to review drum events and change instrument, articulation, velocity, beat position and duration, or delete an event. The editor sorts events by beat position after edits. Use **Compare with imported** to see the events and tempo/meter metadata removed from or added to the original imported pattern, including pattern-length changes. It also lists imported tempo and time-signature events and lets users set or remove either type at any non-negative beat without changing the other metadata events.
 
 When MIDI import encounters unmapped notes, the app lists each note number and how many note events used it. When a MIDI note maps to multiple instrument/articulation pairs, the import report lists all candidates and explains that the first profile entry was used for those events. Edit the profile to make that note unique before importing if another meaning is intended. MIDI export lists the semantic events that were omitted because the active profile did not map them.
 
@@ -16,4 +16,4 @@ When MIDI import encounters unmapped notes, the app lists each note number and h
 
 - GM mappings are a starter profile, not a guarantee that every instrument follows GM exactly.
 - Ambiguous note assignments are reported, but users must edit the profile and import again to choose another semantic interpretation.
-- The editor does not yet show a side-by-side MIDI round-trip diff.
+- The editor diff compares the imported semantic pattern with the current editor state. It does not yet compare timing against a broad collection of third-party MIDI files or report a DAW round-trip diff.

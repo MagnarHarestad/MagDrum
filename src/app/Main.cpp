@@ -33,6 +33,44 @@ juce::String describeMidiMapping(const MidiNoteMapping& mapping)
  if(instrument>=std::size(instruments)||articulation>=std::size(articulations))return "Unknown mapping";
  return juce::String(instruments[instrument])+" / "+articulations[articulation];
 }
+
+juce::String describeMidiEvent(const DrumEvent& event)
+{
+ return describeMidiMapping({event.instrument,event.articulation,0})+" — velocity "+juce::String(event.velocity)
+     +", beat "+juce::String(event.positionBeats,3)+", length "+juce::String(event.durationBeats,3);
+}
+
+juce::String describeMidiMetadata(const MidiMetaEvent& meta)
+{
+ if(meta.message.isTempoMetaEvent())
+  return "Tempo "+juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote())))
+      +" BPM at beat "+juce::String(meta.positionBeats,3);
+ if(meta.message.isTimeSignatureMetaEvent())
+ {
+  int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);
+  return "Meter "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(meta.positionBeats,3);
+ }
+ return "MIDI metadata at beat "+juce::String(meta.positionBeats,3);
+}
+
+juce::String describeMidiPatternDiff(const MidiPattern& imported,const MidiPattern& current)
+{
+ const auto diff=compareMidiPatterns(imported,current);
+ const int removed=static_cast<int>(diff.removedEvents.size()+diff.removedMetadata.size());
+ const int added=static_cast<int>(diff.addedEvents.size()+diff.addedMetadata.size());
+ if(removed==0&&added==0&&!diff.lengthChanged)return "No changes from the imported MIDI pattern.";
+
+ juce::String report="Imported MIDI — removed from current pattern ("+juce::String(removed)+"):\n";
+ for(const auto& event:diff.removedEvents)report+="  "+describeMidiEvent(event)+"\n";
+ for(const auto& meta:diff.removedMetadata)report+="  "+describeMidiMetadata(meta)+"\n";
+ if(removed==0)report+="  None\n";
+ report+="\nCurrent pattern — added since import ("+juce::String(added)+"):\n";
+ for(const auto& event:diff.addedEvents)report+="  "+describeMidiEvent(event)+"\n";
+ for(const auto& meta:diff.addedMetadata)report+="  "+describeMidiMetadata(meta)+"\n";
+ if(added==0)report+="  None\n";
+ if(diff.lengthChanged)report+="\nPattern length: "+juce::String(imported.lengthBeats,3)+" → "+juce::String(current.lengthBeats,3)+" beats\n";
+ return report;
+}
 }
 
 class WaveformView final : public juce::Component, private juce::ChangeListener
@@ -50,7 +88,7 @@ private:
 class MidiPatternEditor final : public juce::Component, private juce::ListBoxModel, private juce::Button::Listener
 {
 public:
- explicit MidiPatternEditor(MidiPattern& value):pattern(value),events("Drum events",this)
+ explicit MidiPatternEditor(MidiPattern& value,const MidiPattern& importedValue,bool hasImportedValue):pattern(value),importedPattern(importedValue),hasImportedPattern(hasImportedValue),events("Drum events",this)
  {
   events.setRowHeight(26);addAndMakeVisible(events);
   const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};
@@ -70,6 +108,7 @@ public:
   tempo.setInputRestrictions(3,"0123456789");timeSignature.setInputRestrictions(5,"0123456789/");tempo.setText("120",juce::dontSendNotification);timeSignature.setText("4/4",juce::dontSendNotification);
   addAndMakeVisible(metadataBeatLabel);addAndMakeVisible(metadataBeat);addAndMakeVisible(metadataType);addAndMakeVisible(tempoLabel);addAndMakeVisible(tempo);addAndMakeVisible(timeSignatureLabel);addAndMakeVisible(timeSignature);
   saveMeta.setButtonText("Set at beat");removeMeta.setButtonText("Remove at beat");saveMeta.addListener(this);removeMeta.addListener(this);addAndMakeVisible(saveMeta);addAndMakeVisible(removeMeta);
+  compare.setButtonText("Compare with imported");compare.addListener(this);compare.setEnabled(hasImportedPattern);addAndMakeVisible(compare);
   bool tempoAtStartFound=false,signatureAtStartFound=false;for(const auto& meta:pattern.tempoAndSignature)if(meta.positionBeats==0.0){if(meta.message.isTempoMetaEvent()&&!tempoAtStartFound){tempo.setText(juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote()))),juce::dontSendNotification);tempoAtStartFound=true;}if(meta.message.isTimeSignatureMetaEvent()&&!signatureAtStartFound){int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);timeSignature.setText(juce::String(numerator)+"/"+juce::String(denominator),juce::dontSendNotification);signatureAtStartFound=true;}}
   refreshMetadataSummary();message.setText("Edit drum events or change tempo and meter at any beat.",juce::dontSendNotification);addAndMakeVisible(message);
  }
@@ -79,7 +118,7 @@ public:
   auto row=area.removeFromTop(32);instrument.setBounds(row.removeFromLeft(125));row.removeFromLeft(5);articulation.setBounds(row.removeFromLeft(125));row.removeFromLeft(5);velocity.setBounds(row.removeFromLeft(80));row.removeFromLeft(5);beat.setBounds(row.removeFromLeft(130));row.removeFromLeft(5);duration.setBounds(row.removeFromLeft(130));row.removeFromLeft(5);apply.setBounds(row.removeFromLeft(100));row.removeFromLeft(5);remove.setBounds(row.removeFromLeft(105));
   area.removeFromTop(5);metadataSummary.setBounds(area.removeFromTop(62));area.removeFromTop(5);
   row=area.removeFromTop(32);metadataBeatLabel.setBounds(row.removeFromLeft(50));metadataBeat.setBounds(row.removeFromLeft(72));row.removeFromLeft(5);metadataType.setBounds(row.removeFromLeft(120));row.removeFromLeft(8);tempoLabel.setBounds(row.removeFromLeft(38));tempo.setBounds(row.removeFromLeft(52));row.removeFromLeft(8);timeSignatureLabel.setBounds(row.removeFromLeft(48));timeSignature.setBounds(row.removeFromLeft(56));row.removeFromLeft(8);saveMeta.setBounds(row.removeFromLeft(100));row.removeFromLeft(5);removeMeta.setBounds(row.removeFromLeft(112));
-  area.removeFromTop(4);message.setBounds(area.removeFromTop(30));
+  row=area.removeFromTop(30);message.setBounds(row.removeFromLeft(610));row.removeFromLeft(6);compare.setBounds(row);
  }
 private:
  int getNumRows()override{return static_cast<int>(pattern.events.size());}
@@ -101,6 +140,7 @@ private:
  }
  void buttonClicked(juce::Button* button)override
  {
+   if(button==&compare){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,"MIDI pattern diff",describeMidiPatternDiff(importedPattern,pattern),"Close");return;}
   if(button==&saveMeta||button==&removeMeta){const double position=metadataBeat.getText().getDoubleValue();if(!std::isfinite(position)||position<0.0){message.setText("Enter a non-negative beat position.",juce::dontSendNotification);return;}const bool editingTempo=metadataType.getSelectedId()==1;if(button==&removeMeta){const bool removed=editingTempo?removePatternTempo(pattern,position):removePatternTimeSignature(pattern,position);message.setText(removed?"Metadata removed at beat "+juce::String(position,3)+".":"No matching metadata exists at that beat.",juce::dontSendNotification);}else if(editingTempo){const int bpm=tempo.getText().getIntValue();if(!setPatternTempo(pattern,bpm,position)){message.setText("Use a tempo from 20 to 300 BPM and a non-negative beat.",juce::dontSendNotification);return;}message.setText("Tempo set to "+juce::String(bpm)+" BPM at beat "+juce::String(position,3)+".",juce::dontSendNotification);}else{const auto text=timeSignature.getText().trim();const int slash=text.indexOfChar('/');if(slash<=0){message.setText("Use a time signature such as 4/4.",juce::dontSendNotification);return;}const int numerator=text.substring(0,slash).getIntValue(),denominator=text.substring(slash+1).getIntValue();if(!setPatternTimeSignature(pattern,numerator,denominator,position)){message.setText("Use a numerator 1–32 and denominator 1, 2, 4, 8 or 16.",juce::dontSendNotification);return;}message.setText("Time signature set to "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(position,3)+".",juce::dontSendNotification);}refreshMetadataSummary();return;}
   const int row=events.getSelectedRow();if(!juce::isPositiveAndBelow(row,pattern.events.size())){message.setText("Select a drum event first.",juce::dontSendNotification);return;}
   if(button==&remove){pattern.events.erase(pattern.events.begin()+row);events.updateContent();events.selectRow(juce::jmin(row,static_cast<int>(pattern.events.size())-1));message.setText("Event deleted.",juce::dontSendNotification);return;}
@@ -110,7 +150,7 @@ private:
   std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});events.updateContent();events.selectRow(row);message.setText("Event updated and pattern resorted by beat position.",juce::dontSendNotification);
  }
  void refreshMetadataSummary(){juce::String summary;for(const auto& meta:pattern.tempoAndSignature){if(meta.message.isTempoMetaEvent())summary+="Tempo "+juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote())))+" BPM at beat "+juce::String(meta.positionBeats,3)+"\n";else if(meta.message.isTimeSignatureMetaEvent()){int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);summary+="Meter "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(meta.positionBeats,3)+"\n";}}if(summary.isEmpty())summary="No tempo or time-signature events.";metadataSummary.setText(summary,juce::dontSendNotification);}
- MidiPattern& pattern;juce::ListBox events;juce::ComboBox instrument,articulation,metadataType;juce::TextEditor velocity,beat,duration,metadataBeat,tempo,timeSignature,metadataSummary;juce::TextButton apply,remove,saveMeta,removeMeta;juce::Label message,metadataBeatLabel,tempoLabel,timeSignatureLabel;
+ MidiPattern& pattern;const MidiPattern& importedPattern;bool hasImportedPattern=false;juce::ListBox events;juce::ComboBox instrument,articulation,metadataType;juce::TextEditor velocity,beat,duration,metadataBeat,tempo,timeSignature,metadataSummary;juce::TextButton apply,remove,saveMeta,removeMeta,compare;juce::Label message,metadataBeatLabel,tempoLabel,timeSignatureLabel;
 };
 
 class StepCellButton final : public juce::TextButton
@@ -239,7 +279,7 @@ private:
  private:MainComponent&main;
  };
  class MidiPatternWindow final:public juce::DocumentWindow{
- public:explicit MidiPatternWindow(MainComponent& owner):DocumentWindow("Edit MIDI pattern",juce::Colour(0xff202226),juce::DocumentWindow::allButtons),main(owner){setUsingNativeTitleBar(true);setContentOwned(new MidiPatternEditor(main.midiPattern),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}void closeButtonPressed()override{main.midiPatternWindow.reset();}
+ public:explicit MidiPatternWindow(MainComponent& owner):DocumentWindow("Edit MIDI pattern",juce::Colour(0xff202226),juce::DocumentWindow::allButtons),main(owner){setUsingNativeTitleBar(true);setContentOwned(new MidiPatternEditor(main.midiPattern,main.midiBaseline,main.hasMidiImportBaseline),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}void closeButtonPressed()override{main.midiPatternWindow.reset();}
  private:MainComponent& main;
  };
  class StepSequencerWindow final:public juce::DocumentWindow{
@@ -385,7 +425,7 @@ private:
     const auto file=c.getResult();if(!file.existsAsFile())return;
     MidiPattern pattern;auto report=MidiPatternIO{}.read(file,safe->mappingProfile,pattern);
     if(!report.ok){safe->status.setText(report.error,juce::dontSendNotification);return;}
-    safe->midiPattern=std::move(pattern);
+    safe->midiPattern=std::move(pattern);safe->midiBaseline=safe->midiPattern;safe->hasMidiImportBaseline=true;
     std::map<int,int> unmappedCounts;for(const auto note:report.unmappedNotes)++unmappedCounts[note];
     juce::String details;
     for(const auto&[note,count]:unmappedCounts)details<<"Unmapped MIDI note "<<note<<": "<<count<<" event(s)\n";
@@ -429,7 +469,7 @@ private:
   rows.updateContent();rows.repaint();
  }
  void playSelected(){auto n=rows.getSelectedRow();if(!juce::isPositiveAndBelow(n,visible.size())){status.setText("Select a sample before playback.",juce::dontSendNotification);return;}const auto file=visible.getReference(n);auto*r=formats.createReaderFor(file);if(!r){status.setText("Could not open this sample. The file may have moved, been deleted or use an unsupported format.",juce::dontSendNotification);StructuredLogger::log(StructuredLogger::Level::warning,"sample_preview.unavailable",{{"path",file.getFullPathName()}});return;}if(patternPreviewCancellation)patternPreviewCancellation->store(true);++patternPreviewGeneration;transport.stop();transport.setSource(nullptr);source.reset();patternLoopSource=nullptr;if(patternPreviewFile.existsAsFile())patternPreviewFile.deleteFile();patternPreviewFile={};source.reset(new juce::AudioFormatReaderSource(r,true));transport.setSource(source.get(),0,nullptr,r->sampleRate);transport.start();}
- juce::Label title,subtitle,status;juce::TextButton scan,scanHistory,pluginScan,play,openSourceKit,stepSequencer,categorySave,tagsSave,similar,duplicates,perceptualDuplicates,compareSamples,midiImport,midiExport,midiEdit,profileSave,profileLoad,profileImport,profileExport,mappingSet,mappingRemove;juce::TextEditor filter,tags,profileName,mappingNote;juce::ComboBox categoryFilter,sourceFilter,kitFilter,sortFilter,characteristicFilter,confidenceFilter,categoryEdit,mappingInstrument,mappingArticulation;juce::ListBox rows;WaveformView waveform;juce::AudioFormatManager formats;juce::AudioPluginFormatManager pluginFormats;juce::KnownPluginList knownPlugins;juce::AudioTransportSource transport;SampleDatabase database;MidiMappingProfile mappingProfile=MidiMappingProfile::generalMidi();MidiPattern midiPattern;juce::Array<juce::File>all,visible;juce::Array<PluginSoundBrowseRecord>pluginBrowseRecords;std::unordered_map<std::string,SampleBrowseRecord>browseRecordsByPath;juce::File pluginListFile,pluginCrashList,databaseFile,patternPreviewFile;juce::String selectedPluginIdentifier,selectedPluginName,selectedPluginFormat;juce::PluginDescription selectedPluginDescription;std::uint64_t pluginLoadGeneration=0,patternPreviewGeneration=0;std::shared_ptr<std::atomic<bool>>patternPreviewCancellation;std::unique_ptr<PluginWindow>pluginWindow;std::unique_ptr<MidiPatternWindow>midiPatternWindow;std::unique_ptr<StepSequencerWindow>stepSequencerWindow;std::unique_ptr<PluginEditorWindow>pluginEditorWindow;std::unique_ptr<ComparisonWindow>comparisonWindow;std::unique_ptr<juce::AudioPluginInstance>selectedPlugin;std::unique_ptr<juce::PositionableAudioSource>source;LoopingAudioSource*patternLoopSource=nullptr;std::unique_ptr<juce::FileChooser>chooser;juce::ThreadPool workers{1};std::atomic<bool>pluginScanCancellation{false},pluginScanRunning{false},sampleScanCancellation{false};bool scanning=false,patternPreviewLooping=false;
+ juce::Label title,subtitle,status;juce::TextButton scan,scanHistory,pluginScan,play,openSourceKit,stepSequencer,categorySave,tagsSave,similar,duplicates,perceptualDuplicates,compareSamples,midiImport,midiExport,midiEdit,profileSave,profileLoad,profileImport,profileExport,mappingSet,mappingRemove;juce::TextEditor filter,tags,profileName,mappingNote;juce::ComboBox categoryFilter,sourceFilter,kitFilter,sortFilter,characteristicFilter,confidenceFilter,categoryEdit,mappingInstrument,mappingArticulation;juce::ListBox rows;WaveformView waveform;juce::AudioFormatManager formats;juce::AudioPluginFormatManager pluginFormats;juce::KnownPluginList knownPlugins;juce::AudioTransportSource transport;SampleDatabase database;MidiMappingProfile mappingProfile=MidiMappingProfile::generalMidi();MidiPattern midiPattern,midiBaseline;bool hasMidiImportBaseline=false;juce::Array<juce::File>all,visible;juce::Array<PluginSoundBrowseRecord>pluginBrowseRecords;std::unordered_map<std::string,SampleBrowseRecord>browseRecordsByPath;juce::File pluginListFile,pluginCrashList,databaseFile,patternPreviewFile;juce::String selectedPluginIdentifier,selectedPluginName,selectedPluginFormat;juce::PluginDescription selectedPluginDescription;std::uint64_t pluginLoadGeneration=0,patternPreviewGeneration=0;std::shared_ptr<std::atomic<bool>>patternPreviewCancellation;std::unique_ptr<PluginWindow>pluginWindow;std::unique_ptr<MidiPatternWindow>midiPatternWindow;std::unique_ptr<StepSequencerWindow>stepSequencerWindow;std::unique_ptr<PluginEditorWindow>pluginEditorWindow;std::unique_ptr<ComparisonWindow>comparisonWindow;std::unique_ptr<juce::AudioPluginInstance>selectedPlugin;std::unique_ptr<juce::PositionableAudioSource>source;LoopingAudioSource*patternLoopSource=nullptr;std::unique_ptr<juce::FileChooser>chooser;juce::ThreadPool workers{1};std::atomic<bool>pluginScanCancellation{false},pluginScanRunning{false},sampleScanCancellation{false};bool scanning=false,patternPreviewLooping=false;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 class MagDrumApplication final:public juce::JUCEApplication{

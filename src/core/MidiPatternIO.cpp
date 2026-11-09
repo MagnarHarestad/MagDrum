@@ -5,6 +5,26 @@
 
 namespace
 {
+constexpr double patternComparisonTolerance = 1.0e-6;
+
+bool sameDrumEvent(const DrumEvent& left, const DrumEvent& right)
+{
+    return left.instrument == right.instrument && left.articulation == right.articulation
+        && left.velocity == right.velocity
+        && std::abs(left.positionBeats - right.positionBeats) <= patternComparisonTolerance
+        && std::abs(left.durationBeats - right.durationBeats) <= patternComparisonTolerance;
+}
+
+bool sameMetaEvent(const MidiMetaEvent& left, const MidiMetaEvent& right)
+{
+    if (std::abs(left.positionBeats - right.positionBeats) > patternComparisonTolerance
+        || left.message.getRawDataSize() != right.message.getRawDataSize())
+        return false;
+    if (left.message.getRawDataSize() == 0) return true;
+    return std::equal(left.message.getRawData(), left.message.getRawData() + left.message.getRawDataSize(),
+                      right.message.getRawData());
+}
+
 void replaceMetaAtBeat(MidiPattern& pattern, bool tempo, const juce::MidiMessage& replacement, double positionBeats)
 {
     pattern.tempoAndSignature.erase(std::remove_if(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
@@ -17,6 +37,47 @@ void replaceMetaAtBeat(MidiPattern& pattern, bool tempo, const juce::MidiMessage
     std::stable_sort(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
         [](const auto& left, const auto& right) { return left.positionBeats < right.positionBeats; });
 }
+}
+
+MidiPatternDiff compareMidiPatterns(const MidiPattern& original, const MidiPattern& current)
+{
+    MidiPatternDiff result;
+    std::vector<bool> matchedCurrentEvents(current.events.size(), false);
+    for (const auto& originalEvent : original.events)
+    {
+        size_t match = current.events.size();
+        for (size_t index = 0; index < current.events.size(); ++index)
+            if (!matchedCurrentEvents[index] && sameDrumEvent(originalEvent, current.events[index]))
+            {
+                match = index;
+                break;
+            }
+        if (match == current.events.size()) result.removedEvents.push_back(originalEvent);
+        else matchedCurrentEvents[match] = true;
+    }
+    for (size_t index = 0; index < current.events.size(); ++index)
+        if (!matchedCurrentEvents[index]) result.addedEvents.push_back(current.events[index]);
+
+    std::vector<bool> matchedCurrentMetadata(current.tempoAndSignature.size(), false);
+    for (const auto& originalMeta : original.tempoAndSignature)
+    {
+        size_t match = current.tempoAndSignature.size();
+        for (size_t index = 0; index < current.tempoAndSignature.size(); ++index)
+            if (!matchedCurrentMetadata[index] && sameMetaEvent(originalMeta, current.tempoAndSignature[index]))
+            {
+                match = index;
+                break;
+            }
+        if (match == current.tempoAndSignature.size()) result.removedMetadata.push_back(originalMeta);
+        else matchedCurrentMetadata[match] = true;
+    }
+    for (size_t index = 0; index < current.tempoAndSignature.size(); ++index)
+        if (!matchedCurrentMetadata[index]) result.addedMetadata.push_back(current.tempoAndSignature[index]);
+
+    result.lengthChanged = !std::isfinite(original.lengthBeats) || !std::isfinite(current.lengthBeats)
+        ? original.lengthBeats != current.lengthBeats
+        : std::abs(original.lengthBeats - current.lengthBeats) > patternComparisonTolerance;
+    return result;
 }
 
 bool setPatternTempo(MidiPattern& pattern, int beatsPerMinute, double positionBeats)
