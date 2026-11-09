@@ -1,6 +1,6 @@
 # Scanning sounds from an instrument plugin
 
-The desktop app can discover installed audio plugins using JUCE's plugin list. Use the list's options to scan default locations or add a custom folder. MagDrum keeps the discovered plugin inventory in its local SQLite database and caches JUCE's plugin descriptions in the user's application data folder.
+The desktop app can discover installed audio plugins using JUCE's plugin list. Use the list's options to scan default locations or add a custom folder. MagDrum keeps the discovered plugin inventory in its local SQLite database and caches JUCE's plugin descriptions in the user's application data folder. With a loaded VST3 instrument, choose **Find VST3 presets** to recursively search a user-selected folder for `.vstpreset` files. Select a result to ask that instrument to load it. MagDrum does not copy preset files; the plugin validates whether a preset belongs to it. After a successful load, enter or keep a kit name and use **Save state** if you want to recall that kit from MagDrum later.
 
 ## Capture a kit
 

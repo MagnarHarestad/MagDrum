@@ -5,6 +5,7 @@
 #include "core/MidiPatternIO.h"
 #include "core/PluginNoteScanner.h"
 #include "core/PluginPrograms.h"
+#include "core/PluginPresetFiles.h"
 #include "core/PatternAudioRenderer.h"
 #include "core/LoopingAudioSource.h"
 #include "core/PluginVelocityLayerAnalyzer.h"
@@ -78,6 +79,7 @@ int main()
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    const auto presetFolder=root.getChildFile("presets");if(!presetFolder.createDirectory().wasOk())return 124;const auto presetA=presetFolder.getChildFile("A Kit.vstpreset");const auto presetB=presetFolder.getChildFile("nested").getChildFile("B Kit.VSTPRESET");if(!presetB.getParentDirectory().createDirectory().wasOk()||!presetA.replaceWithText("fixture")||!presetB.replaceWithText("fixture")||!presetFolder.getChildFile("ignore.fxp").replaceWithText("fixture"))return 125;const auto foundPresets=findVst3PresetFiles(presetFolder);if(!foundPresets.rootIsDirectory||foundPresets.cancelled||foundPresets.files.size()!=2||foundPresets.files[0].getFileName()!="A Kit.vstpreset"||foundPresets.files[1].getFileName()!="B Kit.VSTPRESET")return 126;const auto cancelledPresetSearch=findVst3PresetFiles(presetFolder,[]{return true;});if(!cancelledPresetSearch.cancelled||!cancelledPresetSearch.files.isEmpty())return 127;
     auto waveFile=root.getChildFile("kick.wav");
     juce::WavAudioFormat wav;
     auto stream=waveFile.createOutputStream();
