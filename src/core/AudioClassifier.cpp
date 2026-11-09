@@ -57,6 +57,35 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (sample.spectralCentroidHz >= 3000.0) addTag("Bright");
     else if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1000.0) addTag("Dark");
 
+    const auto& attacks = sample.transientAttackTimesSeconds;
+    if (attacks.size() == 2 && attacks.front() <= 0.04)
+    {
+        const auto separation = attacks[1] - attacks[0];
+        if (separation >= 0.015 && separation <= 0.095)
+            addTag("Articulation candidate: Flam");
+    }
+    if (attacks.size() >= 5 && attacks.front() <= 0.04)
+    {
+        double intervalTotal = 0.0;
+        double intervalSquares = 0.0;
+        bool intervalsValid = true;
+        for (size_t index = 1; index < attacks.size(); ++index)
+        {
+            const auto interval = attacks[index] - attacks[index - 1];
+            if (interval < 0.03 || interval > 0.15)
+                intervalsValid = false;
+            intervalTotal += interval;
+            intervalSquares += interval * interval;
+        }
+
+        const auto intervalCount = static_cast<double>(attacks.size() - 1);
+        const auto meanInterval = intervalTotal / intervalCount;
+        const auto variance = juce::jmax(0.0, intervalSquares / intervalCount - meanInterval * meanInterval);
+        const auto coefficientOfVariation = meanInterval > 0.0 ? std::sqrt(variance) / meanInterval : 1.0;
+        if (intervalsValid && coefficientOfVariation <= 0.45)
+            addTag("Articulation candidate: Roll");
+    }
+
     juce::StringArray namedCategories;
     if (has({"kick", "bass drum", "bassdrum", "bd"})) namedCategories.add("Kick");
     if (has({"snare", "snr", "sd"})) namedCategories.add("Snare");

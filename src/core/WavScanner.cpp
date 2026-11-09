@@ -76,29 +76,28 @@ PitchEstimate estimateFundamental(const juce::AudioBuffer<float>& buffer, unsign
     return {effectiveRate / (selectedLag + adjustment), juce::jlimit(0.0, 1.0, correlation[static_cast<size_t>(selectedLag)])};
 }
 
-int countTransientAttacks(const std::vector<double>& envelope, double sampleRate, double overallRms)
+std::vector<double> findTransientAttackTimes(const std::vector<double>& envelope, double sampleRate, double overallRms)
 {
-    if (envelope.size() < 2 || sampleRate <= 0.0) return 0;
+    std::vector<double> attackTimes;
+    if (envelope.size() < 2 || sampleRate <= 0.0) return attackTimes;
     const auto peak = *std::max_element(envelope.begin(), envelope.end());
-    if (peak <= 1.0e-8) return 0;
+    if (peak <= 1.0e-8) return attackTimes;
     constexpr int envelopeFrameSamples = 256;
     const auto minimumSeparationFrames = juce::jmax(1, static_cast<int>(std::lround(sampleRate * 0.012 / envelopeFrameSamples)));
     const auto minimumLevel = juce::jmax(peak * 0.15, overallRms * 0.10);
-    int attacks = 0;
     int lastAttack = -minimumSeparationFrames;
     for (size_t index = 0; index + 1 < envelope.size(); ++index)
     {
         const auto previous = index == 0 ? 0.0 : envelope[index - 1];
         const auto current = envelope[index];
-        const auto next = envelope[index + 1];
-        if (current >= minimumLevel && current > previous * 1.8 && current >= next
+        if (current >= minimumLevel && current > previous * 1.8
             && static_cast<int>(index) - lastAttack >= minimumSeparationFrames)
         {
-            ++attacks;
             lastAttack = static_cast<int>(index);
+            attackTimes.push_back(static_cast<double>(index * envelopeFrameSamples) / sampleRate);
         }
     }
-    return attacks;
+    return attackTimes;
 }
 
 juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::dsp::FFT& fft,
@@ -358,7 +357,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
-        sample.transientCount = countTransientAttacks(transientEnvelope, reader->sampleRate, sample.rms);
+        sample.transientAttackTimesSeconds = findTransientAttackTimes(transientEnvelope, reader->sampleRate, sample.rms);
+        sample.transientCount = static_cast<int>(sample.transientAttackTimesSeconds.size());
         sample.spectralCentroidHz = centroidMagnitude > 0.0 ? centroidWeightedMagnitude / centroidMagnitude : 0.0;
         sample.spectralFlatness = spectralWindowCount > 0 ? spectralFlatnessTotal / spectralWindowCount : 0.0;
         sample.fingerprint = juce::SHA256(file).toHexString();

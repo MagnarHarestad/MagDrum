@@ -1,9 +1,10 @@
 #pragma once
 #include <functional>
 #include <cstdint>
+#include <vector>
 #include <juce_audio_formats/juce_audio_formats.h>
 
-inline constexpr int currentSampleAnalysisVersion = 7;
+inline constexpr int currentSampleAnalysisVersion = 8;
 
 struct ScannedSample
 {
@@ -19,6 +20,7 @@ struct ScannedSample
     double spectralFlatness = 0.0;
     double transientStrength = 0.0;
     int transientCount = 0;
+    std::vector<double> transientAttackTimesSeconds;
     double fundamentalHz = 0.0;
     double pitchConfidence = 0.0;
     int analysisVersion = currentSampleAnalysisVersion;
