@@ -417,6 +417,10 @@ int main(int argc,char** argv)
     ScannedSample filenameOnly;filenameOnly.durationSeconds=.5;filenameOnly.rms=.2;filenameOnly.peak=.8;filenameOnly.spectralCentroidHz=2500;filenameOnly.transientStrength=.01;
     filenameOnly.file=juce::File("Kick_01.wav");const auto tokenKick=AudioClassifier{}.classify(filenameOnly);
     if(tokenKick.category!="Kick"||tokenKick.confidence<0.9)return 141;
+    const std::array<std::pair<const char*,const char*>,5> drumAliases{{
+        {"BD_01.wav","Kick"},{"SD_Center.wav","Snare"},{"CHH_Closed.wav","Closed hi-hat"},
+        {"OHH_Open.wav","Open hi-hat"},{"PHH_Foot.wav","Pedal hi-hat"}}};
+    for(const auto& [filename,category] : drumAliases){filenameOnly.file=juce::File(filename);if(AudioClassifier{}.classify(filenameOnly).category!=category)return 197;}
     filenameOnly.file=juce::File("pride.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 142;
     filenameOnly.file=juce::File("sidekick.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 143;
     ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");

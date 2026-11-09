@@ -58,9 +58,9 @@ DrumClassification classify(const ScannedSample& sample) const override
     else if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1000.0) addTag("Dark");
 
     juce::StringArray namedCategories;
-    if (has({"kick", "bass drum", "bassdrum"})) namedCategories.add("Kick");
-    if (has({"snare"})) namedCategories.add("Snare");
-    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat"}))
+    if (has({"kick", "bass drum", "bassdrum", "bd"})) namedCategories.add("Kick");
+    if (has({"snare", "snr", "sd"})) namedCategories.add("Snare");
+    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat", "hh", "chh", "ohh", "phh"}))
     {
         if (has({"pedal", "foot", "phh"})) namedCategories.add("Pedal hi-hat");
         else if (has({"open", "ohh"})) namedCategories.add("Open hi-hat");
@@ -79,7 +79,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        out.confidence = has({"808", "909", "kick", "snare", "hihat", "hi-hat", "hi hat", "tom", "clap", "ride", "crash", "rimshot", "percussion"}) ? 0.92 : 0.82;
+        out.confidence = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "tom", "clap", "ride", "crash", "rimshot", "percussion"}) ? 0.92 : 0.82;
         return out;
     }
     if (namedCategories.size() > 1)
