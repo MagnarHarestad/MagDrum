@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MagDrum VERSION 0.1.0 LANGUAGES C CXX)
+project(MagDrum VERSION 0.1.1 LANGUAGES C CXX)
 option(MAGDRUM_BUILD_MOBILE_PREVIEW "Build the iOS library UI as a desktop preview for shared-code validation" OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

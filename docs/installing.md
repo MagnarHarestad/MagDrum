@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published archive is the [Windows x64 test build v0.1.1-test.56](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.56). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
+The latest published archive is the [Windows x64 test build v0.1.1-test.57](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.57). It was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. The app and VST3 both report version 0.1.1. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
-The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `f6794b7960c59d70c5b43ccd1a5703def7c2e362be7543172c9a20aee9d0505f`, matching the v0.1.1-test.56 release asset. It contains the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.55 package had SHA-256 `59580cf353723556bb1deb842f980f2aa728388d343fdf6c55fb604700462072`.
+The current local `latest-publish/MagDrum-Windows-x64.zip` has SHA-256 `f60714ed192ad05a2be4473c6bf32ef181a3ed99abe2069b20255f3124933f29`, matching the v0.1.1-test.57 release asset. It contains the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.56 package had SHA-256 `f6794b7960c59d70c5b43ccd1a5703def7c2e362be7543172c9a20aee9d0505f`.
 
 ## Windows x64 and Cubase
 
