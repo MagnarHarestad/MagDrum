@@ -42,6 +42,9 @@ public:
         stop.setButtonText("Stop"); stop.addListener(this); addAndMakeVisible(stop);
         importMidi.setButtonText("Import MIDI"); importMidi.addListener(this); addAndMakeVisible(importMidi);
         exportMidi.setButtonText("Export MIDI"); exportMidi.addListener(this); addAndMakeVisible(exportMidi);
+        midiFallback.setButtonText("Allow articulation fallback");
+        midiFallback.setTooltip("When enabled, unsupported articulations use a mapping for the same drum instrument. The export report lists every substitution.");
+        addAndMakeVisible(midiFallback);
         profileName.setTextToShowWhenEmpty("Mapping profile name", juce::Colour(0xff77736c));
         profileName.setText("General MIDI"); addAndMakeVisible(profileName);
         savedProfiles.setTextWhenNothingSelected("Saved profiles");
@@ -120,6 +123,7 @@ public:
             play.setBounds(row.removeFromLeft((row.getWidth() - 6) * 3 / 4)); row.removeFromLeft(6); stop.setBounds(row);
             area.removeFromTop(6); row = area.removeFromTop(44);
             importMidi.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); exportMidi.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(36); midiFallback.setBounds(row);
             area.removeFromTop(8); row = area.removeFromTop(44);
             search.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); category.setBounds(row);
             area.removeFromTop(6); row = area.removeFromTop(44);
@@ -139,7 +143,7 @@ public:
             cancelImport.setBounds(row.removeFromLeft(90)); row.removeFromLeft(6);
             play.setBounds(row.removeFromLeft(125)); row.removeFromLeft(6); stop.setBounds(row.removeFromLeft(75));
             area.removeFromTop(6); row = area.removeFromTop(42);
-            importMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(6); exportMidi.setBounds(row.removeFromLeft(140));
+            importMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(6); exportMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(8); midiFallback.setBounds(row.removeFromLeft(280));
             area.removeFromTop(8); row = area.removeFromTop(42);
             search.setBounds(row.removeFromLeft(400)); row.removeFromLeft(8); category.setBounds(row.removeFromLeft(180));
             area.removeFromTop(6); row = area.removeFromTop(42);
@@ -546,18 +550,51 @@ private:
                 const auto exportTemp = safe->dataDirectory.getChildFile("MIDI Exports")
                     .getNonexistentChildFile("MagDrum-Export", ".mid", false);
                 std::vector<DrumEvent> unsupported;
+                std::vector<MidiFallbackUse> fallbacks;
                 juce::String copyError;
-                const bool written = MidiPatternIO{}.write(exportTemp, safe->pattern, safe->mappingProfile, false, &unsupported);
+                const bool written = MidiPatternIO{}.write(exportTemp, safe->pattern, safe->mappingProfile,
+                    safe->midiFallback.getToggleState(), &unsupported, &fallbacks);
                 const bool copied = written && MagDrumFiles::copyFileToURL(exportTemp, destination, copyError);
                 exportTemp.deleteFile();
-                safe->status.setText(copied ? "MIDI exported; " + juce::String(static_cast<int>(unsupported.size()))
-                    + " events need a target mapping." : (copyError.isNotEmpty() ? copyError : "MIDI export failed."), juce::dontSendNotification);
+                if (!copied)
+                {
+                    safe->status.setText(copyError.isNotEmpty() ? copyError : "MIDI export failed.", juce::dontSendNotification);
+                    return;
+                }
+                safe->status.setText("MIDI exported; " + juce::String(static_cast<int>(fallbacks.size()))
+                    + " fallback mapping(s), " + juce::String(static_cast<int>(unsupported.size()))
+                    + " unsupported event(s) omitted.", juce::dontSendNotification);
+                if (!fallbacks.empty() || !unsupported.empty())
+                {
+                    juce::String report;
+                    for (const auto& fallback : fallbacks)
+                        report += "Fallback: " + safe->describeMapping(fallback.requestedEvent.instrument, fallback.requestedEvent.articulation)
+                            + " mapped to " + safe->describeMapping(fallback.requestedEvent.instrument, fallback.mappedArticulation)
+                            + " at MIDI note " + juce::String(fallback.midiNote) + ".\n";
+                    for (const auto& event : unsupported)
+                        report += "Omitted: " + safe->describeMapping(event.instrument, event.articulation)
+                            + ", velocity " + juce::String(event.velocity) + ".\n";
+                    juce::AlertWindow::showMessageBoxAsync(unsupported.empty() ? juce::MessageBoxIconType::InfoIcon
+                        : juce::MessageBoxIconType::WarningIcon, "MIDI export mapping report", report, "Close");
+                }
             });
+    }
+
+    static juce::String describeMapping(DrumInstrument instrument, DrumArticulation articulation)
+    {
+        static constexpr const char* instruments[] { "Kick", "Snare", "Hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion" };
+        static constexpr const char* articulations[] { "Default", "Center", "Rimshot", "Side stick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge" };
+        const auto instrumentIndex = static_cast<size_t>(instrument);
+        const auto articulationIndex = static_cast<size_t>(articulation);
+        if (instrumentIndex >= std::size(instruments) || articulationIndex >= std::size(articulations))
+            return "Unknown mapping";
+        return juce::String(instruments[instrumentIndex]) + " / " + articulations[articulationIndex];
     }
 
     static constexpr int samplePageSize = 250;
     juce::Label title, status;
     juce::TextButton importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
+    juce::ToggleButton midiFallback;
     juce::TextButton loadProfile, saveProfile, setMapping, removeMapping;
     juce::TextEditor search, profileName, mappingNote;
     juce::ComboBox category, savedProfiles, mappingInstrument, mappingArticulation;

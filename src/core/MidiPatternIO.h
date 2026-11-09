@@ -35,6 +35,13 @@ struct MidiAmbiguousNote
     std::vector<MidiNoteMapping> candidates;
 };
 
+struct MidiFallbackUse
+{
+    DrumEvent requestedEvent;
+    std::uint8_t midiNote = 0;
+    DrumArticulation mappedArticulation = DrumArticulation::Default;
+};
+
 bool setPatternTempo(MidiPattern&, int beatsPerMinute, double positionBeats = 0.0);
 bool setPatternTimeSignature(MidiPattern&, int numerator, int denominator, double positionBeats = 0.0);
 bool removePatternTempo(MidiPattern&, double positionBeats);
@@ -53,5 +60,6 @@ class MidiPatternIO
 public:
     MidiImportReport read(const juce::File&, const MidiMappingProfile&, MidiPattern&) const;
     bool write(const juce::File&, const MidiPattern&, const MidiMappingProfile&,
-               bool allowFallback, std::vector<DrumEvent>* unsupported = nullptr) const;
+               bool allowFallback, std::vector<DrumEvent>* unsupported = nullptr,
+               std::vector<MidiFallbackUse>* fallbacks = nullptr) const;
 };

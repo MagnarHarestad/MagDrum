@@ -471,6 +471,11 @@ int main(int argc,char** argv)
     MidiPattern pattern;pattern.events.push_back(hat);pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::tempoMetaEvent(600000)});pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::timeSignatureMetaEvent(7,8)});pattern.lengthBeats=8.0;
     MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
     if(!midiIO.write(midiFile,pattern,gm,false))return 23;
+    MidiPattern fallbackPattern;fallbackPattern.events.push_back(unsupported);const auto omittedFallbackFile=root.getChildFile("fallback-omitted.mid");std::vector<DrumEvent> omittedFallbackEvents;std::vector<MidiFallbackUse> unusedFallbacks;
+    if(!midiIO.write(omittedFallbackFile,fallbackPattern,gm,false,&omittedFallbackEvents,&unusedFallbacks)||omittedFallbackEvents.size()!=1||!unusedFallbacks.empty())return 190;
+    const auto mappedFallbackFile=root.getChildFile("fallback-enabled.mid");std::vector<DrumEvent> unsupportedFallbackEvents;std::vector<MidiFallbackUse> appliedFallbacks;
+    if(!midiIO.write(mappedFallbackFile,fallbackPattern,gm,true,&unsupportedFallbackEvents,&appliedFallbacks)||!unsupportedFallbackEvents.empty()||appliedFallbacks.size()!=1||appliedFallbacks[0].requestedEvent.articulation!=DrumArticulation::Edge||appliedFallbacks[0].midiNote!=42||appliedFallbacks[0].mappedArticulation!=DrumArticulation::Closed)return 191;
+    MidiPattern fallbackRoundTrip;if(!midiIO.read(mappedFallbackFile,gm,fallbackRoundTrip).ok||fallbackRoundTrip.events.size()!=1||fallbackRoundTrip.events[0].articulation!=DrumArticulation::Closed)return 192;
     MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
     if(!midiReport.ok||!midiReport.ambiguousNotes.empty()||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2||std::abs(decodedPattern.lengthBeats-8.0)>0.001)return 24;
     if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;

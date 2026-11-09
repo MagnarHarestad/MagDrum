@@ -190,7 +190,8 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
 }
 
 bool MidiPatternIO::write(const juce::File& file,const MidiPattern& pattern,const MidiMappingProfile& profile,
-                          bool allowFallback,std::vector<DrumEvent>* unsupported) const
+                          bool allowFallback,std::vector<DrumEvent>* unsupported,
+                          std::vector<MidiFallbackUse>* fallbacks) const
 {
     constexpr int ppq=960;juce::MidiFile midi;midi.setTicksPerQuarterNote(ppq);juce::MidiMessageSequence sequence;
     auto metadata=pattern.tempoAndSignature;
@@ -202,6 +203,7 @@ bool MidiPatternIO::write(const juce::File& file,const MidiPattern& pattern,cons
     {
         const auto mapped=profile.toMidi(event,allowFallback);
         if(!mapped.note){if(unsupported)unsupported->push_back(event);continue;}
+        if(mapped.usedFallback&&fallbacks)fallbacks->push_back({event,*mapped.note,mapped.mappedArticulation});
         const auto note=*mapped.note;const int velocity=juce::jlimit(1,127,static_cast<int>(event.velocity));
         const double start=juce::jmax(0.0,event.positionBeats)*ppq;const double end=(juce::jmax(0.0,event.positionBeats)+juce::jmax(0.0,event.durationBeats))*ppq;
         lengthBeats=juce::jmax(lengthBeats,end/ppq);
