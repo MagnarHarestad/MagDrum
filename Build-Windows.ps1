@@ -86,7 +86,9 @@ try {
         if (Test-Path -LiteralPath $resourceFile) { Remove-Item -LiteralPath $resourceFile -Force }
     }
 
-    & $cmakePath --build $buildDirectory --config Release --target MagDrum MagDrumPlugin_VST3 MagDrumTests MagDrumPluginTests --parallel 4
+    $buildTargets = @('MagDrum', 'MagDrumPlugin_VST3')
+    if (-not $SkipTests) { $buildTargets += @('MagDrumTests', 'MagDrumPluginTests') }
+    & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel 4
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
 
     if (-not $SkipTests) {
