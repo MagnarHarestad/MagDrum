@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published archive is the [Windows x64 test build v0.1.1-test.67](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.67). It was built locally without GitHub Actions and passed both CTest suites, including SFZ filename-family classification checks, a headless end-to-end test of the built VST3 through the isolated note scanner, spectral-flatness fixtures, analyzed pitched-tom and four-pulse Clap WAV fixtures, transient-count persistence, and 250,000-row database pagination. The app and VST3 both report version 0.1.1. Windows ARM64 has been compiled and packaged locally but is not published because its VST3 bundle is missing JUCE-generated `moduleinfo.json`. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
+The latest published test build is [v0.1.1-test.68](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.68), with Windows x64 and ARM64 packages. The x64 package was built locally without GitHub Actions and passed both CTest suites, including a headless end-to-end test of the built VST3 through the isolated note scanner. Windows ARM64 was cross-compiled and its binary architecture checked, but it has not been runtime-tested on ARM64 Windows. JUCE omitted the optional `moduleinfo.json`; hosts can still query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
 
-The v0.1.1-test.67 archive has SHA-256 `a1c542ba4aa8f95935539b775b3fe90845b1d66cf71cd225b54c4226d32be301`, matching the local `latest-publish/MagDrum-Windows-x64.zip`. It contains the standalone app, VST3 bundle and installer, and both CTest suites pass. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. The previous v0.1.1-test.66 package had SHA-256 `66007d7d36f2a08fae0e80f6c69582d52a3547f4ceba60baee4fbc5a9fa3bde9`.
+The v0.1.1-test.68 x64 archive has SHA-256 `a1c542ba4aa8f95935539b775b3fe90845b1d66cf71cd225b54c4226d32be301`, matching the local package. The ARM64 archive SHA-256 is `49caafb4e6dfb158102328e0b131da25dc696dd1cde645c83de1dd429ee47de6`. Both archives contain the standalone app and VST3 bundle; x64 also includes the installer. The x64 package passed both CTest suites. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup.
 
 ## Windows x64 and Cubase
 
@@ -21,12 +21,12 @@ contains the standalone sample library app.
 
 ## Windows ARM64
 
-The local `latest-publish/MagDrum-Windows-ARM64.zip` contains ARM64 app and VST3
-binaries, confirmed by their PE architecture. JUCE could not run its ARM64 VST3
-manifest helper on this AMD64 build host, so the bundle has no `moduleinfo.json`
-and the archive is not a release candidate. Use the published x64 package with
-x64 Cubase; an ARM64 Cubase installation would require an ARM64 plugin package
-with valid manifest metadata.
+The published `MagDrum-Windows-ARM64.zip` contains ARM64 app and VST3 binaries,
+confirmed by their PE architecture. They have not been runtime-tested on ARM64
+Windows. JUCE could not run its ARM64 VST3 manifest helper on this AMD64 build
+host, so the bundle has no `moduleinfo.json`. Steinberg marks that metadata file
+optional; a host can query the module factory instead, which may take longer.
+For Cubase Pro 15 on Windows x64, use the Windows x64 package above.
 
 ## macOS Intel and Apple Silicon
 

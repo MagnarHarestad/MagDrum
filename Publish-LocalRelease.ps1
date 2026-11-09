@@ -84,6 +84,13 @@ $noteLines = @(
 if ($missingNames.Count -gt 0) {
     $noteLines += @('', 'Not included in this release:', ($missingNames | ForEach-Object { "- $_" }))
 }
+if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
+    $noteLines += @(
+        '',
+        'Windows ARM64 was cross-compiled on an x64 host and has not been runtime-tested on ARM64 Windows.',
+        'JUCE omitted the optional VST3 moduleinfo.json during cross-compilation; hosts may take longer to scan the plugin.'
+    )
+}
 $notesPath = Join-Path $env:TEMP ("MagDrum-$Tag-release-notes.txt")
 Set-Content -LiteralPath $notesPath -Value $noteLines -Encoding utf8
 
