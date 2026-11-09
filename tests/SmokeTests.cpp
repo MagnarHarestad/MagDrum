@@ -149,6 +149,24 @@ int main(int argc,char** argv)
     if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600){std::cerr<<"Feature check: peak="<<scanned.getFirst().peak<<" rms="<<scanned.getFirst().rms<<" centroid="<<scanned.getFirst().spectralCentroidHz<<"\n";return 18;}
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
 
+    const auto formatRoot=root.getSiblingFile("MagDrumAdditionalFormatsTest");formatRoot.deleteRecursively();if(!formatRoot.createDirectory().wasOk())return 144;
+    juce::AudioFormatManager testFormats;testFormats.registerBasicFormats();
+    auto* aiffFormat=testFormats.findFormatForFileExtension("aiff");auto* flacFormat=testFormats.findFormatForFileExtension("flac");
+    if(aiffFormat==nullptr||flacFormat==nullptr)return 145;
+    const auto writeFormatFixture=[](juce::AudioFormat& format,const juce::File& file)
+    {
+        std::unique_ptr<juce::OutputStream> output(file.createOutputStream());if(!output)return false;
+        std::unique_ptr<juce::AudioFormatWriter> formatWriter(format.createWriterFor(output,juce::AudioFormatWriterOptions().withSampleRate(44100.0).withNumChannels(1).withBitsPerSample(16)));
+        if(!formatWriter)return false;
+        std::array<float,4096> audio{};for(size_t index=0;index<audio.size();++index)audio[index]=0.4f*static_cast<float>(std::sin(2.0*juce::MathConstants<double>::pi*330.0*index/44100.0));
+        const float* channels[]{audio.data()};const bool wrote=formatWriter->writeFromFloatArrays(channels,1,static_cast<int>(audio.size()));formatWriter.reset();return wrote&&file.existsAsFile();
+    };
+    if(!writeFormatFixture(*aiffFormat,formatRoot.getChildFile("fixture.aiff"))||!writeFormatFixture(*flacFormat,formatRoot.getChildFile("fixture.flac")))return 146;
+    juce::WavAudioFormat additionalWavFormat;if(!writeFormatFixture(additionalWavFormat,formatRoot.getChildFile("fixture.wav")))return 146;
+    WavScanner::Stats formatScanStats;const auto additionalFormatSamples=scanner.scan(formatRoot,{}, {},&formatScanStats);
+    juce::StringArray scannedFormats;for(const auto& formatSample:additionalFormatSamples){scannedFormats.addIfNotAlreadyThere(formatSample.format);if(formatSample.channels!=1||formatSample.sampleRate!=44100.0||formatSample.durationSeconds<=0.0||formatSample.peak<0.35||formatSample.acousticFingerprint.length()!=128)return 147;}
+    if(additionalFormatSamples.size()!=3||formatScanStats.filesConsidered!=3||formatScanStats.filesAnalyzed!=3||formatScanStats.errors!=0||!scannedFormats.contains("WAV")||!scannedFormats.contains("AIFF")||!scannedFormats.contains("FLAC"))return 148;
+
     const auto acousticRoot=root.getSiblingFile("MagDrumAcousticFingerprintTest");acousticRoot.deleteRecursively();if(!acousticRoot.createDirectory().wasOk())return 57;
     const auto writeTone=[&](const juce::File& file,double frequency,float amplitude){auto output=file.createOutputStream();if(!output)return false;std::unique_ptr<juce::AudioFormatWriter> toneWriter(wav.createWriterFor(output.get(),44100.0,1u,16,{},0));if(!toneWriter)return false;output.release();float tone[4096]{};for(int i=0;i<4096;++i)tone[i]=amplitude*std::sin(2.0*juce::MathConstants<double>::pi*frequency*i/44100.0);const float* data[]{tone};return toneWriter->writeFromFloatArrays(data,1,4096);};
     const auto gainFile=acousticRoot.getChildFile("gain.wav"),pitchFile=acousticRoot.getChildFile("pitch.wav");
