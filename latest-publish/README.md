@@ -1,12 +1,12 @@
 # Latest MagDrum packages
 
-Download the current Windows x64 test package from [MagDrum v0.1.1-test.20](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.20).
+Download the current Windows x64 test package from [MagDrum v0.1.1-test.21](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.21).
 
 The current package is:
 
 - `MagDrum-Windows-x64.zip` — standalone app, VST3 and PowerShell installer.
 
-The package is intended for testing the VST3 instrument in Cubase Pro 15. Its installer defaults to the per-user VST3 location and preserves an existing MagDrum installation when replacing it. The standalone scanner lists programs exposed by drum instruments and lets users select them before saving kit state or scanning notes. MIDI export and import preserve pattern length, including empty bars, and the step sequencer can render and play a sample-based audio preview with tempo changes. Plugin scans can capture 1–8 repeats, store each take, and suggest velocity-layer and repeated-trigger variation candidates for listening review. The database now keeps stable folder/plugin source records, backfills prior scan folders, and lets the browser filter by a specific folder source. SHA-256: `4c85a2b4bdbd4cfb8d926e0f3f4cd9af038ce3deeb69f9703c36cf0e2eabc400`.
+The package is intended for testing the VST3 instrument in Cubase Pro 15. Its installer defaults to the per-user VST3 location and preserves an existing MagDrum installation when replacing it. The standalone scanner lists programs exposed by drum instruments and lets users select them before saving kit state or scanning notes. MIDI export and import preserve pattern length, including empty bars, and the step sequencer can render and play a sample-based audio preview with tempo changes. Plugin scans can capture 1–8 repeats, store each take, and suggest velocity-layer and repeated-trigger variation candidates for listening review. The database now keeps stable folder/plugin source records, backfills prior scan folders, and lets the browser filter by a specific folder source. The browser can also filter by measured duration bands and spectral brightness. SHA-256: `5e80420293a5d250b0620a1e3989fee5f524d5b36ec5f09e9e89f96a99872627`.
 
 This package was built and tested locally on Windows x64; CTest passed (1/1). The release was uploaded with GitHub CLI, which does not start Actions runners. Windows ARM64 can be cross-compiled from Windows x64 after installing Visual Studio's ARM64 C++ tools. macOS Intel/Apple Silicon and AU packages must be built on a Mac with Xcode; Linux x64 can be built on Linux or in WSL2. Local build scripts, tested package details, and host requirements are documented in [local-builds.md](../docs/local-builds.md). The other four platform archives have not been produced yet.
 
