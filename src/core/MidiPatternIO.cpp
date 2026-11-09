@@ -37,6 +37,34 @@ bool setPatternTimeSignature(MidiPattern& pattern, int numerator, int denominato
     return true;
 }
 
+namespace
+{
+bool removeMetaAtBeat(MidiPattern& pattern, bool tempo, double positionBeats)
+{
+    if (!std::isfinite(positionBeats) || positionBeats < 0.0)
+        return false;
+
+    const auto previousSize = pattern.tempoAndSignature.size();
+    pattern.tempoAndSignature.erase(std::remove_if(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
+        [tempo, positionBeats](const MidiMetaEvent& item)
+        {
+            const bool sameType = tempo ? item.message.isTempoMetaEvent() : item.message.isTimeSignatureMetaEvent();
+            return sameType && std::abs(item.positionBeats - positionBeats) < 1.0e-9;
+        }), pattern.tempoAndSignature.end());
+    return pattern.tempoAndSignature.size() != previousSize;
+}
+}
+
+bool removePatternTempo(MidiPattern& pattern, double positionBeats)
+{
+    return removeMetaAtBeat(pattern, true, positionBeats);
+}
+
+bool removePatternTimeSignature(MidiPattern& pattern, double positionBeats)
+{
+    return removeMetaAtBeat(pattern, false, positionBeats);
+}
+
 MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingProfile& profile,MidiPattern& output) const
 {
     MidiImportReport report;

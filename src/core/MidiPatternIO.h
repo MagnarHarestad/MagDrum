@@ -19,6 +19,8 @@ struct MidiPattern
 
 bool setPatternTempo(MidiPattern&, int beatsPerMinute, double positionBeats = 0.0);
 bool setPatternTimeSignature(MidiPattern&, int numerator, int denominator, double positionBeats = 0.0);
+bool removePatternTempo(MidiPattern&, double positionBeats);
+bool removePatternTimeSignature(MidiPattern&, double positionBeats);
 
 struct MidiImportReport
 {
