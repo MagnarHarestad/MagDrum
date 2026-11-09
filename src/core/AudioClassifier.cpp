@@ -48,11 +48,13 @@ DrumClassification classify(const ScannedSample& sample) const override
 
     const double crest = sample.peak / juce::jmax(sample.rms, 0.00001);
     const double transientRatio = sample.transientStrength / juce::jmax(sample.rms, 0.00001);
-    if (sample.durationSeconds < 0.24 && sample.rms < 0.12 && sample.bitDepth > 0) addTag("Short");
+    if (sample.durationSeconds < 0.24) addTag("Short");
     if (sample.durationSeconds > 0.8) addTag("Long");
     if (sample.peak > 0.85) addTag("Loud");
     if (transientRatio > 1.2) addTag("Punchy");
     if (sample.rms < 0.05) addTag("Quiet");
+    if (sample.spectralCentroidHz >= 3000.0) addTag("Bright");
+    else if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 1000.0) addTag("Dark");
 
     juce::StringArray namedCategories;
     if (has({"kick", "bass drum", "bassdrum"})) namedCategories.add("Kick");

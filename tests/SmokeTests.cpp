@@ -390,6 +390,11 @@ int main(int argc,char** argv)
     ScannedSample kickLike; kickLike.durationSeconds=.5; kickLike.rms=.2; kickLike.peak=.8; kickLike.spectralCentroidHz=700; kickLike.transientStrength=.12; kickLike.fundamentalHz=90; kickLike.pitchConfidence=.8;
     auto prediction=AudioClassifier{}.classify(kickLike);
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
+    if(!prediction.tags.contains("Dark"))return 193;
+    auto brightFeatureSample=kickLike;brightFeatureSample.spectralCentroidHz=3500.0;
+    if(!AudioClassifier{}.classify(brightFeatureSample).tags.contains("Bright"))return 194;
+    auto loudShortSample=kickLike;loudShortSample.durationSeconds=0.1;loudShortSample.rms=0.3;loudShortSample.bitDepth=0;
+    if(!AudioClassifier{}.classify(loudShortSample).tags.contains("Short"))return 195;
     auto sustainedTone=scanned.getFirst();sustainedTone.file=juce::File("tone.wav");
     if(AudioClassifier{}.classify(sustainedTone).category!="Unknown")return 138;
     auto lowCentroidNoise=kickLike;lowCentroidNoise.transientStrength=.02;lowCentroidNoise.fundamentalHz=0;lowCentroidNoise.pitchConfidence=0;
