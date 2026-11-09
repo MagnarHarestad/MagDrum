@@ -12,3 +12,8 @@ struct PluginPresetSearchResult
 
 PluginPresetSearchResult findVst3PresetFiles(const juce::File& root,
                                              const std::function<bool()>& shouldCancel = {});
+PluginPresetSearchResult findVst3PresetFiles(const juce::Array<juce::File>& roots,
+                                             const std::function<bool()>& shouldCancel = {});
+juce::Array<juce::File> getStandardVst3PresetSearchRoots(const juce::String& company,
+                                                         const juce::String& pluginName,
+                                                         const juce::File& executableFile);
