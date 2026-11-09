@@ -63,15 +63,31 @@ int main()
         if (stream == nullptr || !stream->write(midiMarker, sizeof(midiMarker))) return 3;
     }
     juce::String copyError;
+    if (!importFolder.createDirectory().wasOk() && !importFolder.isDirectory()) return 3;
+    if (!copiedBytes.replaceWithText("old destination contents")) return 3;
     if (!MagDrumFiles::copyURLToFile(juce::URL(sourceBytes), copiedBytes, {}, copyError)
         || !filesMatch(sourceBytes, copiedBytes)) return 4;
     if (!MagDrumFiles::copyURLToFile(juce::URL(copiedBytes), copiedBytes, {}, copyError)
         || !filesMatch(sourceBytes, copiedBytes)) return 5;
+
+    const auto preservedDestination = importFolder.getChildFile("preserved.mid");
+    if (!preservedDestination.replaceWithText("keep this file on cancellation")) return 6;
+    const auto largeImportSource = root.getChildFile("large-import-source.bin");
+    juce::MemoryBlock largeImportData(128 * 1024, true);
+    if (!largeImportSource.replaceWithData(largeImportData.getData(), largeImportData.getSize())) return 6;
+    int cancellationChecks = 0;
+    if (MagDrumFiles::copyURLToFile(juce::URL(largeImportSource), preservedDestination,
+            [&cancellationChecks] { return ++cancellationChecks >= 3; }, copyError)) return 6;
+    juce::MemoryBlock preservedData;
+    if (!preservedDestination.loadFileAsData(preservedData)
+        || juce::String::fromUTF8(static_cast<const char*>(preservedData.getData()),
+                                 static_cast<int>(preservedData.getSize())) != "keep this file on cancellation") return 6;
+
     const auto cancelledCopy = importFolder.getChildFile("cancelled.mid");
     if (MagDrumFiles::copyURLToFile(juce::URL(sourceBytes), cancelledCopy, [] { return true; }, copyError)
-        || cancelledCopy.existsAsFile()) return 6;
+        || cancelledCopy.existsAsFile()) return 7;
     if (!MagDrumFiles::copyFileToURL(copiedBytes, juce::URL(roundTripBytes), copyError)
-        || !filesMatch(sourceBytes, roundTripBytes)) return 7;
+        || !filesMatch(sourceBytes, roundTripBytes)) return 8;
 
     MagDrumAudioProcessor processor;
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;

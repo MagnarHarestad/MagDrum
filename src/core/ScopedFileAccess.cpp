@@ -28,8 +28,9 @@ bool copyURLToFile(const juce::URL& source, const juce::File& destination,
         error = "MagDrum could not create its shared import folder.";
         return false;
     }
-    destination.deleteFile();
-    auto output = destination.createOutputStream();
+    const auto temporary = destination.getSiblingFile(destination.getFileName() + "."
+                                                       + juce::Uuid().toString() + ".tmp");
+    auto output = temporary.createOutputStream();
     if (output == nullptr)
     {
         error = "MagDrum could not create a copy of the selected file.";
@@ -37,12 +38,14 @@ bool copyURLToFile(const juce::URL& source, const juce::File& destination,
     }
 
     std::array<char, 64 * 1024> buffer{};
+    const auto expectedBytes = input->getTotalLength();
+    std::int64_t bytesCopied = 0;
     while (!input->isExhausted())
     {
         if (shouldCancel && shouldCancel())
         {
             output.reset();
-            destination.deleteFile();
+            temporary.deleteFile();
             return false;
         }
         const int bytesRead = input->read(buffer.data(), static_cast<int>(buffer.size()));
@@ -50,18 +53,32 @@ bool copyURLToFile(const juce::URL& source, const juce::File& destination,
         {
             error = "MagDrum could not finish copying the selected file.";
             output.reset();
-            destination.deleteFile();
+            temporary.deleteFile();
             return false;
         }
         if (bytesRead == 0) break;
+        bytesCopied += bytesRead;
     }
     output->flush();
-    const bool succeeded = output->getStatus().wasOk();
+    const bool succeeded = output->getStatus().wasOk()
+        && (expectedBytes < 0 || bytesCopied == expectedBytes);
     output.reset();
     if (!succeeded)
     {
         error = "MagDrum could not finish writing the selected file.";
-        destination.deleteFile();
+        temporary.deleteFile();
+        return false;
+    }
+
+    if (shouldCancel && shouldCancel())
+    {
+        temporary.deleteFile();
+        return false;
+    }
+    if (!temporary.replaceFileIn(destination))
+    {
+        error = "MagDrum could not replace the imported file.";
+        temporary.deleteFile();
         return false;
     }
     return true;
