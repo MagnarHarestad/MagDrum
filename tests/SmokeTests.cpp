@@ -166,6 +166,23 @@ int main(int argc,char** argv)
     sqlite3_stmt* migratedVersion=nullptr;if(sqlite3_prepare_v2(legacy,"SELECT version FROM schema_info WHERE singleton=1",-1,&migratedVersion,nullptr)!=SQLITE_OK)return 93;const bool schemaUpgraded=sqlite3_step(migratedVersion)==SQLITE_ROW&&sqlite3_column_int(migratedVersion,0)==11;sqlite3_finalize(migratedVersion);sqlite3_close(legacy);if(!schemaUpgraded)return 94;
     SampleDatabase db;
     if(!db.open(dbFile))return 8;
+    const auto resumeRoot=root.getSiblingFile("MagDrumInterruptedScanTest");resumeRoot.deleteRecursively();if(!resumeRoot.createDirectory().wasOk())return 170;
+    if(!waveFile.copyFileTo(resumeRoot.getChildFile("01-first.wav"))||!waveFile.copyFileTo(resumeRoot.getChildFile("02-second.wav")))return 171;
+    const auto resumeDbFile=resumeRoot.getChildFile("resume.sqlite3");
+    {
+        SampleDatabase firstRunDb;if(!firstRunDb.open(resumeDbFile))return 172;
+        const auto resumeSource=firstRunDb.ensureSampleSource("folder",resumeRoot.getFullPathName(),resumeRoot.getFileName(),resumeRoot.getFullPathName());if(!resumeSource)return 173;
+        if(!firstRunDb.beginSampleScan(resumeRoot))return 174;
+        bool cancelAfterFirstSample=false;std::int64_t firstRunIndexed=0;WavScanner::Stats firstRunStats;
+        scanner.scan(resumeRoot,[&]{return cancelAfterFirstSample;},{},&firstRunStats,[&](const ScannedSample& item){if(!firstRunDb.insertSample(item,*resumeSource))return false;++firstRunIndexed;cancelAfterFirstSample=true;return true;});
+        if(!firstRunStats.cancelled||firstRunStats.filesAnalyzed!=1||firstRunIndexed!=1||firstRunDb.getAllPaths().size()!=1)return 175;
+    }
+    SampleDatabase resumedDb;if(!resumedDb.open(resumeDbFile)||resumedDb.markRunningSampleScansInterrupted()!=1)return 176;
+    const auto resumedHistory=resumedDb.getRecentSampleScans(1);if(resumedHistory.size()!=1||resumedHistory.getFirst().status!="interrupted")return 177;
+    const auto resumeSource=resumedDb.ensureSampleSource("folder",resumeRoot.getFullPathName(),resumeRoot.getFileName(),resumeRoot.getFullPathName());if(!resumeSource||!resumedDb.beginSampleScan(resumeRoot))return 178;
+    WavScanner::Stats resumedStats;std::int64_t resumedIndexed=0;
+    scanner.scan(resumeRoot,{},[&](const juce::File& file,std::int64_t size,std::int64_t modified){return resumedDb.isSampleUnchanged(file,size,modified);},&resumedStats,[&](const ScannedSample& item){if(!resumedDb.insertSample(item,*resumeSource))return false;++resumedIndexed;return true;});
+    if(resumedStats.filesSkippedUnchanged!=1||resumedStats.filesAnalyzed!=1||resumedStats.errors!=0||resumedIndexed!=1||resumedDb.getAllPaths().size()!=2)return 179;
     PluginInstrumentRecord instrument{"vst3:fixture:drums","VST3","Fixture Drums","MagDrum Test","Instrument",root.getFullPathName(),"1.0"};
     if(!db.upsertPluginInstrument(instrument)||!db.upsertPluginInstrument(instrument))return 31;
     const auto instruments=db.getPluginInstruments();

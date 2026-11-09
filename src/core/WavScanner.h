@@ -34,6 +34,8 @@ class WavScanner
 public:
     using ShouldCancel = std::function<bool()>;
     using ShouldSkipFile = std::function<bool(const juce::File&, std::int64_t, std::int64_t)>;
+    // When provided, each analyzed file is delivered immediately and is not retained in the returned array.
+    using SampleConsumer = std::function<bool(const ScannedSample&)>;
     struct Stats
     {
         std::int64_t filesConsidered = 0;
@@ -43,5 +45,6 @@ public:
         bool cancelled = false;
     };
     juce::Array<ScannedSample> scan(const juce::File& root, ShouldCancel shouldCancel = {},
-                                    ShouldSkipFile shouldSkipFile = {}, Stats* stats = nullptr) const;
+                                    ShouldSkipFile shouldSkipFile = {}, Stats* stats = nullptr,
+                                    SampleConsumer sampleConsumer = {}) const;
 };

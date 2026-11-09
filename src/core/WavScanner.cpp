@@ -141,7 +141,8 @@ juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::ds
 }
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel,
-                                            ShouldSkipFile shouldSkipFile, Stats* stats) const
+                                            ShouldSkipFile shouldSkipFile, Stats* stats,
+                                            SampleConsumer sampleConsumer) const
 {
     juce::Array<ScannedSample> result;
     if (stats != nullptr) *stats = {};
@@ -310,7 +311,13 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         const auto classification = AudioClassifier{}.classify(sample);
         sample.category = classification.category;
         sample.classificationConfidence = classification.confidence;
-        result.add(std::move(sample));
+        if (sampleConsumer)
+        {
+            if (!sampleConsumer(sample) && stats != nullptr)
+                ++stats->errors;
+        }
+        else
+            result.add(std::move(sample));
         if (stats != nullptr) ++stats->filesAnalyzed;
     }
     return result;

@@ -382,12 +382,7 @@ private:
    if(error.isEmpty())
    {
     WavScanner scanner;
-    auto results=scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats);
-    for(const auto& sample:results)
-    {
-     if(scanDatabase.insertSample(sample,*sourceId))++indexed;
-     else ++stats.errors;
-    }
+    (void) scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;});
     if(!scanDatabase.assignSamplesToSource(root,*sourceId))++stats.errors;
     const auto state=stats.cancelled?"cancelled":"completed";
     if(!scanDatabase.finishSampleScan(scanId,state,stats.filesConsidered,stats.filesSkippedUnchanged,indexed,stats.errors))
