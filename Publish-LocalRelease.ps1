@@ -43,7 +43,8 @@ foreach ($name in $Asset) {
     $releaseAssets.Add($resolvedPath)
     $includedNames.Add($name)
 }
-if ($includedNames.Count -ne ($includedNames | Select-Object -Unique).Count) {
+$uniqueNames = @($includedNames | Select-Object -Unique)
+if ($includedNames.Count -ne $uniqueNames.Count) {
     throw 'Each release asset may be listed only once.'
 }
 
