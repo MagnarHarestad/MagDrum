@@ -50,10 +50,16 @@ struct PluginSoundBrowseRecord
     int midiNote = 0, velocity = 0, takeIndex = 1;
 };
 
+struct SampleSourceRecord
+{
+    std::int64_t id = 0;
+    juce::String type, identifier, displayName, rootPath;
+};
+
 struct SampleBrowseRecord
 {
     juce::File file;
-    juce::String category;
+    juce::String category, sourceType, sourceName, sourceIdentifier;
     double durationSeconds = 0.0, brightnessHz = 0.0;
 };
 
@@ -78,8 +84,12 @@ public:
     SampleDatabase(const SampleDatabase&) = delete;
     SampleDatabase& operator=(const SampleDatabase&) = delete;
     bool open(const juce::File& file);
+    std::optional<std::int64_t> ensureSampleSource(const juce::String& type, const juce::String& identifier,
+                                                   const juce::String& displayName, const juce::String& rootPath = {});
+    bool assignSamplesToSource(const juce::File& root, std::int64_t sourceId);
+    juce::Array<SampleSourceRecord> getSampleSources(const juce::String& type = {}) const;
     bool insertSample(const juce::File& file, double durationSeconds, int channels, double sampleRate);
-    bool insertSample(const ScannedSample& sample);
+    bool insertSample(const ScannedSample& sample, std::int64_t sourceId = 0);
     bool isSampleUnchanged(const juce::File& file, std::int64_t sizeBytes, std::int64_t modifiedTimeMillis) const;
     std::optional<std::int64_t> beginSampleScan(const juce::File& root);
     bool finishSampleScan(std::int64_t scanId, const juce::String& status,

@@ -4,23 +4,23 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The currently available archive is Windows x64. Windows ARM64, separate Intel
-and Apple Silicon macOS archives, and Linux x64 are configured in the release
-workflow but are not published until GitHub Actions can start jobs again.
+The currently available archive is the [Windows x64 test build v0.1.1-test.20](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.20). It was built, tested and uploaded locally without GitHub Actions. Windows ARM64, separate Intel and Apple Silicon macOS archives, and Linux x64 have not been built or published yet; see [local build requirements](local-builds.md).
 
 ## Windows x64 and Cubase
 
 Unzip `MagDrum-Windows-x64.zip`, close Cubase, then run `Install-MagDrum.ps1`
-from PowerShell. Approve the administrator prompt so it can copy
-`MagDrum.vst3` into the system VST3 folder. Start Cubase 15 and rescan plugins
+from PowerShell. It installs into your per-user VST3 folder without administrator
+access. For an all-users install, run PowerShell as administrator and add
+`-AllUsers`. Start Cubase 15 and rescan plugins
 in Studio > VST Plug-in Manager. Add MagDrum as an instrument track. The
 archive also contains the standalone sample library app.
 
 ## Windows ARM64
 
-An ARM64 build and archive are configured for the `windows-11-arm` runner.
-That package has not yet been built or verified; use the x64 package only on
-systems that support x64 applications until the ARM64 release is available.
+Windows ARM64 can be built locally from Windows x64 with Visual Studio's ARM64
+C++ tools. Those tools are not installed on the machine that produced v0.1.1-test.20,
+so an ARM64 package is not available yet. Use the x64 package only on systems
+that support x64 applications until an ARM64 release is available.
 
 ## macOS Intel and Apple Silicon
 

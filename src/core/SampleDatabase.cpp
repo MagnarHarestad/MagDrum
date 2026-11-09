@@ -3,6 +3,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace
 {
@@ -77,9 +78,23 @@ bool SampleDatabase::open(const juce::File& file)
         sqlite3_exec(connection, migration, nullptr, nullptr, nullptr); // duplicate-column means already upgraded
     if (sqlite3_exec(connection, "CREATE INDEX IF NOT EXISTS samples_fingerprint ON samples(fingerprint); CREATE INDEX IF NOT EXISTS samples_duration ON samples(duration)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,9) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity); CREATE TABLE IF NOT EXISTS plugin_velocity_layer_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),lower_velocity INTEGER NOT NULL CHECK(lower_velocity BETWEEN 1 AND 127),upper_velocity INTEGER NOT NULL CHECK(upper_velocity BETWEEN 1 AND 127),spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,lower_velocity,upper_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
+    const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,10) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity); CREATE TABLE IF NOT EXISTS plugin_velocity_layer_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),lower_velocity INTEGER NOT NULL CHECK(lower_velocity BETWEEN 1 AND 127),upper_velocity INTEGER NOT NULL CHECK(upper_velocity BETWEEN 1 AND 127),spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,lower_velocity,upper_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, pluginSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
+    const char* sourceSchema = "UPDATE schema_info SET version=max(version,10) WHERE singleton=1; CREATE TABLE IF NOT EXISTS sample_sources(id INTEGER PRIMARY KEY,source_type TEXT NOT NULL CHECK(source_type IN ('folder','plugin')),identifier TEXT NOT NULL,display_name TEXT NOT NULL,root_path TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(source_type,identifier)); CREATE INDEX IF NOT EXISTS sample_sources_name ON sample_sources(display_name COLLATE NOCASE)";
+    if (sqlite3_exec(connection, sourceSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    sqlite3_exec(connection, "ALTER TABLE samples ADD COLUMN source_id INTEGER REFERENCES sample_sources(id) ON DELETE SET NULL", nullptr, nullptr, nullptr); // duplicate source_id means already upgraded
+    sqlite3_stmt* sampleColumns = nullptr;
+    if (sqlite3_prepare_v2(connection, "PRAGMA table_info(samples)", -1, &sampleColumns, nullptr) != SQLITE_OK) return false;
+    bool hasSourceId = false;
+    while (sqlite3_step(sampleColumns) == SQLITE_ROW)
+    {
+        const auto* name = reinterpret_cast<const char*>(sqlite3_column_text(sampleColumns, 1));
+        if (name != nullptr && std::strcmp(name, "source_id") == 0) hasSourceId = true;
+    }
+    sqlite3_finalize(sampleColumns);
+    if (!hasSourceId) return false;
     const char* roundRobinSchema = "UPDATE schema_info SET version=max(version,9) WHERE singleton=1; CREATE TABLE IF NOT EXISTS plugin_round_robin_takes(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_index INTEGER NOT NULL CHECK(take_index BETWEEN 1 AND 8),silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',acoustic_fingerprint TEXT NOT NULL DEFAULT '',PRIMARY KEY(kit_id,midi_note,velocity,take_index),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_round_robin_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),take_count INTEGER NOT NULL CHECK(take_count>=2),distinct_variants INTEGER NOT NULL CHECK(distinct_variants BETWEEN 2 AND take_count),maximum_spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, roundRobinSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
@@ -90,7 +105,85 @@ bool SampleDatabase::open(const juce::File& file)
         return false;
     if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0)",nullptr,nullptr,nullptr)!=SQLITE_OK)
         return false;
+    sqlite3_stmt* roots = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT root_path FROM sample_scan_history GROUP BY root_path ORDER BY length(root_path)", -1, &roots, nullptr) == SQLITE_OK)
+    {
+        while (sqlite3_step(roots) == SQLITE_ROW)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(roots, 0));
+            if (value == nullptr) continue;
+            const juce::File root(juce::String::fromUTF8(value));
+            const auto sourceRootPath = root.getFullPathName();
+            const auto sourceId = ensureSampleSource("folder", sourceRootPath, root.getFileName().isNotEmpty() ? root.getFileName() : sourceRootPath, sourceRootPath);
+            if (!sourceId || !assignSamplesToSource(root, *sourceId)) { sqlite3_finalize(roots); return false; }
+        }
+        sqlite3_finalize(roots);
+    }
     return true;
+}
+
+std::optional<std::int64_t> SampleDatabase::ensureSampleSource(const juce::String& type,
+                                                               const juce::String& identifier,
+                                                               const juce::String& displayName,
+                                                               const juce::String& rootPath)
+{
+    if (connection == nullptr || (type != "folder" && type != "plugin")
+        || identifier.trim().isEmpty() || displayName.trim().isEmpty()) return std::nullopt;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "INSERT INTO sample_sources(source_type,identifier,display_name,root_path) VALUES(?,?,?,?) ON CONFLICT(source_type,identifier) DO UPDATE SET display_name=excluded.display_name,root_path=excluded.root_path";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return std::nullopt;
+    const auto cleanType = type.trim(), cleanIdentifier = identifier.trim(), cleanName = displayName.trim();
+    sqlite3_bind_text(statement, 1, cleanType.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, cleanIdentifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, cleanName.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 4, rootPath.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool inserted = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    if (!inserted || sqlite3_prepare_v2(connection, "SELECT id FROM sample_sources WHERE source_type=? AND identifier=?", -1, &statement, nullptr) != SQLITE_OK)
+        return std::nullopt;
+    sqlite3_bind_text(statement, 1, cleanType.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, cleanIdentifier.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    std::optional<std::int64_t> result;
+    if (sqlite3_step(statement) == SQLITE_ROW) result = sqlite3_column_int64(statement, 0);
+    sqlite3_finalize(statement);
+    return result;
+}
+
+bool SampleDatabase::assignSamplesToSource(const juce::File& root, std::int64_t sourceId)
+{
+    if (connection == nullptr || sourceId <= 0 || root.getFullPathName().isEmpty()) return false;
+    const auto rootPath = root.getFullPathName();
+    auto prefix = rootPath;
+    if (!prefix.endsWithChar(juce::File::getSeparatorChar())) prefix += juce::File::getSeparatorChar();
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "UPDATE samples SET source_id=? WHERE path=? OR substr(path,1,length(?))=?", -1, &statement, nullptr) != SQLITE_OK)
+        return false;
+    sqlite3_bind_int64(statement, 1, sourceId);
+    sqlite3_bind_text(statement, 2, rootPath.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, prefix.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 4, prefix.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    sqlite3_finalize(statement);
+    return ok;
+}
+
+juce::Array<SampleSourceRecord> SampleDatabase::getSampleSources(const juce::String& type) const
+{
+    juce::Array<SampleSourceRecord> result;
+    if (connection == nullptr) return result;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = type.trim().isEmpty()
+        ? "SELECT id,source_type,identifier,display_name,root_path FROM sample_sources ORDER BY display_name COLLATE NOCASE"
+        : "SELECT id,source_type,identifier,display_name,root_path FROM sample_sources WHERE source_type=? ORDER BY display_name COLLATE NOCASE";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return result;
+    if (!type.trim().isEmpty()) sqlite3_bind_text(statement, 1, type.trim().toRawUTF8(), -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto text = [statement](int column) { const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column)); return value != nullptr ? juce::String::fromUTF8(value) : juce::String(); };
+        result.add({sqlite3_column_int64(statement, 0), text(1), text(2), text(3), text(4)});
+    }
+    sqlite3_finalize(statement);
+    return result;
 }
 
 bool SampleDatabase::upsertPluginInstrument(const PluginInstrumentRecord& plugin)
@@ -377,11 +470,11 @@ juce::Array<PluginSoundBrowseRecord> SampleDatabase::getPluginSoundBrowseRecords
     return result;
 }
 
-bool SampleDatabase::insertSample(const ScannedSample& sample)
+bool SampleDatabase::insertSample(const ScannedSample& sample, std::int64_t sourceId)
 {
     if (connection == nullptr) return false;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version,analysis_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version,analysis_version=excluded.analysis_version";
+    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,transient_strength,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version,analysis_version,source_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,transient_strength=excluded.transient_strength,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version,analysis_version=excluded.analysis_version,source_id=COALESCE(excluded.source_id,samples.source_id)";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
     const auto path = sample.file.getFullPathName(); const auto name = sample.file.getFileName();
     sqlite3_bind_text(statement,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(statement,2,name.toRawUTF8(),-1,SQLITE_TRANSIENT);
@@ -395,6 +488,7 @@ bool SampleDatabase::insertSample(const ScannedSample& sample)
     sqlite3_bind_text(statement,19,sample.acousticFingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
     sqlite3_bind_int(statement,20,sample.acousticFingerprintVersion);
     sqlite3_bind_int(statement,21,sample.analysisVersion);
+    if (sourceId > 0) sqlite3_bind_int64(statement,22,sourceId); else sqlite3_bind_null(statement,22);
     const bool ok=sqlite3_step(statement)==SQLITE_DONE; sqlite3_finalize(statement); return ok;
 }
 
@@ -739,7 +833,7 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
     juce::Array<SampleBrowseRecord> records;
     if (connection == nullptr) return records;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT path,COALESCE(NULLIF(user_category,''),category),duration,spectral_centroid FROM samples ORDER BY name COLLATE NOCASE";
+    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,'') FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id ORDER BY s.name COLLATE NOCASE";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
     while (sqlite3_step(statement) == SQLITE_ROW)
     {
@@ -749,6 +843,12 @@ juce::Array<SampleBrowseRecord> SampleDatabase::getSampleBrowseRecords() const
         SampleBrowseRecord record;
         record.file = juce::File(juce::String::fromUTF8(path));
         record.category = category != nullptr ? juce::String::fromUTF8(category) : juce::String("Unknown");
+        const auto* sourceType = reinterpret_cast<const char*>(sqlite3_column_text(statement, 4));
+        const auto* sourceName = reinterpret_cast<const char*>(sqlite3_column_text(statement, 5));
+        const auto* sourceIdentifier = reinterpret_cast<const char*>(sqlite3_column_text(statement, 6));
+        record.sourceType = sourceType != nullptr ? juce::String::fromUTF8(sourceType) : juce::String();
+        record.sourceName = sourceName != nullptr ? juce::String::fromUTF8(sourceName) : juce::String();
+        record.sourceIdentifier = sourceIdentifier != nullptr ? juce::String::fromUTF8(sourceIdentifier) : juce::String();
         record.durationSeconds = sqlite3_column_double(statement, 2);
         record.brightnessHz = sqlite3_column_double(statement, 3);
         records.add(std::move(record));

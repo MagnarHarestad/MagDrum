@@ -2,13 +2,14 @@
 
 MagDrum stores the local library in `samples.sqlite3` under the user's application data directory. The database is local to the user and is not synchronized or uploaded.
 
-The database evolves with additive migrations. `schema_info.version` records the current schema level (version 9); SQLite's `user_version` is not used. Existing sample paths and manual categories are retained while columns are added. Rows without acoustic fingerprint version 1 or the current sample analysis version are rescanned once so updated measurements are populated.
+The database evolves with additive migrations. `schema_info.version` records the current schema level (version 10); SQLite's `user_version` is not used. Existing sample paths and manual categories are retained while columns are added. Rows without acoustic fingerprint version 1 or the current sample analysis version are rescanned once so updated measurements are populated.
 
 ## Current tables
 
 | Table | Purpose |
 | --- | --- |
-| `samples` | Native files and generated previews, audio metadata including a pitch estimate/confidence when measurable, four-window spectral centroid, heuristic category/confidence, exact file SHA-256, a four-segment/16-band normalized acoustic fingerprint and its algorithm version, analysis version, manual category override, file size and modification time. The original file path is the source reference. |
+| `samples` | Native files and generated previews, audio metadata including a pitch estimate/confidence when measurable, four-window spectral centroid, heuristic category/confidence, exact file SHA-256, a four-segment/16-band normalized acoustic fingerprint and its algorithm version, analysis version, manual category override, file size and modification time, and a nullable source relationship. |
+| `sample_sources` | Stable folder and plugin source identities, display names and folder roots, separate from individual sample paths. Existing folder scans are backfilled when the database opens. |
 | `sample_scan_history` | Sample-folder scan start/end, outcome, counts of considered/skipped/indexed files, errors and restart interruptions. |
 | `sample_tags` | User tags attached to a sample path. |
 | `plugin_instruments` | Discovered plugin instrument identity, format, vendor, category, install reference and version. The format-independent JUCE identifier is unique. |
@@ -19,10 +20,10 @@ The database evolves with additive migrations. `schema_info.version` records the
 | `plugin_round_robin_candidates` | Versioned heuristic candidates where repeated triggers have distinct acoustic fingerprints. |
 | `mapping_profiles` | Named semantic MIDI mapping profiles. |
 | `mapping_entries` | Instrument/articulation to MIDI-note mappings within a profile. |
-| `schema_info` | Single-row schema version marker, currently version 9. |
+| `schema_info` | Single-row schema version marker, currently version 10. |
 
 Database APIs can upsert plugin instruments, named kits with opaque plugin state, recall saved kit state, note/velocity sound captures with metadata and versioned velocity-boundary candidates. The desktop scanner populates kits and captures. Plugin discovery persists in `plugin_instruments` and in a JUCE XML cache used by the plugin list.
 
 ## Planned additions
 
-The schema still needs source records distinct from file paths, user-defined classification tags and corrections for plugin-generated sounds, confirmed velocity-layer ranges and round-robin groups, and richer plugin-sound analysis. Velocity-boundary and repeated-trigger variation candidates are heuristics, not proof of internal instrument behavior; they must be reviewed and evaluated against known instruments.
+The schema still needs user-defined classification tags and corrections for plugin-generated sounds, confirmed velocity-layer ranges and round-robin groups, and richer plugin-sound analysis. Velocity-boundary and repeated-trigger variation candidates are heuristics, not proof of internal instrument behavior; they must be reviewed and evaluated against known instruments.
