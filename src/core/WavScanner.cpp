@@ -194,8 +194,6 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         double sumSquares = 0.0;
         double previousMean = 0.0;
         double transientMax = 0.0;
-        double centroid = 0.0;
-        bool centroidMeasured = false;
         bool pitchMeasured = false;
         constexpr int fftOrder = 10;
         constexpr int fftSize = 1 << fftOrder;
@@ -218,28 +216,6 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             {
                 readFailed = true;
                 break;
-            }
-            if (!centroidMeasured && count >= fftSize)
-            {
-                double sumMagnitude = 0.0, weightedMagnitude = 0.0;
-                for (int i = 0; i < fftSize; ++i)
-                {
-                    double mono = 0.0;
-                    for (unsigned int c = 0; c < reader->numChannels; ++c)
-                        mono += buffer.getSample(static_cast<int>(c), i);
-                    mono /= reader->numChannels;
-                    fftData[i] = static_cast<float>(mono * (0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * i / (fftSize - 1))));
-                }
-                fft.performFrequencyOnlyForwardTransform(fftData.getData());
-                for (int bin = 1; bin < fftSize / 2; ++bin)
-                {
-                    const double magnitude = fftData[bin];
-                    const double hz = static_cast<double>(bin) * reader->sampleRate / fftSize;
-                    weightedMagnitude += hz * magnitude;
-                    sumMagnitude += magnitude;
-                }
-                centroid = sumMagnitude > 0.0 ? weightedMagnitude / sumMagnitude : 0.0;
-                centroidMeasured = true;
             }
             if (!pitchMeasured && count >= 256)
             {
@@ -274,9 +250,60 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             if (stats != nullptr) ++stats->errors;
             continue;
         }
+        std::array<juce::int64, 4> centroidOffsets{};
+        const auto lastCentroidOffset = juce::jmax<juce::int64>(0, sampleCount - fftSize);
+        for (size_t window = 0; window < centroidOffsets.size(); ++window)
+            centroidOffsets[window] = lastCentroidOffset * static_cast<juce::int64>(window)
+                                    / static_cast<juce::int64>(centroidOffsets.size() - 1);
+        std::sort(centroidOffsets.begin(), centroidOffsets.end());
+        double centroidMagnitude = 0.0, centroidWeightedMagnitude = 0.0;
+        juce::int64 previousCentroidOffset = -1;
+        for (const auto offset : centroidOffsets)
+        {
+            if (offset == previousCentroidOffset)
+                continue;
+            previousCentroidOffset = offset;
+            if (shouldCancel && shouldCancel())
+            {
+                cancelledDuringFile = true;
+                if (stats != nullptr) stats->cancelled = true;
+                break;
+            }
+            buffer.clear();
+            const int count = static_cast<int>(std::min<juce::int64>(fftSize, sampleCount - offset));
+            if (count <= 0 || !reader->read(channelData.getData(), static_cast<int>(reader->numChannels), offset, count))
+            {
+                readFailed = true;
+                break;
+            }
+            std::fill_n(fftData.getData(), fftSize * 2, 0.0f);
+            for (int i = 0; i < count; ++i)
+            {
+                double mono = 0.0;
+                for (unsigned int channel = 0; channel < reader->numChannels; ++channel)
+                    mono += buffer.getSample(static_cast<int>(channel), i);
+                mono /= reader->numChannels;
+                const double window = count > 1 ? 0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * i / (count - 1)) : 1.0;
+                fftData[i] = static_cast<float>(mono * window);
+            }
+            fft.performFrequencyOnlyForwardTransform(fftData.getData());
+            for (int bin = 1; bin < fftSize / 2; ++bin)
+            {
+                const double magnitude = fftData[bin];
+                centroidWeightedMagnitude += static_cast<double>(bin) * reader->sampleRate / fftSize * magnitude;
+                centroidMagnitude += magnitude;
+            }
+        }
+        if (cancelledDuringFile)
+            break;
+        if (readFailed)
+        {
+            if (stats != nullptr) ++stats->errors;
+            continue;
+        }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
         sample.transientStrength = transientMax;
-        sample.spectralCentroidHz = centroid;
+        sample.spectralCentroidHz = centroidMagnitude > 0.0 ? centroidWeightedMagnitude / centroidMagnitude : 0.0;
         sample.fingerprint = juce::SHA256(file).toHexString();
         sample.acousticFingerprint = createAcousticFingerprint(*reader, fft, fftData, buffer, channelData.getData(), fftSize);
         sample.acousticFingerprintVersion = sample.acousticFingerprint.length() == 128 ? 1 : 0;

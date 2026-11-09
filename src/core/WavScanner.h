@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <juce_audio_formats/juce_audio_formats.h>
 
+inline constexpr int currentSampleAnalysisVersion = 2;
+
 struct ScannedSample
 {
     juce::File file;
@@ -17,6 +19,7 @@ struct ScannedSample
     double transientStrength = 0.0;
     double fundamentalHz = 0.0;
     double pitchConfidence = 0.0;
+    int analysisVersion = currentSampleAnalysisVersion;
     std::int64_t fileSizeBytes = 0;
     std::int64_t modifiedTimeMillis = 0;
     juce::String fingerprint;
