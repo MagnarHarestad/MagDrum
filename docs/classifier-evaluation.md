@@ -35,6 +35,16 @@ With filenames hidden, audio-only classification scored 14.1% accuracy and 0.083
 
 ## Third local measurement
 
-On 2026-11-09, revision `9f04cf9a734527edfbb0a4eee1f674e45bbf71bc` of the CC0 [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) library was evaluated. A temporary labeled subset contained 121 WAV/FLAC samples across Kick (14), Snare (14), Closed hi-hat (14), Open hi-hat (12), Pedal hi-hat (12), Tom (14), Ride (14), Crash (11), and Percussion (16). Labels followed the library's source folders and SFZ sample names; multiple mic captures and velocity/repetition variants come from the same kit. All 121 files decoded. Filename-plus-audio classification scored 75.2% accuracy and 0.737 macro F1; 91/121 suggestions passed the review threshold and all accepted suggestions matched the folder labels. With filenames hidden, it scored 2.5% accuracy and 0.007 macro F1, with 0/121 accepted. This is another warning that audio-only classification is not reliable; this selected subset is one kit, not an independent or genre-diverse benchmark.
+On 2026-11-09, revision `9f04cf9a734527edfbb0a4eee1f674e45bbf71bc` of the CC0 [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) library was evaluated; its [LICENSE](https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE) declares CC0 1.0. A temporary labeled subset contained 121 WAV/FLAC samples across Kick (14), Snare (14), Closed hi-hat (14), Open hi-hat (12), Pedal hi-hat (12), Tom (14), Ride (14), Crash (11), and Percussion (16). Labels followed the library's source folders and SFZ sample names; multiple mic captures and velocity/repetition variants come from the same kit. All 121 files decoded. Filename-plus-audio classification scored 75.2% accuracy and 0.737 macro F1; 91/121 suggestions passed the review threshold and all accepted suggestions matched the folder labels. With filenames hidden, it scored 2.5% accuracy and 0.007 macro F1, with 0/121 accepted. This is another warning that audio-only classification is not reliable; this selected subset is one kit, not an independent or genre-diverse benchmark.
 
 On the same 121 files, production similarity search returned 235 candidates for 95/121 queries. Of the returned candidates, 211/235 (89.8%) matched the query folder category; the top candidate matched for 88/95 queries with results (92.6%). The result is likely influenced by related velocity and round-robin recordings within the same kit. It shows category agreement for this particular sample set, not human-perceived similarity or general retrieval quality. The temporary labeled copy and downloaded library were kept outside the MagDrum repository and release assets.
+
+To reproduce the curated subset, clone the upstream CC0 repository to a temporary location, then run the preparation script. It requires a new output directory outside both the source library and MagDrum, and copies a deterministic, category-balanced selection without changing the source:
+
+```powershell
+$source = Join-Path $env:TEMP 'virtuosity_drums'
+$labeled = Join-Path $env:TEMP 'magdrum-virtuosity-labeled'
+git clone --depth 1 https://github.com/sfzinstruments/virtuosity_drums.git $source
+pwsh -NoProfile -File .\tools\Prepare-VirtuosityEvaluation.ps1 -SourceRoot $source -OutputRoot $labeled
+& .\build\classifier-evaluation\MagDrumClassifierEvaluation_artefacts\Release\MagDrumClassifierEvaluation.exe $labeled
+```
