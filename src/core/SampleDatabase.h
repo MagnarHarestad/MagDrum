@@ -106,6 +106,14 @@ struct PerceptualDuplicateMatch
     double similarity = 0.0;
 };
 
+struct PortableMetadataMergeResult
+{
+    bool ok = false;
+    int samplesMatched = 0, samplesUnavailable = 0, tagsAdded = 0;
+    int categoryConflicts = 0, profilesAdded = 0, profileConflicts = 0;
+    juce::String error;
+};
+
 class SampleDatabase
 {
 public:
@@ -165,6 +173,8 @@ public:
     bool saveMappingProfile(const juce::String& name, const MidiMappingProfile& profile);
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::StringArray getMappingProfileNames() const;
+    juce::var exportPortableMetadata() const;
+    PortableMetadataMergeResult mergePortableMetadata(const juce::var& archive);
     juce::Array<juce::File> getAllPaths() const;
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;

@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
+#include <set>
 
 namespace
 {
@@ -1058,6 +1060,281 @@ juce::StringArray SampleDatabase::getMappingProfileNames() const
     }
     sqlite3_finalize(query);
     return names;
+}
+
+juce::var SampleDatabase::exportPortableMetadata() const
+{
+    auto archive = juce::var(new juce::DynamicObject());
+    auto* root = archive.getDynamicObject();
+    root->setProperty("format", "com.magdrum.library-metadata");
+    root->setProperty("version", 1);
+    root->setProperty("created_utc", juce::Time::getCurrentTime().toISO8601(true));
+
+    struct ExportedSample
+    {
+        juce::String hash;
+        std::int64_t size = 0;
+        juce::StringArray categories, tags;
+    };
+    std::map<std::pair<std::string, std::int64_t>, ExportedSample> samples;
+    if (connection != nullptr)
+    {
+        sqlite3_stmt* query = nullptr;
+        const char* sql = "SELECT s.fingerprint,s.size_bytes,s.user_category,st.tag FROM samples s LEFT JOIN sample_tags st ON st.path=s.path WHERE length(s.fingerprint)=64 AND (s.user_category<>'' OR st.tag IS NOT NULL) ORDER BY s.fingerprint,s.size_bytes,st.tag";
+        if (sqlite3_prepare_v2(connection, sql, -1, &query, nullptr) == SQLITE_OK)
+        {
+            while (sqlite3_step(query) == SQLITE_ROW)
+            {
+                const auto* hashValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+                if (hashValue == nullptr) continue;
+                const auto hash = juce::String::fromUTF8(hashValue).toLowerCase();
+                if (!hash.containsOnly("0123456789abcdef")) continue;
+                const auto size = sqlite3_column_int64(query, 1);
+                auto& sample = samples[{hash.toStdString(), size}];
+                sample.hash = hash;
+                sample.size = size;
+                const auto* categoryValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 2));
+                if (categoryValue != nullptr)
+                    sample.categories.addIfNotAlreadyThere(juce::String::fromUTF8(categoryValue));
+                const auto* tagValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 3));
+                if (tagValue != nullptr)
+                    sample.tags.addIfNotAlreadyThere(juce::String::fromUTF8(tagValue));
+            }
+            sqlite3_finalize(query);
+        }
+    }
+
+    juce::Array<juce::var> sampleArray;
+    for (const auto& [key, sample] : samples)
+    {
+        juce::ignoreUnused(key);
+        auto item = juce::var(new juce::DynamicObject());
+        item.getDynamicObject()->setProperty("sha256", sample.hash);
+        item.getDynamicObject()->setProperty("size_bytes", juce::var(sample.size));
+        juce::Array<juce::var> categories, tags;
+        for (const auto& category : sample.categories) categories.add(category);
+        for (const auto& tag : sample.tags) tags.add(tag);
+        item.getDynamicObject()->setProperty("manual_categories", juce::var(categories));
+        item.getDynamicObject()->setProperty("user_tags", juce::var(tags));
+        sampleArray.add(item);
+    }
+    root->setProperty("samples", juce::var(sampleArray));
+
+    juce::Array<juce::var> profiles;
+    for (const auto& name : getMappingProfileNames())
+        if (const auto profile = loadMappingProfile(name))
+        {
+            auto item = juce::var(new juce::DynamicObject());
+            item.getDynamicObject()->setProperty("name", name);
+            item.getDynamicObject()->setProperty("csv", juce::String::fromUTF8(profile->toCsv().c_str()));
+            profiles.add(item);
+        }
+    root->setProperty("mapping_profiles", juce::var(profiles));
+    return archive;
+}
+
+PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::var& archive)
+{
+    PortableMetadataMergeResult result;
+    if (connection == nullptr || !archive.isObject()
+        || archive.getProperty("format", {}).toString() != "com.magdrum.library-metadata"
+        || static_cast<int>(archive.getProperty("version", {})) != 1)
+    {
+        result.error = "Unsupported or invalid MagDrum metadata archive.";
+        return result;
+    }
+
+    const auto sampleValue = archive.getProperty("samples", {});
+    const auto profileValue = archive.getProperty("mapping_profiles", {});
+    const auto* sampleArray = sampleValue.getArray();
+    const auto* profileArray = profileValue.getArray();
+    if (sampleArray == nullptr || profileArray == nullptr || sampleArray->size() > 1000000
+        || profileArray->size() > 10000)
+    {
+        result.error = "Archive is missing its metadata arrays or exceeds the supported record limit.";
+        return result;
+    }
+
+    struct IncomingSample
+    {
+        juce::String hash;
+        std::int64_t size = 0;
+        juce::StringArray categories, tags;
+    };
+    struct IncomingProfile
+    {
+        juce::String name;
+        MidiMappingProfile profile;
+        IncomingProfile(juce::String value, MidiMappingProfile mapping) : name(std::move(value)), profile(std::move(mapping)) {}
+    };
+    std::vector<IncomingSample> incomingSamples;
+    std::vector<IncomingProfile> incomingProfiles;
+    std::set<std::pair<std::string, std::int64_t>> sampleKeys;
+    std::set<std::string> profileNames;
+
+    for (const auto& value : *sampleArray)
+    {
+        if (!value.isObject()) { result.error = "Archive contains an invalid sample record."; return result; }
+        const auto hash = value.getProperty("sha256", {}).toString().toLowerCase();
+        const auto sizeValue = value.getProperty("size_bytes", {});
+        if (hash.length() != 64 || !hash.containsOnly("0123456789abcdef")
+            || (!sizeValue.isInt() && !sizeValue.isInt64()) || static_cast<juce::int64>(sizeValue) < 0
+            || !sampleKeys.insert({hash.toStdString(), static_cast<juce::int64>(sizeValue)}).second)
+        {
+            result.error = "Archive contains a duplicate or invalid sample identity.";
+            return result;
+        }
+        IncomingSample sample;
+        sample.hash = hash;
+        sample.size = static_cast<juce::int64>(sizeValue);
+        const auto categoriesValue = value.getProperty("manual_categories", {});
+        const auto tagsValue = value.getProperty("user_tags", {});
+        const auto* categories = categoriesValue.getArray();
+        const auto* tags = tagsValue.getArray();
+        if (categories == nullptr || tags == nullptr || categories->size() > 16 || tags->size() > 10000)
+        {
+            result.error = "Archive contains an invalid sample metadata list.";
+            return result;
+        }
+        for (const auto& category : *categories)
+        {
+            if (!category.isString() || category.toString().trim().isEmpty() || category.toString().length() > 64)
+            { result.error = "Archive contains an invalid manual category."; return result; }
+            sample.categories.addIfNotAlreadyThere(category.toString().trim());
+        }
+        for (const auto& tag : *tags)
+        {
+            if (!tag.isString() || tag.toString().trim().isEmpty() || tag.toString().length() > 256)
+            { result.error = "Archive contains an invalid user tag."; return result; }
+            sample.tags.addIfNotAlreadyThere(tag.toString().trim());
+        }
+        incomingSamples.push_back(std::move(sample));
+    }
+
+    for (const auto& value : *profileArray)
+    {
+        if (!value.isObject()) { result.error = "Archive contains an invalid mapping profile."; return result; }
+        const auto nameValue = value.getProperty("name", {});
+        const auto csvValue = value.getProperty("csv", {});
+        if (!nameValue.isString() || !csvValue.isString() || nameValue.toString().trim().isEmpty()
+            || nameValue.toString().length() > 128 || csvValue.toString().length() > 65536
+            || !profileNames.insert(nameValue.toString().trim().toLowerCase().toStdString()).second)
+        { result.error = "Archive contains a duplicate or invalid mapping profile."; return result; }
+        const auto csv = csvValue.toString().toStdString();
+        const auto profile = MidiMappingProfile::fromCsv(csv);
+        if (!profile) { result.error = "Archive contains an invalid MIDI mapping CSV."; return result; }
+        incomingProfiles.emplace_back(nameValue.toString().trim(), *profile);
+    }
+
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+    { result.error = "Could not start the metadata import transaction."; return result; }
+    bool ok = true;
+    sqlite3_stmt* findSamples = nullptr;
+    sqlite3_stmt* updateCategory = nullptr;
+    sqlite3_stmt* insertTag = nullptr;
+    sqlite3_stmt* findProfile = nullptr;
+    sqlite3_stmt* insertProfile = nullptr;
+    sqlite3_stmt* insertMapping = nullptr;
+    const auto prepare = [&](sqlite3_stmt** statement, const char* sql)
+    {
+        if (sqlite3_prepare_v2(connection, sql, -1, statement, nullptr) == SQLITE_OK) return true;
+        ok = false;
+        return false;
+    };
+    prepare(&findSamples, "SELECT path,user_category FROM samples WHERE fingerprint=? AND size_bytes=?");
+    prepare(&updateCategory, "UPDATE samples SET user_category=?,category=? WHERE path=? AND user_category=''");
+    prepare(&insertTag, "INSERT OR IGNORE INTO sample_tags(path,tag) VALUES(?,?)");
+    prepare(&findProfile, "SELECT 1 FROM mapping_profiles WHERE name=?");
+    prepare(&insertProfile, "INSERT INTO mapping_profiles(name) VALUES(?)");
+    prepare(&insertMapping, "INSERT INTO mapping_entries(profile_name,instrument,articulation,note) VALUES(?,?,?,?)");
+    if (!ok)
+    {
+        for (auto* statement : {findSamples, updateCategory, insertTag, findProfile, insertProfile, insertMapping})
+            if (statement != nullptr) sqlite3_finalize(statement);
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not prepare the metadata import transaction.";
+        return result;
+    }
+
+    for (const auto& sample : incomingSamples)
+    {
+        if (!ok) break;
+        sqlite3_reset(findSamples); sqlite3_clear_bindings(findSamples);
+        sqlite3_bind_text(findSamples, 1, sample.hash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(findSamples, 2, sample.size);
+        bool matched = false;
+        int sampleStep = SQLITE_OK;
+        while ((sampleStep = sqlite3_step(findSamples)) == SQLITE_ROW)
+        {
+            matched = true;
+            const auto* pathValue = reinterpret_cast<const char*>(sqlite3_column_text(findSamples, 0));
+            const auto* categoryValue = reinterpret_cast<const char*>(sqlite3_column_text(findSamples, 1));
+            if (pathValue == nullptr) { ok = false; break; }
+            const juce::String path = juce::String::fromUTF8(pathValue);
+            const juce::String currentCategory = categoryValue != nullptr ? juce::String::fromUTF8(categoryValue) : juce::String();
+            if (sample.categories.size() == 1)
+            {
+                const auto incoming = sample.categories[0];
+                if (currentCategory.isEmpty())
+                {
+                    sqlite3_reset(updateCategory); sqlite3_clear_bindings(updateCategory);
+                    sqlite3_bind_text(updateCategory, 1, incoming.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(updateCategory, 2, incoming.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(updateCategory, 3, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    if (sqlite3_step(updateCategory) != SQLITE_DONE) { ok = false; break; }
+                }
+                else if (currentCategory != incoming) ++result.categoryConflicts;
+            }
+            else if (sample.categories.size() > 1) ++result.categoryConflicts;
+
+            for (const auto& tag : sample.tags)
+            {
+                sqlite3_reset(insertTag); sqlite3_clear_bindings(insertTag);
+                sqlite3_bind_text(insertTag, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(insertTag, 2, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                if (sqlite3_step(insertTag) != SQLITE_DONE) { ok = false; break; }
+                result.tagsAdded += sqlite3_changes(connection) > 0 ? 1 : 0;
+            }
+            if (!ok) break;
+        }
+        if (sampleStep != SQLITE_DONE) ok = false;
+        if (matched) ++result.samplesMatched; else ++result.samplesUnavailable;
+    }
+
+    for (const auto& incoming : incomingProfiles)
+    {
+        if (!ok) break;
+        sqlite3_reset(findProfile); sqlite3_clear_bindings(findProfile);
+        sqlite3_bind_text(findProfile, 1, incoming.name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        const int profileStep = sqlite3_step(findProfile);
+        if (profileStep == SQLITE_ROW)
+        {
+            const auto existing = loadMappingProfile(incoming.name);
+            if (!existing || existing->toCsv() != incoming.profile.toCsv()) ++result.profileConflicts;
+            continue;
+        }
+        if (profileStep != SQLITE_DONE) { ok = false; break; }
+        sqlite3_reset(insertProfile); sqlite3_clear_bindings(insertProfile);
+        sqlite3_bind_text(insertProfile, 1, incoming.name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(insertProfile) != SQLITE_DONE) { ok = false; break; }
+        for (const auto& mapping : incoming.profile.entries())
+        {
+            sqlite3_reset(insertMapping); sqlite3_clear_bindings(insertMapping);
+            sqlite3_bind_text(insertMapping, 1, incoming.name.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int(insertMapping, 2, static_cast<int>(mapping.instrument));
+            sqlite3_bind_int(insertMapping, 3, static_cast<int>(mapping.articulation));
+            sqlite3_bind_int(insertMapping, 4, mapping.note);
+            if (sqlite3_step(insertMapping) != SQLITE_DONE) { ok = false; break; }
+        }
+        if (ok) ++result.profilesAdded;
+    }
+
+    for (auto* statement : {findSamples, updateCategory, insertTag, findProfile, insertProfile, insertMapping})
+        if (statement != nullptr) sqlite3_finalize(statement);
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    result.ok = ok && transactionResult == SQLITE_OK;
+    if (!result.ok) result.error = "Metadata import failed; no changes were committed.";
+    return result;
 }
 
 bool SampleDatabase::insertSample(const juce::File& file, double duration, int channels, double rate)
