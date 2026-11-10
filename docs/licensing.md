@@ -25,3 +25,8 @@ Before a stable multi-platform distribution, finish a target-by-target audit of
 the exact JUCE modules and SDKs included in each package, and include all required
 third-party notices. Some optional JUCE components, such as AAX or ASIO, have
 separate terms and are not part of the current Windows VST3 package.
+
+The GitHub repository and its releases are currently private. For AGPLv3
+distribution beyond people who can access this repository, provide each binary
+recipient with the corresponding source and build scripts, or publish the source
+repository. Do not send the test ZIP to someone who cannot obtain that source.
