@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published test build is [v0.1.1-test.73](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.73), with Windows x64 and ARM64 packages. The x64 package was built locally without GitHub Actions and both CTest suites passed. Windows ARM64 was cross-compiled; its PE architecture was checked, but ARM64 test executables could not run on this x64 host. Native ARM64 runtime testing remains outstanding. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can still query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
+The latest published test build is [v0.1.1-test.74](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.74), with Windows x64 and ARM64 packages. The x64 package was built locally without GitHub Actions and both CTest suites passed. Windows ARM64 was cross-compiled; its PE architecture was checked, but ARM64 test executables could not run on this x64 host. Native ARM64 runtime testing remains outstanding. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can still query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
 
-The x64 archive SHA-256 is `50450d8212e9f933cd27401ceae160446298284943522dfdcdf8a67a9566baf1`; the ARM64 archive SHA-256 is `56a9dfaf6b8b3ce38637ff45bb5df26181d04fb74d0846ed1a73067f946acf46`. Both archives contain the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup.
+The latest package archives contain the standalone app, VST3 bundle, installer, MagDrum's AGPLv3 `LICENSE`, and JUCE/VST3 license notices. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. Check the release page for the matching package checksums.
 
 ## Windows x64 and Cubase
 

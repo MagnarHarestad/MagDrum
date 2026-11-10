@@ -15,3 +15,7 @@ loads WAV, AIFF or FLAC samples that you select in its editor. This is an
 unsigned test build; Windows may show a security prompt because the package
 is not code-signed. The app and plugin are separate: the plugin is for Cubase,
 and the standalone app is the sample library/scanner.
+
+The package also contains LICENSE, THIRD-PARTY-NOTICES.md, JUCE-LICENSE.md
+and VST3-SDK-LICENSE.txt. MagDrum's original source code is licensed under
+GNU AGPLv3; third-party components keep their own license terms.

@@ -61,6 +61,9 @@ ctest --test-dir "$build_dir" -C Release --output-on-failure
 stage="$build_dir/package-local"
 rm -rf "$stage"
 mkdir -p "$stage"
+cp "$repo_root/LICENSE" "$repo_root/THIRD-PARTY-NOTICES.md" "$stage/"
+cp "$repo_root/build/_deps/juce-src/LICENSE.md" "$stage/JUCE-LICENSE.md"
+cp "$repo_root/build/_deps/juce-src/modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt" "$stage/VST3-SDK-LICENSE.txt"
 if [[ "$host_os" == "Darwin" ]]; then
   app="$(find "$build_dir" -type d -path '*/MagDrum_artefacts/Release/MagDrum.app' -print -quit)"
   vst="$(find "$build_dir" -type d -path '*/MagDrumPlugin_artefacts/Release/VST3/MagDrum.vst3' -print -quit)"

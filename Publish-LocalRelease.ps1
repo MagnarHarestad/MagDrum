@@ -75,6 +75,8 @@ $releaseAssets.Add($checksumPath)
 $missingNames = @($knownAssets | Where-Object { $_ -notin $includedNames })
 $noteLines = @(
     "Locally built MagDrum test packages for $Tag.",
+    'MagDrum original source code is licensed under GNU AGPLv3. The packages include the license and current third-party notices.',
+    'The source repository contains the corresponding source for this release.',
     '',
     'Included packages:',
     ($includedNames | ForEach-Object { "- $_" }),

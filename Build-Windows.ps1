@@ -111,6 +111,15 @@ try {
     Copy-Item -LiteralPath $app.FullName -Destination $stagingDirectory
     Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $stagingDirectory 'MagDrum.vst3') -Recurse
     Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingDirectory
+    $juceSourceDirectory = Join-Path $dependencyDirectory 'juce-src'
+    $juceLicense = Join-Path $juceSourceDirectory 'LICENSE.md'
+    $vst3License = Join-Path $juceSourceDirectory 'modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt'
+    if (-not (Test-Path -LiteralPath $juceLicense -PathType Leaf) -or -not (Test-Path -LiteralPath $vst3License -PathType Leaf)) {
+        throw 'Required JUCE and VST3 SDK license notices were not found in the pinned JUCE source.'
+    }
+    Copy-Item -LiteralPath $juceLicense -Destination (Join-Path $stagingDirectory 'JUCE-LICENSE.md')
+    Copy-Item -LiteralPath $vst3License -Destination (Join-Path $stagingDirectory 'VST3-SDK-LICENSE.txt')
 
     $zipPath = Join-Path $buildDirectory ($stagingName + "-Windows-$Architecture.zip")
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath
