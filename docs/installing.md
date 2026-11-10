@@ -10,6 +10,9 @@ The x64 archive SHA-256 is `50450d8212e9f933cd27401ceae160446298284943522dfdcdf8
 
 ## Windows x64 and Cubase
 
+For a step-by-step Cubase Pro 15 play, state-save and velocity-layer checklist,
+see [Verify MagDrum in Cubase Pro 15](cubase-testing.md).
+
 Unzip `MagDrum-Windows-x64.zip`, close Cubase, then run `Install-MagDrum.ps1`
 from PowerShell. It installs into your per-user VST3 folder without administrator
 access. If a system-wide MagDrum VST3 is already installed, the installer warns
