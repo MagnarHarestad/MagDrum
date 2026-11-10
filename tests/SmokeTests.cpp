@@ -326,8 +326,8 @@ int main(int argc,char** argv)
         SampleDatabase firstRunDb;if(!firstRunDb.open(resumeDbFile))return 172;
         const auto resumeSource=firstRunDb.ensureSampleSource("folder",resumeRoot.getFullPathName(),resumeRoot.getFileName(),resumeRoot.getFullPathName());if(!resumeSource)return 173;
         const auto firstRunScan=firstRunDb.beginSampleScan(resumeRoot);if(!firstRunScan)return 174;
-        bool cancelAfterFirstSample=false;std::int64_t firstRunIndexed=0;WavScanner::Stats firstRunStats;
-        scanner.scan(resumeRoot,[&]{return cancelAfterFirstSample;},{},&firstRunStats,[&](const ScannedSample& item){if(!firstRunDb.insertSample(item,*resumeSource))return false;++firstRunIndexed;cancelAfterFirstSample=true;return true;},{},[&](const juce::File& file){return firstRunDb.updateSampleScanCheckpoint(*firstRunScan,file);});
+        int checksAfterFirstSample=0;std::int64_t firstRunIndexed=0;WavScanner::Stats firstRunStats;
+        scanner.scan(resumeRoot,[&]{return firstRunIndexed>0&&++checksAfterFirstSample>=3;},{},&firstRunStats,[&](const ScannedSample& item){if(!firstRunDb.insertSample(item,*resumeSource))return false;++firstRunIndexed;return true;},{},[&](const juce::File& file){return firstRunDb.updateSampleScanCheckpoint(*firstRunScan,file);});
         if(!firstRunStats.cancelled||firstRunStats.filesAnalyzed!=1||firstRunIndexed!=1||firstRunDb.getAllPaths().size()!=1)return 175;
     }
     SampleDatabase resumedDb;if(!resumedDb.open(resumeDbFile)||resumedDb.markRunningSampleScansInterrupted()!=1)return 176;
