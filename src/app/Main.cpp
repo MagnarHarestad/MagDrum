@@ -373,18 +373,20 @@ private:
   {
    StructuredLogger::log(StructuredLogger::Level::info,"sample_scan.started",{{"root",root.getFullPathName()}});
    WavScanner::Stats stats;std::int64_t indexed=0,scanId=0;juce::String error;SampleDatabase scanDatabase;
+   juce::String resumeAfter;
    if(!scanDatabase.open(databaseFile))error="Could not open the sample database for scanning.";
    const auto rootPath=root.getFullPathName();const auto sourceId=error.isEmpty()?scanDatabase.ensureSampleSource("folder",rootPath,root.getFileName().isNotEmpty()?root.getFileName():rootPath,rootPath):std::optional<std::int64_t>();if(error.isEmpty()&&!sourceId)error="Could not save the sample folder source record.";
    if(error.isEmpty())
    {
-    const auto started=scanDatabase.beginSampleScan(root);
+    resumeAfter=scanDatabase.getResumableSampleScanPath(root);
+    const auto started=scanDatabase.beginSampleScan(root,resumeAfter);
     if(!started)error="Could not create a scan-history record.";
     else scanId=*started;
    }
    if(error.isEmpty())
    {
     WavScanner scanner;
-    (void) scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;});
+    (void) scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;},resumeAfter,[&scanDatabase,scanId](const juce::File& file){return scanDatabase.updateSampleScanCheckpoint(scanId,file);});
     if(!scanDatabase.assignSamplesToSource(root,*sourceId))++stats.errors;
     const auto state=stats.cancelled?"cancelled":"completed";
     if(!scanDatabase.finishSampleScan(scanId,state,stats.filesConsidered,stats.filesSkippedUnchanged,indexed,stats.errors))

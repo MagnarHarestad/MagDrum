@@ -41,6 +41,7 @@ public:
     using ShouldSkipFile = std::function<bool(const juce::File&, std::int64_t, std::int64_t)>;
     // When provided, each analyzed file is delivered immediately and is not retained in the returned array.
     using SampleConsumer = std::function<bool(const ScannedSample&)>;
+    using FileProgressConsumer = std::function<bool(const juce::File&)>;
     struct Stats
     {
         std::int64_t filesConsidered = 0;
@@ -51,5 +52,7 @@ public:
     };
     juce::Array<ScannedSample> scan(const juce::File& root, ShouldCancel shouldCancel = {},
                                     ShouldSkipFile shouldSkipFile = {}, Stats* stats = nullptr,
-                                    SampleConsumer sampleConsumer = {}) const;
+                                    SampleConsumer sampleConsumer = {},
+                                    const juce::String& resumeAfterFile = {},
+                                    FileProgressConsumer fileProgressConsumer = {}) const;
 };

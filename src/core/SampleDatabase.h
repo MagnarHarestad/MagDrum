@@ -98,6 +98,7 @@ struct SampleScanRecord
     std::int64_t id = 0;
     juce::String rootPath, startedAt, finishedAt, status;
     std::int64_t filesConsidered = 0, filesSkipped = 0, filesIndexed = 0, errors = 0;
+    juce::String lastCompletedPath;
 };
 
 struct PerceptualDuplicateMatch
@@ -129,7 +130,9 @@ public:
     bool insertSample(const juce::File& file, double durationSeconds, int channels, double sampleRate);
     bool insertSample(const ScannedSample& sample, std::int64_t sourceId = 0);
     bool isSampleUnchanged(const juce::File& file, std::int64_t sizeBytes, std::int64_t modifiedTimeMillis) const;
-    std::optional<std::int64_t> beginSampleScan(const juce::File& root);
+    std::optional<std::int64_t> beginSampleScan(const juce::File& root, const juce::String& resumeAfterPath = {});
+    juce::String getResumableSampleScanPath(const juce::File& root) const;
+    bool updateSampleScanCheckpoint(std::int64_t scanId, const juce::File& completedFile);
     bool finishSampleScan(std::int64_t scanId, const juce::String& status,
                           std::int64_t filesConsidered, std::int64_t filesSkipped,
                           std::int64_t filesIndexed, std::int64_t errors);

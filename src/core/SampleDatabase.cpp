@@ -133,8 +133,9 @@ bool SampleDatabase::open(const juce::File& file)
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
     if (sqlite3_exec(connection, "CREATE TABLE IF NOT EXISTS sample_tags(path TEXT NOT NULL,tag TEXT NOT NULL,PRIMARY KEY(path,tag),FOREIGN KEY(path) REFERENCES samples(path) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS sample_tags_tag ON sample_tags(tag)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0)",nullptr,nullptr,nullptr)!=SQLITE_OK)
+    if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,last_completed_path TEXT NOT NULL DEFAULT '')",nullptr,nullptr,nullptr)!=SQLITE_OK)
         return false;
+    sqlite3_exec(connection, "ALTER TABLE sample_scan_history ADD COLUMN last_completed_path TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr); // duplicate column means already upgraded
     sqlite3_stmt* roots = nullptr;
     if (sqlite3_prepare_v2(connection, "SELECT root_path FROM sample_scan_history GROUP BY root_path ORDER BY length(root_path)", -1, &roots, nullptr) == SQLITE_OK)
     {
@@ -755,18 +756,51 @@ bool SampleDatabase::isSampleUnchanged(const juce::File& file, std::int64_t size
     return unchanged;
 }
 
-std::optional<std::int64_t> SampleDatabase::beginSampleScan(const juce::File& root)
+std::optional<std::int64_t> SampleDatabase::beginSampleScan(const juce::File& root, const juce::String& resumeAfterPath)
 {
     if (connection == nullptr || !root.isDirectory()) return std::nullopt;
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(connection, "INSERT INTO sample_scan_history(root_path) VALUES(?)", -1, &statement, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(connection, "INSERT INTO sample_scan_history(root_path,last_completed_path) VALUES(?,?)", -1, &statement, nullptr) != SQLITE_OK)
         return std::nullopt;
     const auto path = root.getFullPathName();
     sqlite3_bind_text(statement, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, resumeAfterPath.toRawUTF8(), -1, SQLITE_TRANSIENT);
     const bool ok = sqlite3_step(statement) == SQLITE_DONE;
     sqlite3_finalize(statement);
     if (!ok) return std::nullopt;
     return sqlite3_last_insert_rowid(connection);
+}
+
+juce::String SampleDatabase::getResumableSampleScanPath(const juce::File& root) const
+{
+    if (connection == nullptr || !root.isDirectory()) return {};
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT last_completed_path FROM sample_scan_history WHERE root_path=? AND status IN ('interrupted','cancelled') ORDER BY id DESC LIMIT 1", -1, &statement, nullptr) != SQLITE_OK)
+        return {};
+    const auto rootPath = root.getFullPathName();
+    sqlite3_bind_text(statement, 1, rootPath.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    juce::String result;
+    if (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        if (value != nullptr) result = juce::String::fromUTF8(value);
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
+bool SampleDatabase::updateSampleScanCheckpoint(std::int64_t scanId, const juce::File& completedFile)
+{
+    if (connection == nullptr || scanId <= 0) return false;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "UPDATE sample_scan_history SET last_completed_path=? WHERE id=? AND status='running'", -1, &statement, nullptr) != SQLITE_OK)
+        return false;
+    const auto path = completedFile.getFullPathName();
+    sqlite3_bind_text(statement, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 2, scanId);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE && sqlite3_changes(connection) == 1;
+    sqlite3_finalize(statement);
+    return ok;
 }
 
 bool SampleDatabase::finishSampleScan(std::int64_t scanId, const juce::String& status,
@@ -804,7 +838,7 @@ juce::Array<SampleScanRecord> SampleDatabase::getRecentSampleScans(int limit) co
     juce::Array<SampleScanRecord> result;
     if (connection == nullptr) return result;
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(connection, "SELECT id,root_path,started_at,coalesce(finished_at,''),status,files_considered,files_skipped,files_indexed,errors FROM sample_scan_history ORDER BY id DESC LIMIT ?", -1, &statement, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(connection, "SELECT id,root_path,started_at,coalesce(finished_at,''),status,files_considered,files_skipped,files_indexed,errors,last_completed_path FROM sample_scan_history ORDER BY id DESC LIMIT ?", -1, &statement, nullptr) != SQLITE_OK)
         return result;
     sqlite3_bind_int(statement, 1, juce::jlimit(1, 200, limit));
     while (sqlite3_step(statement) == SQLITE_ROW)
@@ -816,7 +850,7 @@ juce::Array<SampleScanRecord> SampleDatabase::getRecentSampleScans(int limit) co
         };
         result.add({sqlite3_column_int64(statement, 0), text(1), text(2), text(3), text(4),
                     sqlite3_column_int64(statement, 5), sqlite3_column_int64(statement, 6),
-                    sqlite3_column_int64(statement, 7), sqlite3_column_int64(statement, 8)});
+                    sqlite3_column_int64(statement, 7), sqlite3_column_int64(statement, 8), text(9)});
     }
     sqlite3_finalize(statement);
     return result;

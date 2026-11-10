@@ -166,7 +166,9 @@ juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::ds
 
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel,
                                             ShouldSkipFile shouldSkipFile, Stats* stats,
-                                            SampleConsumer sampleConsumer) const
+                                            SampleConsumer sampleConsumer,
+                                            const juce::String& resumeAfterFile,
+                                            FileProgressConsumer fileProgressConsumer) const
 {
     juce::Array<ScannedSample> result;
     if (stats != nullptr) *stats = {};
@@ -175,29 +177,51 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
 
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
+    juce::Array<juce::File> files;
     for (const auto& entry : juce::RangedDirectoryIterator(root, true, "*", juce::File::findFiles))
+    {
+        const auto file = entry.getFile();
+        const auto extension = file.getFileExtension().toLowerCase();
+        if (extension == ".wav" || extension == ".wave" || extension == ".aif"
+            || extension == ".aiff" || extension == ".flac")
+            files.add(file);
+    }
+    std::sort(files.begin(), files.end(), [](const juce::File& left, const juce::File& right)
+    {
+        const auto leftPath = left.getFullPathName();
+        const auto rightPath = right.getFullPathName();
+        const int folded = leftPath.compareIgnoreCase(rightPath);
+        return folded == 0 ? leftPath < rightPath : folded < 0;
+    });
+    int firstFile = 0;
+    if (resumeAfterFile.isNotEmpty())
+        while (firstFile < files.size()
+               && files.getReference(firstFile).getFullPathName().compareIgnoreCase(resumeAfterFile) <= 0)
+            ++firstFile;
+    for (int fileIndex = firstFile; fileIndex < files.size(); ++fileIndex)
     {
         if (shouldCancel && shouldCancel())
         {
             if (stats != nullptr) stats->cancelled = true;
             break;
         }
-        const auto file = entry.getFile();
+        const auto file = files.getReference(fileIndex);
         const auto extension = file.getFileExtension().toLowerCase();
-        if (extension != ".wav" && extension != ".wave" && extension != ".aif" && extension != ".aiff" && extension != ".flac")
-            continue;
+        const auto checkpoint = [&]() { return !fileProgressConsumer || fileProgressConsumer(file); };
         const auto fileSizeBytes = static_cast<std::int64_t>(file.getSize());
         const auto modifiedTimeMillis = file.getLastModificationTime().toMilliseconds();
         if (stats != nullptr) ++stats->filesConsidered;
         if (shouldSkipFile && shouldSkipFile(file, fileSizeBytes, modifiedTimeMillis))
         {
             if (stats != nullptr) ++stats->filesSkippedUnchanged;
+            if (!checkpoint() && stats != nullptr) ++stats->errors;
             continue;
         }
         std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
         if (reader == nullptr || reader->sampleRate <= 0.0)
         {
             if (stats != nullptr) ++stats->errors;
+            checkpoint();
             continue;
         }
         ScannedSample sample;
@@ -282,11 +306,13 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         if (readFailed)
         {
             if (stats != nullptr) ++stats->errors;
+            checkpoint();
             continue;
         }
         if (measured == 0)
         {
             if (stats != nullptr) ++stats->errors;
+            checkpoint();
             continue;
         }
         std::array<juce::int64, 4> centroidOffsets{};
@@ -353,6 +379,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         if (readFailed)
         {
             if (stats != nullptr) ++stats->errors;
+            checkpoint();
             continue;
         }
         sample.rms = measured > 0 ? std::sqrt(sumSquares / measured) : 0.0;
@@ -368,14 +395,19 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.category = classification.category;
         sample.classificationTags = classification.tags;
         sample.classificationConfidence = classification.confidence;
+        bool fileStored = true;
         if (sampleConsumer)
         {
-            if (!sampleConsumer(sample) && stats != nullptr)
-                ++stats->errors;
+            fileStored = sampleConsumer(sample);
+            if (!fileStored && stats != nullptr) ++stats->errors;
         }
         else
             result.add(std::move(sample));
-        if (stats != nullptr) ++stats->filesAnalyzed;
+        if (fileStored)
+        {
+            if (stats != nullptr) ++stats->filesAnalyzed;
+            if (!checkpoint() && stats != nullptr) ++stats->errors;
+        }
     }
     return result;
 }

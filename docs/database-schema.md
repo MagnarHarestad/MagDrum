@@ -10,7 +10,7 @@ The database evolves with additive migrations. `schema_info.version` records the
 | --- | --- |
 | `samples` | Native files and generated previews, audio metadata including a pitch estimate/confidence when measurable, four-window spectral centroid and spectral flatness, transient attack count, heuristic category/confidence, exact file SHA-256, a four-segment/16-band normalized acoustic fingerprint and its algorithm version, analysis version, manual category override, file size and modification time, and a nullable source relationship. Composite indexes support stable name, duration and centroid ordering in paginated browsing. |
 | `sample_sources` | Stable folder and plugin source identities, display names and folder roots, separate from individual sample paths. Existing folder scans are backfilled when the database opens. |
-| `sample_scan_history` | Sample-folder scan start/end, outcome, counts of considered/skipped/indexed files, errors and restart interruptions. |
+| `sample_scan_history` | Sample-folder scan start/end, outcome, counts of considered/skipped/indexed files, errors, restart interruptions and the last completed audio-file checkpoint used to resume a cancelled or interrupted scan. |
 | `sample_tags` | User tags attached to a sample path. |
 | `sample_classification_tags` | Automatic descriptive tags produced by the classifier, stored separately from user-edited tags and searchable in the browser. |
 | `plugin_instruments` | Discovered plugin instrument identity, format, vendor, category, install reference and version. The format-independent JUCE identifier is unique. |
