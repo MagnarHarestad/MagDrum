@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest published test build is [v0.1.1-test.71](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.71), with Windows x64 and ARM64 packages. The x64 package was built locally without GitHub Actions and both CTest suites passed. Windows ARM64 was cross-compiled; its PE architecture was checked, but ARM64 test executables could not run on this x64 host. Native ARM64 runtime testing remains outstanding. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can still query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
+The latest published test build is [v0.1.1-test.72](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.72), with Windows x64 and ARM64 packages. The x64 package was built locally without GitHub Actions and both CTest suites passed. Windows ARM64 was cross-compiled; its PE architecture was checked, but ARM64 test executables could not run on this x64 host. Native ARM64 runtime testing remains outstanding. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can still query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
 
-The x64 archive SHA-256 is `cdaa3c420797c846d75aa1ed3f6ad375598ac55a83ff4f866c92ca4d80c417e1`; the ARM64 archive SHA-256 is `b22ebacdce6ffb76c58671f0f4a4ff1b7ce0cde50b07cb0b36d1391162e88474`. Both archives contain the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup.
+The x64 archive SHA-256 is `7e5b0dd6b9642c191695793720179abf7091c1fa5cf067d39278abfba677b146`; the ARM64 archive SHA-256 is `dba39569d4e24c615091cb15946b975bb35d198c4097ac7468c3a846eeb011e6`. Both archives contain the standalone app, VST3 bundle and installer. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup.
 
 ## Windows x64 and Cubase
 
