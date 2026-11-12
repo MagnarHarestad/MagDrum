@@ -1,10 +1,12 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "../core/SampleDatabase.h"
+#include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
 
 class MagDrumSampleMap;
 class MagDrumWaveform;
+class MagDrumSampleComparison;
 
 class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Button::Listener,
@@ -28,18 +30,29 @@ private:
     void refreshSamples();
     void setPage(int);
     void setNote(int);
+    void chooseSampleFolder();
+    void startSampleScan(const juce::File&);
+    void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
+    void loadSamplePage(bool reset);
+    void refreshSourceKitFilters();
+    void showLibraryTools();
+    void handleLibraryTool(int);
     juce::File selectedSample() const;
 
     magdrum::ui::LookAndFeel theme;
     MagDrumAudioProcessor& processor;
     SampleDatabase database;
+    juce::File databaseFile;
     juce::Array<SampleBrowseRecord> samples;
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
-    bool sequencerPlaying = false, databaseReady = false;
+    int sampleOffset = 0;
+    bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;
+    std::shared_ptr<std::atomic<bool>> scanCancellation;
+    juce::ThreadPool scanWorkers{1};
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextEditor sampleSearch;
-    juce::ComboBox categoryFilter;
-    juce::TextButton searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"};
+    juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
+    juce::TextButton scanButton{"Add sample folder"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
     std::unique_ptr<MagDrumWaveform> waveform;
@@ -52,6 +65,7 @@ private:
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<juce::TextButton, 16>, 8> steps;
     std::unique_ptr<juce::FileChooser> chooser;
+    std::unique_ptr<juce::DocumentWindow> comparisonWindow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessorEditor)
 };

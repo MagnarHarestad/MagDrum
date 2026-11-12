@@ -4,7 +4,7 @@ The Windows VST3 editor is organized into three views. Open MagDrum on an instru
 
 ## Sample Library
 
-The library searches samples already indexed by the MagDrum desktop app. Search by text or filter by drum category. The list shows category, duration and measured brightness; the map positions samples by duration and brightness and colors them by category. Click a point or list row to select a sound, then use **Preview** (or double-click a list row) to audition it. Select a pad in **Drum Machine** first, return to the library, and choose **Assign to pad** to load the selected sample on that MIDI note. A sample folder must be scanned by the desktop app before it appears here.
+Click **Add sample folder** to choose a folder and scan it directly from the VST. Scanning runs in the background, can be cancelled, skips unchanged files, saves checkpoints, and resumes after an interrupted scan. The resulting index is shared with the MagDrum desktop app. Search by text/tags or filter by category, source, kit, duration, brightness and review confidence. Choose a sort order, then use **More samples** to page through large libraries. The list shows category, duration and measured brightness; the map positions samples by duration and brightness and colors them by category. Click a point or list row to select a sound, then use **Preview** (or double-click a list row) to audition it. Select a pad in **Drum Machine** first, return to the library, and choose **Assign to pad** to load the selected sample on that MIDI note. **Sample tools** provides category and tag editing, scan history, similarity and duplicate searches, waveform comparison, and portable metadata import/export.
 
 ## Drum Machine
 

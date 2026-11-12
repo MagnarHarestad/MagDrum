@@ -11,7 +11,7 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 
 ## Use the plug-in views
 
-1. **Sample Library:** scan a folder in the MagDrum desktop app, then find, filter and audition its samples in the plug-in. The sample map compares measured brightness and duration.
+1. **Sample Library:** click **Add sample folder** and choose your drum library folder. The VST scans it in the background and shows progress in its status line; scanning can be cancelled and unchanged files are skipped. When the scan finishes, find, filter and audition samples in the list or sample map.
 2. **Drum Machine:** select one of the named General MIDI pads. Load a WAV directly or assign a selected library sample. The panel at right shows the pad's waveform and velocity layers. Click the pad to audition it.
 3. **Sequencer:** enter hits on the eight category-specific lanes, set the tempo and preview the pattern. Use **Export MIDI** to save a one-bar pattern, then import that file into a Cubase MIDI track.
 4. To test external MIDI input, create or play a Cubase part that sends note 36 with velocity 100. Cubase's displayed octave name for note 36 depends on its MIDI octave-numbering preference, so verify the MIDI note number if no sound plays.
