@@ -37,6 +37,8 @@ public:
     bool loadSampleForNote(int midiNote, const juce::File&);
     bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&);
     bool clearSamplesForNote(int midiNote);
+    bool previewSample(const juce::File&);
+    void triggerNote(int midiNote, int velocity = 100);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
     juce::String getSamplePathForNote(int midiNote) const;
 
@@ -63,6 +65,7 @@ private:
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
     std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
+    std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
     std::array<Voice, maxVoices> voices{};

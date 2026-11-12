@@ -121,6 +121,46 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     return removedAny;
 }
 
+bool MagDrumAudioProcessor::previewSample(const juce::File& file)
+{
+    if (!file.existsAsFile()) return false;
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (!reader || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0
+        || reader->lengthInSamples > reader->sampleRate * 600.0
+        || reader->lengthInSamples > std::numeric_limits<int>::max()) return false;
+    auto sample = std::make_unique<SampleData>();
+    sample->sampleRate = reader->sampleRate;
+    sample->audio.setSize(static_cast<int>(juce::jmin(2u, reader->numChannels)), static_cast<int>(reader->lengthInSamples));
+    if (!reader->read(sample->audio.getArrayOfWritePointers(), sample->audio.getNumChannels(), 0, sample->audio.getNumSamples())) return false;
+    const juce::ScopedLock lock(sampleLock);
+    const auto* old = previewData.get();
+    if (old != nullptr)
+        for (auto& voice : voices) if (voice.sample == old) voice = {};
+    previewData = std::move(sample);
+    auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
+    voice = {previewData.get(), 0.0, 0.85f, true};
+    return true;
+}
+
+void MagDrumAudioProcessor::triggerNote(int note, int velocity)
+{
+    if (note < 0 || note > 127) return;
+    const juce::ScopedLock lock(sampleLock);
+    const int clampedVelocity = juce::jlimit(1, 127, velocity);
+    const SampleData* sample = nullptr;
+    for (const auto& slot : sampleSlots[static_cast<size_t>(note)])
+    {
+        const auto* candidate = slot.load(std::memory_order_acquire);
+        if (candidate != nullptr && clampedVelocity >= candidate->minimumVelocity && clampedVelocity <= candidate->maximumVelocity)
+        { sample = candidate; break; }
+    }
+    if (sample != nullptr && sample->audio.getNumSamples() > 0)
+    {
+        auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
+        voice = {sample, 0.0, clampedVelocity / 127.0f, true};
+    }
+}
+
 juce::String MagDrumAudioProcessor::getSamplePathForNote(int note) const
 {
     const auto layers = getSampleLayersForNote(note);

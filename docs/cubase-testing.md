@@ -4,22 +4,22 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 
 ## Install and load
 
-1. Download `MagDrum-Windows-x64.zip` from the [v0.1.1-test.74 release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.74) and extract it.
+1. Download `MagDrum-Windows-x64.zip` from the latest MagDrum test release and extract it.
 2. Close Cubase. Run the included `Install-MagDrum.ps1` from PowerShell. The default is a per-user VST3 install and does not require administrator access.
 3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list.
 4. Create an instrument track with MagDrum and open its editor.
 
-## Play a sample
+## Use the plug-in views
 
-1. In MagDrum, choose the MIDI note to trigger. The editor opens on MIDI note 36.
-2. Choose **Load sample** and select a WAV, AIFF or FLAC file. This loads the file directly; scanning it into the standalone library first is optional.
-3. Create or play a MIDI part that sends note 36 with velocity 100. Cubase's displayed octave name for note 36 depends on its MIDI octave-numbering preference, so verify the MIDI note number if no sound plays.
-4. Confirm that the sample is audible through the instrument track and that the MIDI activity/output meters respond.
+1. **Sample Library:** scan a folder in the MagDrum desktop app, then find, filter and audition its samples in the plug-in. The sample map compares measured brightness and duration.
+2. **Drum Machine:** select one of the named General MIDI pads. Load a WAV directly or assign a selected library sample. The panel at right shows the pad's waveform and velocity layers. Click the pad to audition it.
+3. **Sequencer:** enter hits on the eight category-specific lanes, set the tempo and preview the pattern. Use **Export MIDI** to save a one-bar pattern, then import that file into a Cubase MIDI track.
+4. To test external MIDI input, create or play a Cubase part that sends note 36 with velocity 100. Cubase's displayed octave name for note 36 depends on its MIDI octave-numbering preference, so verify the MIDI note number if no sound plays.
 
 ## Check project state and velocity layers
 
-1. Save the Cubase project, close and reopen it, and confirm the sample assignment remains in MagDrum.
-2. Optionally load another sample on the same note for velocity 1–63 and keep the first sample on 64–127. Send notes at velocities 40 and 90 and confirm each range selects its assigned sample.
+1. Save the Cubase project, close and reopen it, and confirm the sample assignments remain in MagDrum.
+2. Load another sample on the same note for velocity 1–63 and keep the first sample on 64–127. Send notes at velocities 40 and 90 and confirm each range selects its assigned sample.
 3. Confirm that editing the assignment does not interrupt audio while notes are playing.
 
 ## Report the result

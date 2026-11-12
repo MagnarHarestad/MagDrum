@@ -1,4 +1,5 @@
 #include <JuceHeader.h>
+#include "ui/MagDrumLookAndFeel.h"
 #include "core/MagDrumPaths.h"
 #include "core/MidiPatternIO.h"
 #include "core/ScopedFileAccess.h"
@@ -45,7 +46,7 @@ public:
         midiFallback.setButtonText("Allow articulation fallback");
         midiFallback.setTooltip("When enabled, unsupported articulations use a mapping for the same drum instrument. The export report lists every substitution.");
         addAndMakeVisible(midiFallback);
-        profileName.setTextToShowWhenEmpty("Mapping profile name", juce::Colour(0xff77736c));
+        profileName.setTextToShowWhenEmpty("Mapping profile name", magdrum::ui::Palette::Muted);
         profileName.setText("General MIDI"); addAndMakeVisible(profileName);
         savedProfiles.setTextWhenNothingSelected("Saved profiles");
         savedProfiles.onChange = [this] { loadMappingProfile(); }; addAndMakeVisible(savedProfiles);
@@ -57,12 +58,12 @@ public:
         const char* articulations[] { "Default", "Center", "Rimshot", "Side stick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge" };
         for (int index = 0; index < 13; ++index) mappingArticulation.addItem(articulations[index], index + 1);
         mappingArticulation.setSelectedId(1); addAndMakeVisible(mappingArticulation);
-        mappingNote.setTextToShowWhenEmpty("MIDI note 0–127", juce::Colour(0xff77736c));
+        mappingNote.setTextToShowWhenEmpty("MIDI note 0–127", magdrum::ui::Palette::Muted);
         mappingNote.setInputRestrictions(3, "0123456789"); addAndMakeVisible(mappingNote);
         setMapping.setButtonText("Set note"); setMapping.addListener(this); addAndMakeVisible(setMapping);
         removeMapping.setButtonText("Remove"); removeMapping.addListener(this); addAndMakeVisible(removeMapping);
         if (databaseReady) refreshSavedProfiles();
-        search.setTextToShowWhenEmpty("Search samples", juce::Colour(0xff77736c));
+        search.setTextToShowWhenEmpty("Search samples", magdrum::ui::Palette::Muted);
         search.onTextChange = [this] { refresh(); }; addAndMakeVisible(search);
         loadMore.setButtonText("More");
         loadMore.onClick = [this] { loadMoreSamples(); };
@@ -72,7 +73,7 @@ public:
         for (int index = 0; index < 13; ++index) category.addItem(categories[index], index + 1);
         category.setSelectedId(1); category.onChange = [this] { refresh(); }; addAndMakeVisible(category);
         addAndMakeVisible(rows); rows.setRowHeight(56);
-        status.setColour(juce::Label::textColourId, juce::Colour(0xffaaa49b));
+        status.setColour(juce::Label::textColourId, magdrum::ui::Palette::Muted);
         status.setText(databaseReady ? (browseDatabaseReady ? "Import audio files or search your library."
                                                              : "The sample index is unavailable for browsing.")
             : dataDirectory == juce::File() ? "Shared MagDrum storage is unavailable. Check the signed app-group entitlement."
@@ -106,8 +107,8 @@ public:
 
     void paint(juce::Graphics& graphics) override
     {
-        graphics.fillAll(juce::Colour(0xff101215));
-        graphics.setColour(juce::Colour(0xffff8a42));
+        graphics.fillAll(magdrum::ui::Palette::Background);
+        graphics.setColour(magdrum::ui::Palette::Accent);
         graphics.fillRoundedRectangle(12.0f, 13.0f, 7.0f, 36.0f, 3.0f);
     }
 
@@ -264,11 +265,11 @@ private:
     void paintListBoxItem(int row, juce::Graphics& graphics, int width, int height, bool selected) override
     {
         if (!juce::isPositiveAndBelow(row, visible.size())) return;
-        graphics.fillAll(selected ? juce::Colour(0xff30343a) : juce::Colour(0xff17191c));
+        graphics.fillAll(selected ? magdrum::ui::Palette::Selection : magdrum::ui::Palette::Panel);
         const auto& record = visible.getReference(row);
-        graphics.setColour(juce::Colour(0xfff0eee9)); graphics.setFont(16.0f);
+        graphics.setColour(magdrum::ui::Palette::Text); graphics.setFont(16.0f);
         graphics.drawText(record.file.getFileName(), 12, 5, width - 24, 24, juce::Justification::centredLeft, true);
-        graphics.setColour(juce::Colour(0xffaaa49b)); graphics.setFont(12.0f);
+        graphics.setColour(magdrum::ui::Palette::Muted); graphics.setFont(12.0f);
         auto details = record.category + "  ·  " + juce::String(record.durationSeconds, 2) + " s  ·  "
             + record.file.getParentDirectory().getFileName();
         if (!record.classificationTags.isEmpty()) details += "  ·  " + record.classificationTags.joinIntoString(", ");
@@ -626,15 +627,15 @@ public:
     const juce::String getApplicationName() override { return "MagDrum"; }
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
     bool moreThanOneInstanceAllowed() override { return true; }
-    void initialise(const juce::String&) override { window = std::make_unique<Window>(); }
-    void shutdown() override { window.reset(); }
+    void initialise(const juce::String&) override { juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel); window = std::make_unique<Window>(); }
+    void shutdown() override { window.reset(); juce::LookAndFeel::setDefaultLookAndFeel(nullptr); }
     void systemRequestedQuit() override { quit(); }
 
 private:
     class Window final : public juce::DocumentWindow
     {
     public:
-        Window() : DocumentWindow("MagDrum", juce::Colour(0xff101215), allButtons)
+        Window() : DocumentWindow("MagDrum", magdrum::ui::Palette::Background, allButtons)
         {
             setUsingNativeTitleBar(true); setContentOwned(new MobileMainComponent(), true);
             const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
