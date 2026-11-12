@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "../core/SampleDatabase.h"
+#include "../core/MidiPatternIO.h"
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
 
@@ -30,6 +31,10 @@ private:
     void refreshSamples();
     void setPage(int);
     void setNote(int);
+    void updateDrumNotes();
+    void refreshMappingSummary();
+    void importMidiPattern();
+    void chooseMappingCsv(bool exportCsv);
     void chooseSampleFolder();
     void startSampleScan(const juce::File&);
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
@@ -50,6 +55,7 @@ private:
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
+    juce::TextButton mapsTab{"MIDI MAPS"};
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
     juce::TextButton scanButton{"Add sample folder"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
@@ -62,8 +68,16 @@ private:
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load WAV"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
     juce::TextEditor tempoEditor;
+    juce::TextButton importMidiButton{"Import MIDI"};
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<juce::TextButton, 16>, 8> steps;
+    MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
+    std::array<int, 16> mappedPadNotes{36,38,42,46,43,47,50,51,53,49,55,39,37,40,44,54};
+    std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};
+    juce::ComboBox profileSelect, mappingInstrument, mappingArticulation;
+    juce::TextEditor profileName, mappingNote;
+    juce::TextButton loadProfileButton{"Load profile"}, saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
+    juce::Label mappingSummary;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::DocumentWindow> comparisonWindow;
 

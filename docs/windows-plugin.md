@@ -1,6 +1,6 @@
 # MagDrum Windows plug-in views
 
-The Windows VST3 editor is organized into three views. Open MagDrum on an instrument track in Cubase and choose a view from the navigation row.
+The Windows VST3 editor is organized into four views. Open MagDrum on an instrument track in Cubase and choose a view from the navigation row.
 
 ## Sample Library
 
@@ -12,7 +12,11 @@ The 4×4 pad grid uses named General MIDI drum notes, so a Kick pad always addre
 
 ## Sequencer
 
-The 16-step grid has dedicated lanes for Kick (36), Snare (38), Closed Hat (42), Open Hat (46), Tom (43), Ride (51), Crash (49) and Clap (39). Each lane is permanently tied to its General MIDI note, preventing drum categories from being accidentally swapped. Set tempo from 30 to 300 BPM. **Play** previews the pattern through the loaded pad sounds; **Export MIDI** saves a one-bar, 4/4 Standard MIDI File that can be imported into a Cubase MIDI track. Steps with no sample assigned remain silent during preview and will play if Cubase receives MIDI for a loaded note.
+The 16-step grid has dedicated lanes for Kick (36), Snare (38), Closed Hat (42), Open Hat (46), Tom (43), Ride (51), Crash (49) and Clap (39). Each lane is permanently tied to its General MIDI note, preventing drum categories from being accidentally swapped. Set tempo from 30 to 300 BPM. **Import MIDI** maps a MIDI file into the grid using the selected profile; it reports unmapped, ambiguous and out-of-range notes. **Export MIDI** writes the current one-bar, 4/4 pattern using that profile. Steps with no sample assigned remain silent during preview and will play if Cubase receives MIDI for a loaded note.
+
+## MIDI Maps
+
+Choose General MIDI or a saved profile, edit drum/articulation-to-note mappings, and import or export profiles as CSV. Saved profiles are stored in the shared MagDrum sample database. Profiles apply to MIDI file import/export; the drum-machine pads and incoming Cubase MIDI remain on their named General MIDI notes so assigning a sample to a pad does not change its playing note.
 
 ## Install and rescan
 
