@@ -16,7 +16,7 @@ The 16-step grid has dedicated lanes for Kick (36), Snare (38), Closed Hat (42),
 
 ## MIDI Maps
 
-Choose General MIDI or a saved profile, edit drum/articulation-to-note mappings, and import or export profiles as CSV. Saved profiles are stored in the shared MagDrum sample database. Profiles apply to MIDI file import/export; the drum-machine pads and incoming Cubase MIDI remain on their named General MIDI notes so assigning a sample to a pad does not change its playing note.
+Choose General MIDI or a saved profile, edit drum/articulation-to-note mappings, and import or export profiles as CSV. Saved profiles are stored in the shared MagDrum sample database and the selected profile is also stored with the Cubase plug-in state. The current sequencer pattern and tempo are stored with that state too. Profiles apply to MIDI file import/export; the drum-machine pads and incoming Cubase MIDI remain on their named General MIDI notes so assigning a sample to a pad does not change its playing note.
 
 ## Install and rescan
 

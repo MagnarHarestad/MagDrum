@@ -252,6 +252,8 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
 {
     juce::XmlElement state("MAGDRUM_STATE");
+    if (auto savedEditorState = getPluginEditorState())
+        state.addChildElement(savedEditorState.release());
     {
         const juce::ScopedLock lock(stateLock);
         for (int note = 0; note < 128; ++note)
@@ -289,6 +291,8 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
 {
     auto state = getXmlFromBinary(data, size);
     if (!state || !state->hasTagName("MAGDRUM_STATE")) return;
+    if (const auto* savedEditorState = state->getChildByName("PLUGIN_EDITOR_STATE"))
+        setPluginEditorState(*savedEditorState);
     struct SavedLayer { int minimumVelocity = 1; int maximumVelocity = 127; juce::String path; };
     std::array<std::vector<SavedLayer>, 128> savedLayers;
     std::array<bool, 128> hasExplicitLayers{};
@@ -337,6 +341,19 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
     for (int note = 0; note < 128; ++note)
         for (const auto& layer : savedLayers[static_cast<size_t>(note)])
             loadSampleForVelocityRange(note, layer.minimumVelocity, layer.maximumVelocity, juce::File(layer.path));
+}
+
+void MagDrumAudioProcessor::setPluginEditorState(const juce::XmlElement& value)
+{
+    if (!value.hasTagName("PLUGIN_EDITOR_STATE")) return;
+    const juce::ScopedLock lock(editorStateLock);
+    editorState = std::make_unique<juce::XmlElement>(value);
+}
+
+std::unique_ptr<juce::XmlElement> MagDrumAudioProcessor::getPluginEditorState() const
+{
+    const juce::ScopedLock lock(editorStateLock);
+    return editorState ? std::make_unique<juce::XmlElement>(*editorState) : nullptr;
 }
 
 juce::AudioProcessorEditor* MagDrumAudioProcessor::createEditor()

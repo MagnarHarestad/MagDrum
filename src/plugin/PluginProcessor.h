@@ -41,6 +41,8 @@ public:
     void triggerNote(int midiNote, int velocity = 100);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
     juce::String getSamplePathForNote(int midiNote) const;
+    void setPluginEditorState(const juce::XmlElement&);
+    std::unique_ptr<juce::XmlElement> getPluginEditorState() const;
 
 private:
     struct SampleData
@@ -68,6 +70,8 @@ private:
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
+    juce::CriticalSection editorStateLock;
+    std::unique_ptr<juce::XmlElement> editorState = std::make_unique<juce::XmlElement>("PLUGIN_EDITOR_STATE");
     std::array<Voice, maxVoices> voices{};
     int nextVoice = 0;
 

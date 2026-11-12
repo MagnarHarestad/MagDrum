@@ -33,6 +33,8 @@ private:
     void setNote(int);
     void updateDrumNotes();
     void refreshMappingSummary();
+    void savePluginEditorState();
+    void restorePluginEditorState();
     void importMidiPattern();
     void chooseMappingCsv(bool exportCsv);
     void chooseSampleFolder();
