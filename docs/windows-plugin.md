@@ -12,7 +12,7 @@ The 4×4 pad grid uses named General MIDI drum notes, so a Kick pad always addre
 
 ## Sequencer
 
-The grid has four selectable bars (64 sixteenth-note steps total) with dedicated lanes for Kick (36), Snare (38), Closed Hat (42), Open Hat (46), Tom (43), Ride (51), Crash (49) and Clap (39). Each lane is permanently tied to its General MIDI note, preventing drum categories from being accidentally swapped. Set tempo from 30 to 300 BPM. **Import MIDI** maps a MIDI file into the grid using the selected profile; it reports unmapped, ambiguous and out-of-range notes. **Export MIDI** writes the four-bar, 4/4 pattern using that profile. Steps with no sample assigned remain silent during preview and will play if Cubase receives MIDI for a loaded note.
+The grid has four selectable bars (64 sixteenth-note steps total) with dedicated lanes for Kick (36), Snare (38), Closed Hat (42), Open Hat (46), Tom (43), Ride (51), Crash (49) and Clap (39). Each lane is permanently tied to its General MIDI note, preventing drum categories from being accidentally swapped. Right-click a step to set its velocity. Set tempo from 30 to 300 BPM. **Play** loops the four-bar pattern through assigned samples. **Import MIDI** maps a file into the grid using the selected profile; it reports unmapped, ambiguous and out-of-range notes. **Export MIDI** writes the four-bar, 4/4 pattern including step velocities. Steps with no sample assigned remain silent during preview and will play if Cubase receives MIDI for a loaded note.
 
 ## MIDI Maps
 

@@ -4,10 +4,23 @@
 #include "../core/MidiPatternIO.h"
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
+#include <functional>
 
 class MagDrumSampleMap;
 class MagDrumWaveform;
 class MagDrumSampleComparison;
+
+class MagDrumStepButton final : public juce::TextButton
+{
+public:
+    using juce::TextButton::TextButton;
+    std::function<void()> onRightClick;
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        if (event.mods.isRightButtonDown()) { if (onRightClick) onRightClick(); return; }
+        juce::TextButton::mouseDown(event);
+    }
+};
 
 class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Button::Listener,
@@ -72,7 +85,8 @@ private:
     juce::TextEditor tempoEditor;
     juce::TextButton importMidiButton{"Import MIDI"};
     std::array<juce::Label, 8> laneLabels;
-    std::array<std::array<juce::TextButton, 64>, 8> steps;
+    std::array<std::array<MagDrumStepButton, 64>, 8> steps;
+    std::array<std::array<int, 64>, 8> stepVelocities{};
     juce::ComboBox barSelect;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{36,38,42,46,43,47,50,51,53,49,55,39,37,40,44,54};
