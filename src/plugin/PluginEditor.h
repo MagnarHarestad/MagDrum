@@ -72,7 +72,8 @@ private:
     juce::TextEditor tempoEditor;
     juce::TextButton importMidiButton{"Import MIDI"};
     std::array<juce::Label, 8> laneLabels;
-    std::array<std::array<juce::TextButton, 16>, 8> steps;
+    std::array<std::array<juce::TextButton, 64>, 8> steps;
+    juce::ComboBox barSelect;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{36,38,42,46,43,47,50,51,53,49,55,39,37,40,44,54};
     std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};
