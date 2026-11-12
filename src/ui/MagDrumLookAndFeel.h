@@ -68,19 +68,34 @@ public:
                               const juce::Colour& backgroundColour,
                               bool isMouseOverButton, bool isButtonDown) override
     {
-        auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
-        auto fill = backgroundColour;
+        const auto bounds = button.getLocalBounds().toFloat().reduced(1.0f);
+        auto base = backgroundColour;
         if (!button.isEnabled())
-            fill = Palette::Panel;
+            base = Palette::Panel;
         else if (isButtonDown)
-            fill = Palette::Accent;
+            base = backgroundColour.darker(0.24f);
         else if (isMouseOverButton)
-            fill = Palette::SurfaceHover;
+            base = backgroundColour.brighter(0.12f);
 
-        g.setColour(fill);
-        g.fillRoundedRectangle(bounds, 5.0f);
-        g.setColour(isMouseOverButton || isButtonDown ? Palette::Accent.withAlpha(0.75f) : Palette::Border);
-        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+        // A dark lower lip and a lit top edge give the controls a raised hardware feel.
+        const float radius = button.getHeight() < 30 ? 6.0f : 8.0f;
+        const auto shadow = bounds.translated(0.0f, isButtonDown ? 0.5f : 2.5f);
+        g.setColour(juce::Colours::black.withAlpha(button.isEnabled() ? 0.62f : 0.25f));
+        g.fillRoundedRectangle(shadow, radius);
+
+        const auto face = bounds.withTrimmedBottom(isButtonDown ? 0.5f : 2.0f)
+                               .translated(0.0f, isButtonDown ? 1.5f : 0.0f);
+        juce::ColourGradient faceGradient(base.brighter(0.2f), face.getX(), face.getY(),
+                                          base.darker(0.12f), face.getX(), face.getBottom(), false);
+        g.setGradientFill(faceGradient);
+        g.fillRoundedRectangle(face, radius);
+
+        g.setColour(base.brighter(0.48f).withAlpha(button.isEnabled() ? 0.62f : 0.2f));
+        g.drawLine(face.getX() + radius, face.getY() + 1.0f,
+                   face.getRight() - radius, face.getY() + 1.0f, 1.0f);
+        g.setColour((isMouseOverButton || isButtonDown) ? Palette::Accent.withAlpha(0.9f)
+                                                        : base.brighter(0.18f).withAlpha(0.72f));
+        g.drawRoundedRectangle(face, radius, isMouseOverButton || isButtonDown ? 1.35f : 1.0f);
     }
 };
 }
