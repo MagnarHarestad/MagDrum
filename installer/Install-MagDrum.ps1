@@ -21,13 +21,23 @@ else {
     $destination = Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3\MagDrum.vst3'
 }
 $staging = "$destination.installing-$([guid]::NewGuid().ToString('N'))"
-$backup = "$destination.backup-$([guid]::NewGuid().ToString('N'))"
 $parent = Split-Path $destination
+$backupParent = if ($AllUsers) {
+    Join-Path $env:ProgramData 'MagDrum\VST3-backups'
+}
+else {
+    Join-Path $env:LOCALAPPDATA 'MagDrum\VST3-backups'
+}
+$backup = Join-Path $backupParent "MagDrum.vst3.backup-$([DateTime]::Now.ToString('yyyyMMdd-HHmmss'))-$([guid]::NewGuid().ToString('N'))"
 if (-not $PSCmdlet.ShouldProcess($destination, 'Install MagDrum VST3')) { return }
 if ((Test-Path -LiteralPath $destination) -and -not $PSCmdlet.ShouldContinue("A MagDrum VST3 already exists at $destination. Keep a backup and replace it?", 'Existing plug-in')) { return }
 New-Item -ItemType Directory -Force $parent | Out-Null
+New-Item -ItemType Directory -Force $backupParent | Out-Null
 try {
     Copy-Item -LiteralPath $source -Destination $staging -Recurse
+    # Older installer runs may have left backups inside the scanner path. Move them out first.
+    Get-ChildItem -LiteralPath $parent -Directory -Filter 'MagDrum.vst3.backup-*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination $backupParent }
     if (Test-Path -LiteralPath $destination) { Move-Item -LiteralPath $destination -Destination $backup }
     Move-Item -LiteralPath $staging -Destination $destination
 }

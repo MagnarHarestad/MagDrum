@@ -4,9 +4,9 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest Windows x64 VST3 package is [v0.1.1-test.76](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.76). It adds sample-folder scanning and expanded library tools inside the plug-in. The previous [v0.1.1-test.74 release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.74) also includes Windows ARM64; that build was cross-compiled but has not been runtime-tested on ARM64 Windows. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
+The latest Windows x64 VST3 package is [v0.1.1-test.82](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.82). It adds default library-folder scanning, a DR-660-inspired pad order, and graphite panels with cyan/magenta highlights alongside the in-plugin sample library, MIDI profiles and four-bar sequencer. The previous [v0.1.1-test.74 release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.74) also includes Windows ARM64; that build was cross-compiled but has not been runtime-tested on ARM64 Windows. JUCE omitted the optional ARM64 `moduleinfo.json`; hosts can query the VST3 module factory, though scanning may take longer. Separate Intel and Apple Silicon macOS archives and Linux x64 have not been built or published; see [local build requirements](local-builds.md).
 
-The latest package archives contain the standalone app, VST3 bundle, installer, MagDrum's AGPLv3 `LICENSE`, and JUCE/VST3 license notices. The installer warns if a system-wide copy is present and explains how to replace it while keeping a backup. Check the release page for the matching package checksums.
+The latest package archives contain the standalone app, VST3 bundle, installer, MagDrum's AGPLv3 `LICENSE`, and JUCE/VST3 license notices. The installer keeps previous plug-in bundles under `%LOCALAPPDATA%\MagDrum\VST3-backups` (per-user) or `%ProgramData%\MagDrum\VST3-backups` (all-users), outside Cubase's VST3 scan folders. After installing, use **Rescan All** in Cubase's VST Plug-in Manager so it drops cached entries for older copies. Check the release page for the matching package checksums.
 
 ## Windows x64 and Cubase
 
@@ -18,7 +18,7 @@ from PowerShell. It installs into your per-user VST3 folder without administrato
 access. If a system-wide MagDrum VST3 is already installed, the installer warns
 that Cubase may discover both copies. To update the system-wide copy, run
 PowerShell as administrator and add `-AllUsers`; the installer asks before
-replacing it and keeps a backup. Start Cubase 15 and rescan plugins in Studio >
+replacing it and moves older copies outside the VST3 scan folder. Start Cubase 15 and rescan plugins in Studio >
 VST Plug-in Manager. Add MagDrum as an instrument track. The archive also
 contains the standalone sample library app.
 

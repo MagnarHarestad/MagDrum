@@ -2,22 +2,61 @@
 #include "../core/MagDrumPaths.h"
 #include "../core/ScopedFileAccess.h"
 #include "../core/WavScanner.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <vector>
 
 namespace
 {
 using magdrum::ui::Palette;
-constexpr std::array<int, 16> defaultPadNotes{36,38,42,46,43,47,50,51,53,49,55,39,37,40,44,54};
-constexpr std::array<const char*, 16> padNames{"Kick","Snare","Closed Hat","Open Hat","Low Tom","Mid Tom","High Tom","Ride","Ride Bell","Crash","Splash","Clap","Rimshot","Snare Rim","Pedal Hat","Percussion"};
+constexpr std::array<int, 16> defaultPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
+constexpr std::array<const char*, 16> padNames{"Crash 1","Crash 2","Bell","Ride","Tom 1","Tom 2","Tom 3","Tom 4","Side Stick","Clap","Closed HH","Open HH","Kick","Snare","Pedal HH","Cowbell"};
 constexpr std::array<int, 8> defaultLaneNotes{36,38,42,46,43,51,49,39};
 constexpr std::array<const char*, 8> laneNames{"KICK","SNARE","CLOSED HAT","OPEN HAT","TOM","RIDE","CRASH","CLAP"};
 using I=DrumInstrument;using A=DrumArticulation;
-constexpr std::array<I,16> padInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Tom,I::Tom,I::Ride,I::Ride,I::Crash,I::Crash,I::Clap,I::Rimshot,I::Snare,I::HiHat,I::Percussion};
-constexpr std::array<A,16> padArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Mid,A::High,A::Bow,A::Bell,A::Default,A::Default,A::Default,A::Default,A::Rimshot,A::Pedal,A::Default};
+constexpr std::array<I,16> padInstruments{I::Crash,I::Crash,I::Ride,I::Ride,I::Tom,I::Tom,I::Tom,I::Tom,I::Rimshot,I::Clap,I::HiHat,I::HiHat,I::Kick,I::Snare,I::HiHat,I::Percussion};
+constexpr std::array<A,16> padArticulations{A::Default,A::Default,A::Bell,A::Bow,A::High,A::Mid,A::Low,A::Low,A::SideStick,A::Default,A::Closed,A::Open,A::Default,A::Default,A::Pedal,A::Default};
 constexpr std::array<I,8> laneInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Ride,I::Crash,I::Clap};
 constexpr std::array<A,8> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default};
 juce::Colour categoryColour(const juce::String& value) { return Palette::forDrumCategory(value); }
+std::vector<juce::File> findDefaultDrumLibraryFolders()
+{
+    const auto commonDocuments = juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory);
+    const auto commonData = juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory);
+    const auto userDocuments = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+    const auto userMusic = juce::File::getSpecialLocation(juce::File::userMusicDirectory);
+    const auto programFiles = juce::File::getSpecialLocation(juce::File::globalApplicationsDirectory);
+
+    const std::vector<juce::File> candidates{
+        commonDocuments.getChildFile("Native Instruments"),
+        commonDocuments.getChildFile("Steinberg"),
+        commonDocuments.getChildFile("VST Sound"),
+        commonData.getChildFile("Native Instruments"),
+        commonData.getChildFile("Steinberg/Content"),
+        commonData.getChildFile("Spectrasonics/STEAM"),
+        userDocuments.getChildFile("Native Instruments"),
+        userDocuments.getChildFile("Steinberg"),
+        userMusic.getChildFile("Native Instruments"),
+        userMusic.getChildFile("Steinberg"),
+        programFiles.getChildFile("Steinberg/Cubase 15/VST Sound")
+    };
+
+    std::vector<juce::File> found;
+    for (const auto& folder : candidates)
+    {
+        if (!folder.isDirectory())
+            continue;
+        const auto path = folder.getFullPathName();
+        const auto alreadyAdded = std::any_of(found.begin(), found.end(), [&path](const juce::File& existing)
+        {
+            return existing.getFullPathName().compareIgnoreCase(path) == 0;
+        });
+        if (!alreadyAdded)
+            found.push_back(folder);
+    }
+    return found;
+}
 juce::String noteName(int note)
 {
     static constexpr const char* names[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
@@ -47,10 +86,13 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto bounds=getLocalBounds().toFloat().reduced(14.0f);
-        g.setColour(Palette::Panel);g.fillRoundedRectangle(bounds,9.0f);
+        juce::ColourGradient panel(Palette::Surface, bounds.getX(), bounds.getY(),
+                                   Palette::Panel, bounds.getRight(), bounds.getBottom(), false);
+        g.setGradientFill(panel);g.fillRoundedRectangle(bounds,9.0f);
         auto plot=bounds.reduced(24.0f,24.0f);plot.removeFromTop(16.0f);plot.removeFromBottom(20.0f);
+        g.setColour(Palette::Background.withAlpha(0.8f));g.fillRoundedRectangle(plot,5.0f);
         g.setColour(Palette::Border);g.drawRoundedRectangle(plot,5.0f,1.0f);
-        for(int i=1;i<4;++i){const float x=plot.getX()+plot.getWidth()*i/4.0f;const float y=plot.getY()+plot.getHeight()*i/4.0f;g.setColour(Palette::Border.withAlpha(0.48f));g.drawVerticalLine(static_cast<int>(x),plot.getY(),plot.getBottom());g.drawHorizontalLine(static_cast<int>(y),plot.getX(),plot.getRight());}
+        for(int i=1;i<4;++i){const float x=plot.getX()+plot.getWidth()*i/4.0f;const float y=plot.getY()+plot.getHeight()*i/4.0f;g.setColour(Palette::Accent.withAlpha(0.10f));g.drawVerticalLine(static_cast<int>(x),plot.getY(),plot.getBottom());g.drawHorizontalLine(static_cast<int>(y),plot.getX(),plot.getRight());}
         g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText("SAMPLE MAP  ·  brightness × duration",bounds.toNearestInt().removeFromTop(24).reduced(12,0),juce::Justification::centredLeft);
         g.drawText("SHORTER",static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::left);
         g.drawText("LONGER",static_cast<int>(plot.getRight()-80),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::right);
@@ -62,10 +104,11 @@ public:
             const auto x=plot.getX()+static_cast<float>(duration)*(plot.getWidth()-12.0f)+6.0f;
             const auto y=plot.getBottom()-static_cast<float>(brightness)*(plot.getHeight()-12.0f)-6.0f;
             const bool selected=i==selectedIndex;const float radius=selected?7.0f:4.2f;
-            g.setColour(categoryColour(sample.category).withAlpha(selected?1.0f:0.72f));g.fillEllipse(x-radius,y-radius,radius*2,radius*2);
+            if(selected){g.setColour(categoryColour(sample.category).withAlpha(0.18f));g.fillEllipse(x-radius-7.0f,y-radius-7.0f,(radius+7.0f)*2,(radius+7.0f)*2);}
+            g.setColour(categoryColour(sample.category).withAlpha(selected?1.0f:0.78f));g.fillEllipse(x-radius,y-radius,radius*2,radius*2);
             if(selected){g.setColour(Palette::Text);g.drawEllipse(x-radius-2,y-radius-2,(radius+2)*2,(radius+2)*2,1.4f);}
         }
-        if(samples.isEmpty()){g.setColour(Palette::Muted);g.drawFittedText("Add a sample folder above to populate the library.",plot.toNearestInt().reduced(22),juce::Justification::centred,3);}
+        if(samples.isEmpty()){g.setColour(Palette::Muted);g.drawFittedText("Scan installed libraries or add a sample folder to populate the library.",plot.toNearestInt().reduced(22),juce::Justification::centred,3);}
     }
     void mouseDown(const juce::MouseEvent& event) override
     {
@@ -92,10 +135,10 @@ public:
     }
     void paint(juce::Graphics& g) override
     {
-        auto area=getLocalBounds().toFloat().reduced(2.0f);g.setColour(Palette::Panel);g.fillRoundedRectangle(area,7.0f);
+        auto area=getLocalBounds().toFloat().reduced(2.0f);g.setColour(Palette::Panel);g.fillRoundedRectangle(area,7.0f);g.setColour(Palette::Border.withAlpha(0.7f));g.drawRoundedRectangle(area,7.0f,1.0f);
         g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText("SAMPLE WAVEFORM",getLocalBounds().reduced(12,7).removeFromTop(18),juce::Justification::centredLeft);
-        auto wave=getLocalBounds().reduced(12,28).toFloat();g.setColour(Palette::Border);g.drawHorizontalLine(static_cast<int>(wave.getCentreY()),wave.getX(),wave.getRight());
-        if(thumbnail.getNumChannels()>0){g.setColour(Palette::Coral);thumbnail.drawChannels(g,wave.toNearestInt(),0.0,thumbnail.getTotalLength(),1.0f);}
+        auto wave=getLocalBounds().reduced(12,28).toFloat();g.setColour(Palette::Accent.withAlpha(0.18f));g.drawHorizontalLine(static_cast<int>(wave.getCentreY()),wave.getX(),wave.getRight());
+        if(thumbnail.getNumChannels()>0){g.setColour(Palette::Accent);thumbnail.drawChannels(g,wave.toNearestInt(),0.0,thumbnail.getTotalLength(),1.0f);}
         else{g.setColour(Palette::Muted);g.drawFittedText(currentFile.existsAsFile()?"Reading waveform…":"No sample loaded",wave.toNearestInt(),juce::Justification::centred,2);}
     }
 private:
@@ -180,7 +223,8 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     confidenceFilter.addItem("All confidence levels",1);confidenceFilter.addItem("Needs review",2);confidenceFilter.setSelectedId(1);addAndMakeVisible(confidenceFilter);
     sourceFilter.addItem("All sources",1);sourceFilter.setSelectedId(1);addAndMakeVisible(sourceFilter);kitFilter.addItem("All kits",1);kitFilter.setSelectedId(1);addAndMakeVisible(kitFilter);
     auto refreshOnChange=[this]{refreshSamples();};categoryFilter.onChange=refreshOnChange;featureFilter.onChange=refreshOnChange;sortFilter.onChange=refreshOnChange;confidenceFilter.onChange=refreshOnChange;sourceFilter.onChange=refreshOnChange;kitFilter.onChange=refreshOnChange;
-    scanButton.addListener(this);searchButton.addListener(this);previewButton.addListener(this);assignButton.addListener(this);libraryToolsButton.addListener(this);moreSamplesButton.addListener(this);addAndMakeVisible(scanButton);addAndMakeVisible(searchButton);addAndMakeVisible(previewButton);addAndMakeVisible(assignButton);addAndMakeVisible(libraryToolsButton);addAndMakeVisible(moreSamplesButton);
+    scanButton.addListener(this);scanDefaultsButton.addListener(this);searchButton.addListener(this);previewButton.addListener(this);assignButton.addListener(this);libraryToolsButton.addListener(this);moreSamplesButton.addListener(this);addAndMakeVisible(scanButton);addAndMakeVisible(scanDefaultsButton);addAndMakeVisible(searchButton);addAndMakeVisible(previewButton);addAndMakeVisible(assignButton);addAndMakeVisible(libraryToolsButton);addAndMakeVisible(moreSamplesButton);
+    scanDefaultsButton.setTooltip("Scan audio files in common Native Instruments, Spectrasonics and Steinberg library locations.");
     indexedList.setModel(this);indexedList.setRowHeight(43);indexedList.setMultipleSelectionEnabled(true);addAndMakeVisible(indexedList);
     sampleMap->onSelect=[this](int index){if(juce::isPositiveAndBelow(index,samples.size()))indexedList.selectRow(index);};addAndMakeVisible(*sampleMap);
     for(size_t i=0;i<pads.size();++i){auto& pad=pads[i];pad.setButtonText(juce::String(padNames[i])+"\n"+noteName(mappedPadNotes[i]));pad.setColour(juce::TextButton::buttonColourId,Palette::Surface);pad.setColour(juce::TextButton::buttonOnColourId,categoryColour(padNames[i]));pad.setClickingTogglesState(false);pad.addListener(this);addAndMakeVisible(pad);}
@@ -226,11 +270,11 @@ void MagDrumAudioProcessorEditor::resized()
     libraryTab.setBounds(tabs.removeFromLeft(160));tabs.removeFromLeft(6);machineTab.setBounds(tabs.removeFromLeft(160));tabs.removeFromLeft(6);sequencerTab.setBounds(tabs.removeFromLeft(160));tabs.removeFromLeft(6);mapsTab.setBounds(tabs.removeFromLeft(160));bounds.removeFromTop(12);
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);
-    sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
+    sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
     for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
     for(auto& label:laneLabels)label.setVisible(page==2);for(auto& row:steps)for(size_t index=0;index<row.size();++index)row[index].setVisible(page==2&&static_cast<int>(index/16+1)==barSelect.getSelectedId());playSequenceButton.setVisible(page==2);clearSequenceButton.setVisible(page==2);exportSequenceButton.setVisible(page==2);importMidiButton.setVisible(page==2);tempoEditor.setVisible(page==2);barSelect.setVisible(page==2);
     profileSelect.setVisible(page==3);profileName.setVisible(page==3);mappingInstrument.setVisible(page==3);mappingArticulation.setVisible(page==3);mappingNote.setVisible(page==3);mappingSummary.setVisible(page==3);loadProfileButton.setVisible(page==3);saveProfileButton.setVisible(page==3);importCsvButton.setVisible(page==3);exportCsvButton.setVisible(page==3);setMappingButton.setVisible(page==3);removeMappingButton.setVisible(page==3);
-    if(page==0){auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(225));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);featureFilter.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);sortFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);confidenceFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);searchButton.setBounds(controls.removeFromLeft(78));controls.removeFromLeft(6);previewButton.setBounds(controls.removeFromLeft(78));bounds.removeFromTop(6);controls=bounds.removeFromTop(34);sourceFilter.setBounds(controls.removeFromLeft(180));controls.removeFromLeft(6);kitFilter.setBounds(controls.removeFromLeft(190));controls.removeFromLeft(6);scanButton.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);assignButton.setBounds(controls.removeFromLeft(118));controls.removeFromLeft(6);libraryToolsButton.setBounds(controls.removeFromLeft(115));controls.removeFromLeft(6);moreSamplesButton.setBounds(controls.removeFromLeft(110));moreSamplesButton.setEnabled(hasMoreSamples);bounds.removeFromTop(8);auto content=bounds;const int left=juce::jlimit(320,440,content.getWidth()*2/5);indexedList.setBounds(content.removeFromLeft(left));content.removeFromLeft(12);sampleMap->setBounds(content);}
+    if(page==0){auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(225));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);featureFilter.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);sortFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);confidenceFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);searchButton.setBounds(controls.removeFromLeft(78));controls.removeFromLeft(6);previewButton.setBounds(controls.removeFromLeft(78));bounds.removeFromTop(6);controls=bounds.removeFromTop(34);sourceFilter.setBounds(controls.removeFromLeft(180));controls.removeFromLeft(6);kitFilter.setBounds(controls.removeFromLeft(190));bounds.removeFromTop(6);controls=bounds.removeFromTop(34);scanButton.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);scanDefaultsButton.setBounds(controls.removeFromLeft(190));controls.removeFromLeft(12);assignButton.setBounds(controls.removeFromLeft(118));controls.removeFromLeft(6);libraryToolsButton.setBounds(controls.removeFromLeft(115));controls.removeFromLeft(6);moreSamplesButton.setBounds(controls.removeFromLeft(110));moreSamplesButton.setEnabled(hasMoreSamples);bounds.removeFromTop(8);auto content=bounds;const int left=juce::jlimit(320,440,content.getWidth()*2/5);indexedList.setBounds(content.removeFromLeft(left));content.removeFromLeft(12);sampleMap->setBounds(content);}
     else if(page==1){auto grid=bounds.removeFromLeft(bounds.getWidth()*3/5);const int gap=10;const int padW=(grid.getWidth()-3*gap)/4,padH=(grid.getHeight()-3*gap)/4;for(size_t i=0;i<pads.size();++i){const int row=static_cast<int>(i/4),col=static_cast<int>(i%4);pads[i].setBounds(grid.getX()+col*(padW+gap),grid.getY()+row*(padH+gap),padW,padH);}bounds.removeFromLeft(18);selectedPadTitle.setBounds(bounds.removeFromTop(38));bounds.removeFromTop(6);sampleDetails.setBounds(bounds.removeFromTop(58));bounds.removeFromTop(8);waveform->setBounds(bounds.removeFromTop(154));bounds.removeFromTop(8);layerSummary.setBounds(bounds.removeFromTop(juce::jmin(180,bounds.getHeight()/2)));bounds.removeFromTop(12);auto row=bounds.removeFromTop(34);velocityRange.setBounds(row.removeFromLeft(100));row.removeFromLeft(8);clearPadButton.setBounds(row.removeFromLeft(108));row.removeFromLeft(8);loadButton.setBounds(row);bounds.removeFromTop(14);}
     else if(page==2){auto toolbar=bounds.removeFromTop(36);playSequenceButton.setBounds(toolbar.removeFromLeft(82));toolbar.removeFromLeft(6);clearSequenceButton.setBounds(toolbar.removeFromLeft(116));toolbar.removeFromLeft(6);importMidiButton.setBounds(toolbar.removeFromLeft(96));toolbar.removeFromLeft(6);exportSequenceButton.setBounds(toolbar.removeFromLeft(110));toolbar.removeFromLeft(12);tempoEditor.setBounds(toolbar.removeFromLeft(70));toolbar.removeFromLeft(8);barSelect.setBounds(toolbar.removeFromLeft(92));bounds.removeFromTop(16);const int labelW=122;const int cellW=juce::jmax(30,(bounds.getWidth()-labelW-15*4)/16);const size_t barOffset=static_cast<size_t>(juce::jlimit(0,3,barSelect.getSelectedId()-1))*16;for(int row=0;row<8;++row){auto line=bounds.removeFromTop(juce::jmax(36,bounds.getHeight()/8));laneLabels[static_cast<size_t>(row)].setBounds(line.removeFromLeft(labelW));line.removeFromLeft(6);for(int step=0;step<16;++step){steps[static_cast<size_t>(row)][barOffset+static_cast<size_t>(step)].setBounds(line.removeFromLeft(cellW));line.removeFromLeft(4);}}}
     else{auto top=bounds.removeFromTop(36);profileSelect.setBounds(top.removeFromLeft(210));top.removeFromLeft(8);profileName.setBounds(top.removeFromLeft(190));top.removeFromLeft(8);loadProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);saveProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);importCsvButton.setBounds(top.removeFromLeft(95));top.removeFromLeft(6);exportCsvButton.setBounds(top.removeFromLeft(95));bounds.removeFromTop(12);auto edit=bounds.removeFromTop(36);mappingInstrument.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingArticulation.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingNote.setBounds(edit.removeFromLeft(110));edit.removeFromLeft(8);setMappingButton.setBounds(edit.removeFromLeft(120));edit.removeFromLeft(8);removeMappingButton.setBounds(edit.removeFromLeft(130));bounds.removeFromTop(14);mappingSummary.setBounds(bounds);}
@@ -270,10 +314,55 @@ juce::File MagDrumAudioProcessorEditor::selectedSample()const{const int row=inde
 
 void MagDrumAudioProcessorEditor::chooseSampleFolder()
 {
-    if(scanning){if(scanCancellation)scanCancellation->store(true);scanButton.setButtonText("Cancelling…");scanButton.setEnabled(false);status.setText("Stopping the current folder scan…",juce::dontSendNotification);return;}
+    if(scanning){if(scanningDefaultLibraries){scanningDefaultLibraries=false;defaultLibraryFolders.clear();}if(scanCancellation)scanCancellation->store(true);scanButton.setButtonText("Cancelling…");scanButton.setEnabled(false);status.setText("Stopping the current folder scan…",juce::dontSendNotification);return;}
     chooser=std::make_unique<juce::FileChooser>("Choose a drum sample folder",juce::File(),juce::String());
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectDirectories,[safe](const juce::FileChooser& fileChooser){if(safe!=nullptr){const auto folder=fileChooser.getResult();if(folder.isDirectory())safe->startSampleScan(folder);}});
+}
+
+void MagDrumAudioProcessorEditor::scanDefaultLibraryFolders()
+{
+    if(scanning)
+    {
+        status.setText("A sample scan is already running.",juce::dontSendNotification);
+        return;
+    }
+    if(!databaseReady||databaseFile==juce::File())
+    {
+        status.setText("The shared MagDrum sample database is unavailable.",juce::dontSendNotification);
+        return;
+    }
+
+    defaultLibraryFolders=findDefaultDrumLibraryFolders();
+    if(defaultLibraryFolders.empty())
+    {
+        status.setText("No default library folders were found. Use Add sample folder to choose a custom location.",juce::dontSendNotification);
+        return;
+    }
+
+    defaultLibraryFolderIndex=0;
+    defaultLibraryIndexedCount=0;
+    defaultLibraryErrorCount=0;
+    scanningDefaultLibraries=true;
+    scanDefaultsButton.setEnabled(false);
+    startNextDefaultLibraryFolder();
+}
+
+void MagDrumAudioProcessorEditor::startNextDefaultLibraryFolder()
+{
+    if(defaultLibraryFolderIndex>=defaultLibraryFolders.size())
+    {
+        const auto folderCount=defaultLibraryFolders.size();
+        scanningDefaultLibraries=false;
+        defaultLibraryFolders.clear();
+        scanDefaultsButton.setEnabled(true);
+        refreshSourceKitFilters();
+        refreshSamples();
+        status.setText("Library scan complete · "+juce::String(defaultLibraryIndexedCount)+" audio samples indexed across "+juce::String(static_cast<int>(folderCount))+" locations · "+juce::String(defaultLibraryErrorCount)+" errors.",juce::dontSendNotification);
+        return;
+    }
+
+    startSampleScan(defaultLibraryFolders[defaultLibraryFolderIndex]);
 }
 
 void MagDrumAudioProcessorEditor::startSampleScan(const juce::File& folder)
@@ -289,6 +378,22 @@ void MagDrumAudioProcessorEditor::startSampleScan(const juce::File& folder)
 void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stats,std::int64_t indexed,const juce::String& error)
 {
     scanning=false;scanCancellation.reset();scanButton.setEnabled(true);scanButton.setButtonText("Add sample folder");refreshSourceKitFilters();refreshSamples();
+    if(scanningDefaultLibraries)
+    {
+        defaultLibraryIndexedCount+=indexed;
+        defaultLibraryErrorCount+=stats.errors+(error.isNotEmpty()?1:0);
+        if(stats.cancelled)
+        {
+            scanningDefaultLibraries=false;
+            defaultLibraryFolders.clear();
+            scanDefaultsButton.setEnabled(true);
+            status.setText("Library scan cancelled · "+juce::String(defaultLibraryIndexedCount)+" audio samples indexed so far.",juce::dontSendNotification);
+            return;
+        }
+        ++defaultLibraryFolderIndex;
+        startNextDefaultLibraryFolder();
+        return;
+    }
     if(error.isNotEmpty())status.setText(error,juce::dontSendNotification);
     else status.setText((stats.cancelled?"Scan cancelled. ":"Scan complete. ")+juce::String(indexed)+" indexed, "+juce::String(stats.filesSkippedUnchanged)+" unchanged, "+juce::String(stats.errors)+" errors.",juce::dontSendNotification);
 }
@@ -350,9 +455,10 @@ void MagDrumAudioProcessorEditor::setPage(int value){page=juce::jlimit(0,3,value
 void MagDrumAudioProcessorEditor::setNote(int note){selectedNote=juce::jlimit(0,127,note);const int index=static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin());const int safeIndex=juce::jlimit(0,static_cast<int>(padNames.size())-1,index);for(size_t i=0;i<pads.size();++i){pads[i].setButtonText(juce::String(padNames[i])+"\n"+noteName(mappedPadNotes[i]));pads[i].setToggleState(static_cast<int>(i)==index,juce::dontSendNotification);pads[i].setColour(juce::TextButton::buttonColourId,static_cast<int>(i)==index?categoryColour(padNames[i]).withAlpha(0.34f):Palette::Surface);}selectedPadTitle.setText(juce::String(padNames[static_cast<size_t>(safeIndex)])+"   ·   "+noteName(selectedNote)+"   ·   MIDI "+juce::String(selectedNote),juce::dontSendNotification);updateLayerSummary();const auto layers=processor.getSampleLayersForNote(selectedNote);sampleDetails.setText(layers.empty()?"Selected pad sound\nNo sample loaded":juce::String("PAD SAMPLE\n")+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path,juce::dontSendNotification);}
 void MagDrumAudioProcessorEditor::updateDrumNotes()
 {
-    int selectedPad=static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin());selectedPad=juce::jlimit(0,static_cast<int>(mappedPadNotes.size())-1,selectedPad);
+    const int previousNote=selectedNote;
     mappedPadNotes=defaultPadNotes;mappedLaneNotes=defaultLaneNotes;
-    setNote(mappedPadNotes[static_cast<size_t>(selectedPad)]);
+    const bool noteStillPresent=std::find(mappedPadNotes.begin(),mappedPadNotes.end(),previousNote)!=mappedPadNotes.end();
+    setNote(noteStillPresent?previousNote:36);
 }
 
 void MagDrumAudioProcessorEditor::refreshMappingSummary()
@@ -405,7 +511,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 {
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}
     for(auto& row:steps)for(auto& cell:row)if(button==&cell){savePluginEditorState();return;}
-    if(button==&scanButton){chooseSampleFolder();return;}
+    if(button==&scanButton){chooseSampleFolder();return;}if(button==&scanDefaultsButton){scanDefaultLibraryFolders();return;}
     if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples)loadSamplePage(false);return;}
     if(button==&previewButton){const auto file=selectedSample();if(file==juce::File()){status.setText("Select a sample to preview.",juce::dontSendNotification);return;}status.setText(processor.previewSample(file)?"Previewing "+file.getFileName():"Could not read this audio file.",juce::dontSendNotification);return;}
     if(button==&assignButton){const auto file=selectedSample();if(file==juce::File()){status.setText("Select a sample first.",juce::dontSendNotification);return;}if(processor.loadSampleForVelocityRange(selectedNote,velocityMinimum(velocityRange.getText()),velocityMaximum(velocityRange.getText()),file)){updateLayerSummary();status.setText("Assigned "+file.getFileName()+" to "+juce::String(padNames[static_cast<size_t>(std::max(0,static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin())))])+".",juce::dontSendNotification);}else status.setText("Assignment failed. Check velocity ranges and the eight-layer limit.",juce::dontSendNotification);return;}

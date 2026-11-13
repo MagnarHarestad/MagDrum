@@ -6,25 +6,26 @@ namespace magdrum::ui
 {
 struct Palette
 {
-    inline static const juce::Colour Background{ 0xff0b0b12 };
-    inline static const juce::Colour Panel{ 0xff12121c };
-    inline static const juce::Colour Surface{ 0xff1a1a28 };
-    inline static const juce::Colour SurfaceHover{ 0xff252538 };
-    inline static const juce::Colour Border{ 0xff303044 };
-    inline static const juce::Colour Text{ 0xffe8e8f4 };
-    inline static const juce::Colour Muted{ 0xff8a8aa6 };
-    inline static const juce::Colour Accent{ 0xfff2a83c };
-    inline static const juce::Colour Green{ 0xff3ce08a };
-    inline static const juce::Colour Teal{ 0xff8fc9a8 };
-    inline static const juce::Colour Violet{ 0xffa98bff };
-    inline static const juce::Colour Coral{ 0xfff26d5b };
-    inline static const juce::Colour Selection{ 0xff30364a };
+    inline static const juce::Colour Background{ 0xff111318 };
+    inline static const juce::Colour Panel{ 0xff191b21 };
+    inline static const juce::Colour Surface{ 0xff24262d };
+    inline static const juce::Colour SurfaceHover{ 0xff30333b };
+    inline static const juce::Colour Border{ 0xff3a3d46 };
+    inline static const juce::Colour Text{ 0xffe7e9ee };
+    inline static const juce::Colour Muted{ 0xff9398a4 };
+    inline static const juce::Colour Accent{ 0xff26c9f4 };
+    inline static const juce::Colour Magenta{ 0xffe84daf };
+    inline static const juce::Colour Green{ 0xff54dbbd };
+    inline static const juce::Colour Teal{ 0xff47b9c5 };
+    inline static const juce::Colour Violet{ 0xff9d8bff };
+    inline static const juce::Colour Coral{ 0xffff786f };
+    inline static const juce::Colour Selection{ 0xff253d4a };
 
     static juce::Colour forDrumCategory(juce::String category)
     {
         category = category.toLowerCase();
-        if (category.contains("kick")) return Accent;
-        if (category.contains("snare") || category.contains("clap") || category.contains("rim")) return Coral;
+        if (category.contains("kick")) return Magenta;
+        if (category.contains("snare") || category.contains("clap") || category.contains("rim")) return Accent;
         if (category.contains("hat")) return Green;
         if (category.contains("tom")) return Teal;
         if (category.contains("ride") || category.contains("crash") || category.contains("cymbal")) return Violet;
@@ -96,6 +97,48 @@ public:
         g.setColour((isMouseOverButton || isButtonDown) ? Palette::Accent.withAlpha(0.9f)
                                                         : base.brighter(0.18f).withAlpha(0.72f));
         g.drawRoundedRectangle(face, radius, isMouseOverButton || isButtonDown ? 1.35f : 1.0f);
+    }
+
+    void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
+                          float sliderPosition, float startAngle, float endAngle,
+                          juce::Slider& slider) override
+    {
+        const float diameter = juce::jmin(static_cast<float>(width), static_cast<float>(height)) - 8.0f;
+        const float radius = diameter * 0.5f;
+        const float centreX = static_cast<float>(x) + static_cast<float>(width) * 0.5f;
+        const float centreY = static_cast<float>(y) + static_cast<float>(height) * 0.5f;
+        const float angle = startAngle + sliderPosition * (endAngle - startAngle);
+        const auto alpha = slider.isEnabled() ? 1.0f : 0.38f;
+
+        g.setColour(juce::Colours::black.withAlpha(0.7f * alpha));
+        g.fillEllipse(centreX - radius, centreY - radius + 3.0f, diameter, diameter);
+        juce::ColourGradient body(Palette::SurfaceHover, centreX, centreY - radius,
+                                  Palette::Background, centreX, centreY + radius, false);
+        g.setGradientFill(body);
+        g.fillEllipse(centreX - radius, centreY - radius, diameter, diameter);
+        g.setColour(Palette::Border.withAlpha(alpha));
+        g.drawEllipse(centreX - radius + 1.0f, centreY - radius + 1.0f,
+                      diameter - 2.0f, diameter - 2.0f, 1.5f);
+
+        juce::Path arc;
+        arc.addCentredArc(centreX, centreY, radius - 4.0f, radius - 4.0f,
+                          0.0f, startAngle, endAngle, true);
+        g.setColour(Palette::Border.withAlpha(alpha));
+        g.strokePath(arc, juce::PathStrokeType(3.0f, juce::PathStrokeType::curved,
+                                               juce::PathStrokeType::rounded));
+        juce::Path valueArc;
+        valueArc.addCentredArc(centreX, centreY, radius - 4.0f, radius - 4.0f,
+                               0.0f, startAngle, angle, true);
+        g.setColour(Palette::Accent.withAlpha(alpha));
+        g.strokePath(valueArc, juce::PathStrokeType(3.0f, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
+
+        const juce::Point<float> indicator(centreX + std::sin(angle) * radius * 0.52f,
+                                           centreY - std::cos(angle) * radius * 0.52f);
+        g.setColour(Palette::Text.withAlpha(alpha));
+        g.drawLine(centreX, centreY, indicator.x, indicator.y, 2.0f);
+        g.setColour(Palette::Accent.withAlpha(alpha));
+        g.fillEllipse(centreX - 2.2f, centreY - 2.2f, 4.4f, 4.4f);
     }
 };
 }

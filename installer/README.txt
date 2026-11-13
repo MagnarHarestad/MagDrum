@@ -7,7 +7,9 @@ PowerShell. By default the script installs to the standard per-user VST3 folder:
 If a system-wide MagDrum VST3 already exists, a per-user installation prints a
 warning because Cubase may find both copies. To replace the system-wide copy,
 open PowerShell as administrator and run Install-MagDrum.ps1 -AllUsers. The
-script asks before replacing the existing copy and preserves it as a backup.
+script asks before replacing the existing copy and preserves previous bundles
+outside the VST3 scan folder: under %LOCALAPPDATA%\MagDrum\VST3-backups for a
+per-user install or %ProgramData%\MagDrum\VST3-backups for an all-users install.
 
 Then open Cubase 15 and choose Studio > VST Plug-in Manager > Rescan All.
 Add MagDrum as an instrument track and route a MIDI track to it. The plugin

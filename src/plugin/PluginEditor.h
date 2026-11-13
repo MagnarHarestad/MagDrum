@@ -5,6 +5,7 @@
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
 #include <functional>
+#include <vector>
 
 class MagDrumSampleMap;
 class MagDrumWaveform;
@@ -51,6 +52,8 @@ private:
     void importMidiPattern();
     void chooseMappingCsv(bool exportCsv);
     void chooseSampleFolder();
+    void scanDefaultLibraryFolders();
+    void startNextDefaultLibraryFolder();
     void startSampleScan(const juce::File&);
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
     void loadSamplePage(bool reset);
@@ -67,13 +70,18 @@ private:
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
     int sampleOffset = 0;
     bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;
+    bool scanningDefaultLibraries = false;
+    std::vector<juce::File> defaultLibraryFolders;
+    size_t defaultLibraryFolderIndex = 0;
+    std::int64_t defaultLibraryIndexedCount = 0;
+    std::int64_t defaultLibraryErrorCount = 0;
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextButton mapsTab{"MIDI MAPS"};
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
-    juce::TextButton scanButton{"Add sample folder"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
+    juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
     std::unique_ptr<MagDrumWaveform> waveform;
@@ -89,7 +97,7 @@ private:
     std::array<std::array<int, 64>, 8> stepVelocities{};
     juce::ComboBox barSelect;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
-    std::array<int, 16> mappedPadNotes{36,38,42,46,43,47,50,51,53,49,55,39,37,40,44,54};
+    std::array<int, 16> mappedPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
     std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};
     juce::ComboBox profileSelect, mappingInstrument, mappingArticulation;
     juce::TextEditor profileName, mappingNote;
