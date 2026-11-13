@@ -4,6 +4,7 @@
 #include "core/AudioClassifier.h"
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
+#include "core/SequencerGrid.h"
 #include "core/PluginNoteScanner.h"
 #include "core/DeviceRealtimeRenderer.h"
 #include "core/PluginScanProcess.h"
@@ -179,6 +180,14 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
 
 int main(int argc,char** argv)
 {
+    if (magdrum::sequencer::stepsPerBar(3,4) != 12
+        || magdrum::sequencer::stepsPerBar(5,4) != 20
+        || magdrum::sequencer::stepsPerBar(7,8) != 14
+        || magdrum::sequencer::stepsPerBar(12,8) != 24
+        || magdrum::sequencer::stepsPerBar(8,4) != 32
+        || magdrum::sequencer::stepsPerBar(9,4) != 0
+        || magdrum::sequencer::maximumSteps != 512)
+        return 230;
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::abort();
     if(argc==3&&std::strcmp(argv[1],"--magdrum-test-partial-crash-fixture")==0){const auto log=juce::File(argv[2]);log.replaceWithText(R"({"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"})"+juce::String("\n"));std::abort();}
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;

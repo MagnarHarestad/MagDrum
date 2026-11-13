@@ -2,6 +2,7 @@
 #include "PluginProcessor.h"
 #include "../core/SampleDatabase.h"
 #include "../core/MidiPatternIO.h"
+#include "../core/SequencerGrid.h"
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
 #include <functional>
@@ -46,6 +47,10 @@ private:
     void setPage(int);
     void setNote(int);
     void updateDrumNotes();
+    int stepsPerBar() const;
+    int timeSignatureNumerator() const;
+    int timeSignatureDenominator() const;
+    void updateSequencerGrid();
     void refreshMappingSummary();
     void savePluginEditorState();
     void restorePluginEditorState();
@@ -72,7 +77,7 @@ private:
     juce::File databaseFile;
     juce::Array<SampleBrowseRecord> samples;
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
-    int sampleOffset = 0;
+    int sampleOffset = 0, previousMeterId = 404;
     bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
@@ -98,9 +103,9 @@ private:
     juce::TextEditor tempoEditor;
     juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"};
     std::array<juce::Label, 8> laneLabels;
-    std::array<std::array<MagDrumStepButton, 256>, 8> steps;
-    std::array<std::array<int, 256>, 8> stepVelocities{};
-    juce::ComboBox barSelect;
+    std::array<std::array<MagDrumStepButton, 512>, 8> steps;
+    std::array<std::array<int, 512>, 8> stepVelocities{};
+    juce::ComboBox barSelect, meterSelect;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
     std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};
