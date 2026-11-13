@@ -50,6 +50,10 @@ private:
     void savePluginEditorState();
     void restorePluginEditorState();
     void importMidiPattern();
+    void loadMidiPatternFile(const juce::File&);
+    void searchDefaultMidiPatterns();
+    void finishDefaultMidiPatternSearch(std::vector<juce::File>);
+    void browseDefaultMidiPatterns();
     void chooseMappingCsv(bool exportCsv);
     void chooseSampleFolder();
     void scanDefaultLibraryFolders();
@@ -72,6 +76,7 @@ private:
     bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
+    std::vector<juce::File> defaultMidiPatterns;
     size_t defaultLibraryFolderIndex = 0;
     std::int64_t defaultLibraryIndexedCount = 0;
     std::int64_t defaultLibraryErrorCount = 0;
@@ -91,7 +96,7 @@ private:
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load WAV"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
     juce::TextEditor tempoEditor;
-    juce::TextButton importMidiButton{"Import MIDI"};
+    juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"};
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<MagDrumStepButton, 64>, 8> steps;
     std::array<std::array<int, 64>, 8> stepVelocities{};

@@ -23,7 +23,7 @@ target_compile_definitions(sqlite3 PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  juce_add_gui_app(MagDrum PRODUCT_NAME "MagDrum" COMPANY_NAME "Censor Design" BUNDLE_ID "com.censordesign.magdrum")
  juce_generate_juce_header(MagDrum)
- target_sources(MagDrum PRIVATE src/app/Main.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp src/core/MagDrumPaths.cpp)
+ target_sources(MagDrum PRIVATE src/app/Main.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp src/core/MagDrumPaths.cpp)
  target_include_directories(MagDrum PRIVATE src)
  target_compile_definitions(MagDrum PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_PLUGINHOST_VST3=1 JUCE_APPLICATION_NAME_STRING="MagDrum" JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
  target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_devices juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
@@ -49,19 +49,19 @@ juce_add_plugin(MagDrumPlugin
     NEEDS_MIDI_INPUT TRUE
     PRODUCT_NAME "MagDrum")
 juce_generate_juce_header(MagDrumPlugin)
-target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp)
+target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp)
 target_include_directories(MagDrumPlugin PRIVATE src)
 target_compile_definitions(MagDrumPlugin PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(MagDrumPlugin PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
- add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp)
+ add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp)
  target_include_directories(MagDrumTests PRIVATE src)
  target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_PLUGINHOST_VST3=1 MAGDRUM_TESTING=1)
  target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_audio_basics juce::juce_audio_devices juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_core)
 
  juce_add_console_app(MagDrumPluginTests PRODUCT_NAME "MagDrum Plugin Tests")
  juce_generate_juce_header(MagDrumPluginTests)
- target_sources(MagDrumPluginTests PRIVATE tests/PluginSmokeTests.cpp src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp src/core/PluginScanProcess.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp)
+ target_sources(MagDrumPluginTests PRIVATE tests/PluginSmokeTests.cpp src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp src/core/PluginScanProcess.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp)
  target_include_directories(MagDrumPluginTests PRIVATE src)
  target_compile_definitions(MagDrumPluginTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_PLUGINHOST_VST3=1)
  target_link_libraries(MagDrumPluginTests PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
@@ -111,6 +111,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR MAGDRUM_BUILD_MOBILE_PREVIEW)
      src/core/AudioClassifier.cpp
      src/core/MidiMapping.cpp
      src/core/MidiPatternIO.cpp
+     src/core/DefaultLibraryDiscovery.cpp
      src/core/ScopedFileAccess.cpp
      src/core/MagDrumPaths.cpp)
  target_include_directories(${MAGDRUM_MOBILE_TARGET} PRIVATE src)

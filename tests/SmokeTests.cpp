@@ -1,5 +1,6 @@
 #include "core/SampleDatabase.h"
 #include "core/WavScanner.h"
+#include "core/DefaultLibraryDiscovery.h"
 #include "core/AudioClassifier.h"
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
@@ -17,6 +18,7 @@
 #include "core/StructuredLogger.h"
 #include <iostream>
 #include <array>
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <chrono>
@@ -185,6 +187,20 @@ int main(int argc,char** argv)
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
+    midiFixture.deleteRecursively();
+    const auto midiRoot=midiFixture.getChildFile("midi-discovery");
+    const auto drumFolder=midiRoot.getChildFile("Native Instruments").getChildFile("Drums");
+    const auto beatFolder=midiRoot.getChildFile("Groove Patterns");
+    const auto otherFolder=midiRoot.getChildFile("Scales");
+    if(!drumFolder.createDirectory().wasOk()||!beatFolder.createDirectory().wasOk()||!otherFolder.createDirectory().wasOk())return 201;
+    if(!drumFolder.getChildFile("Kit_01.mid").replaceWithText("fixture")||!drumFolder.getChildFile("Fill.MIDI").replaceWithText("fixture")||!beatFolder.getChildFile("Breakbeat.mid").replaceWithText("fixture")||!otherFolder.getChildFile("MajorScale.mid").replaceWithText("fixture"))return 202;
+    const auto discoveredMidi=magdrum::library::findDrumMidiPatternFiles({midiRoot});
+    if(discoveredMidi.size()!=3||std::none_of(discoveredMidi.begin(),discoveredMidi.end(),[](const juce::File& file){return file.getFileName()=="Kit_01.mid";})||std::none_of(discoveredMidi.begin(),discoveredMidi.end(),[](const juce::File& file){return file.getFileName()=="Fill.MIDI";})||std::none_of(discoveredMidi.begin(),discoveredMidi.end(),[](const juce::File& file){return file.getFileName()=="Breakbeat.mid";}))return 203;
+    if(magdrum::library::findDrumMidiPatternFiles({midiRoot},1).size()!=1||!magdrum::library::findDrumMidiPatternFiles({midiRoot},200,500000,[]{return true;}).empty())return 204;
+    const auto defaultFolders=magdrum::library::findDefaultLibraryFolders();
+    for(size_t i=0;i<defaultFolders.size();++i){if(!defaultFolders[i].isDirectory())return 205;for(size_t j=i+1;j<defaultFolders.size();++j)if(defaultFolders[i].getFullPathName().compareIgnoreCase(defaultFolders[j].getFullPathName())==0)return 206;}
+    midiFixture.deleteRecursively();
     juce::StringArray crashCommand;crashCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());crashCommand.add("--magdrum-test-crash-fixture");
     const auto crashExecution=PluginScanProcess::monitorWorker(crashCommand,root.getChildFile("crash-progress.json"),root.getChildFile("crash-result.json"),root.getChildFile("crash-cancel"));
     if(!crashExecution.started||crashExecution.manifestRead||crashExecution.terminatedForCancellation||crashExecution.exitCode==0)return 144;

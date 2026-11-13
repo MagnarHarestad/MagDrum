@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "../core/MagDrumPaths.h"
+#include "../core/DefaultLibraryDiscovery.h"
 #include "../core/ScopedFileAccess.h"
 #include "../core/WavScanner.h"
 #include <algorithm>
@@ -20,43 +21,6 @@ constexpr std::array<A,16> padArticulations{A::Default,A::Default,A::Bell,A::Bow
 constexpr std::array<I,8> laneInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Ride,I::Crash,I::Clap};
 constexpr std::array<A,8> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default};
 juce::Colour categoryColour(const juce::String& value) { return Palette::forDrumCategory(value); }
-std::vector<juce::File> findDefaultDrumLibraryFolders()
-{
-    const auto commonDocuments = juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory);
-    const auto commonData = juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory);
-    const auto userDocuments = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
-    const auto userMusic = juce::File::getSpecialLocation(juce::File::userMusicDirectory);
-    const auto programFiles = juce::File::getSpecialLocation(juce::File::globalApplicationsDirectory);
-
-    const std::vector<juce::File> candidates{
-        commonDocuments.getChildFile("Native Instruments"),
-        commonDocuments.getChildFile("Steinberg"),
-        commonDocuments.getChildFile("VST Sound"),
-        commonData.getChildFile("Native Instruments"),
-        commonData.getChildFile("Steinberg/Content"),
-        commonData.getChildFile("Spectrasonics/STEAM"),
-        userDocuments.getChildFile("Native Instruments"),
-        userDocuments.getChildFile("Steinberg"),
-        userMusic.getChildFile("Native Instruments"),
-        userMusic.getChildFile("Steinberg"),
-        programFiles.getChildFile("Steinberg/Cubase 15/VST Sound")
-    };
-
-    std::vector<juce::File> found;
-    for (const auto& folder : candidates)
-    {
-        if (!folder.isDirectory())
-            continue;
-        const auto path = folder.getFullPathName();
-        const auto alreadyAdded = std::any_of(found.begin(), found.end(), [&path](const juce::File& existing)
-        {
-            return existing.getFullPathName().compareIgnoreCase(path) == 0;
-        });
-        if (!alreadyAdded)
-            found.push_back(folder);
-    }
-    return found;
-}
 juce::String noteName(int note)
 {
     static constexpr const char* names[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
@@ -211,6 +175,26 @@ private:
     juce::File rootFolder,dbPath;std::shared_ptr<std::atomic<bool>>cancelFlag;Completion onComplete;Progress onProgress;
 };
 
+class PluginMidiPatternDiscoveryJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(std::vector<juce::File>)>;
+    PluginMidiPatternDiscoveryJob(std::vector<juce::File> roots, Completion completion)
+        : ThreadPoolJob("MagDrum VST3 MIDI pattern discovery"), searchRoots(std::move(roots)), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        auto matches=magdrum::library::findDrumMidiPatternFiles(searchRoots,200,500000,[this]{return shouldExit();});
+        if (onComplete)
+            onComplete(std::move(matches));
+        return jobHasFinished;
+    }
+
+private:
+    std::vector<juce::File> searchRoots;
+    Completion onComplete;
+};
+
 MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p)
     : AudioProcessorEditor(p), processor(p), indexedList("Samples",this), sampleMap(std::make_unique<MagDrumSampleMap>()), waveform(std::make_unique<MagDrumWaveform>())
 {
@@ -238,7 +222,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     for(size_t row=0;row<laneLabels.size();++row){laneLabels[row].setText(laneNames[row],juce::dontSendNotification);laneLabels[row].setColour(juce::Label::textColourId,categoryColour(laneNames[row]));laneLabels[row].setFont(juce::Font(juce::FontOptions(12.0f,juce::Font::bold)));addAndMakeVisible(laneLabels[row]);for(size_t step=0;step<64;++step){auto& cell=steps[row][step];cell.setClickingTogglesState(true);cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(stepVelocities[row][step])/127.0f));cell.setTooltip(juce::String(laneNames[row])+" · MIDI "+juce::String(mappedLaneNotes[row])+" · bar "+juce::String(static_cast<int>(step/16+1))+" · step "+juce::String(static_cast<int>(step%16+1))+" · velocity "+juce::String(stepVelocities[row][step])+" (right-click to edit)");cell.onRightClick=[this,row,step]{juce::PopupMenu menu;for(int velocity:{50,70,85,100,115,127})menu.addItem(velocity,"Velocity "+juce::String(velocity));juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&steps[row][step]),[safe,row,step](int value){if(safe==nullptr||value<1)return;safe->stepVelocities[row][step]=value;auto& target=safe->steps[row][step];target.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(value)/127.0f));target.setTooltip(juce::String(laneNames[row])+" · MIDI "+juce::String(safe->mappedLaneNotes[row])+" · bar "+juce::String(static_cast<int>(step/16+1))+" · step "+juce::String(static_cast<int>(step%16+1))+" · velocity "+juce::String(value)+" (right-click to edit)");safe->savePluginEditorState();});};cell.addListener(this);addAndMakeVisible(cell);}}
     for(int bar=1;bar<=4;++bar)barSelect.addItem("Bar "+juce::String(bar),bar);barSelect.setSelectedId(1);barSelect.onChange=[this]{for(size_t row=0;row<steps.size();++row)for(size_t index=0;index<steps[row].size();++index)steps[row][index].setVisible(page==2&&static_cast<int>(index/16+1)==barSelect.getSelectedId());};addAndMakeVisible(barSelect);
     playSequenceButton.addListener(this);clearSequenceButton.addListener(this);exportSequenceButton.addListener(this);addAndMakeVisible(playSequenceButton);addAndMakeVisible(clearSequenceButton);addAndMakeVisible(exportSequenceButton);
-    importMidiButton.addListener(this);addAndMakeVisible(importMidiButton);
+    importMidiButton.addListener(this);browseMidiButton.addListener(this);addAndMakeVisible(importMidiButton);addAndMakeVisible(browseMidiButton);browseMidiButton.setTooltip("Search the detected default libraries for drum-related MIDI files.");
     tempoEditor.setText("120");tempoEditor.setInputRestrictions(3,"0123456789");tempoEditor.setTooltip("Pattern preview and MIDI export tempo.");addAndMakeVisible(tempoEditor);
     profileSelect.addItem("General MIDI",1);profileSelect.setSelectedId(1);profileSelect.onChange=[this]{const auto name=profileSelect.getText();if(name=="General MIDI")mappingProfile=MidiMappingProfile::generalMidi();else if(const auto loaded=database.loadMappingProfile(name))mappingProfile=*loaded;else return;profileName.setText(name,juce::dontSendNotification);updateDrumNotes();refreshMappingSummary();savePluginEditorState();};addAndMakeVisible(profileSelect);
     profileName.setText("General MIDI");profileName.setTextToShowWhenEmpty("Mapping profile name",Palette::Muted);addAndMakeVisible(profileName);
@@ -272,11 +256,11 @@ void MagDrumAudioProcessorEditor::resized()
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
     for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
-    for(auto& label:laneLabels)label.setVisible(page==2);for(auto& row:steps)for(size_t index=0;index<row.size();++index)row[index].setVisible(page==2&&static_cast<int>(index/16+1)==barSelect.getSelectedId());playSequenceButton.setVisible(page==2);clearSequenceButton.setVisible(page==2);exportSequenceButton.setVisible(page==2);importMidiButton.setVisible(page==2);tempoEditor.setVisible(page==2);barSelect.setVisible(page==2);
+    for(auto& label:laneLabels)label.setVisible(page==2);for(auto& row:steps)for(size_t index=0;index<row.size();++index)row[index].setVisible(page==2&&static_cast<int>(index/16+1)==barSelect.getSelectedId());playSequenceButton.setVisible(page==2);clearSequenceButton.setVisible(page==2);exportSequenceButton.setVisible(page==2);importMidiButton.setVisible(page==2);browseMidiButton.setVisible(page==2);tempoEditor.setVisible(page==2);barSelect.setVisible(page==2);
     profileSelect.setVisible(page==3);profileName.setVisible(page==3);mappingInstrument.setVisible(page==3);mappingArticulation.setVisible(page==3);mappingNote.setVisible(page==3);mappingSummary.setVisible(page==3);loadProfileButton.setVisible(page==3);saveProfileButton.setVisible(page==3);importCsvButton.setVisible(page==3);exportCsvButton.setVisible(page==3);setMappingButton.setVisible(page==3);removeMappingButton.setVisible(page==3);
     if(page==0){auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(225));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);featureFilter.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);sortFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);confidenceFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);searchButton.setBounds(controls.removeFromLeft(78));controls.removeFromLeft(6);previewButton.setBounds(controls.removeFromLeft(78));bounds.removeFromTop(6);controls=bounds.removeFromTop(34);sourceFilter.setBounds(controls.removeFromLeft(180));controls.removeFromLeft(6);kitFilter.setBounds(controls.removeFromLeft(190));bounds.removeFromTop(6);controls=bounds.removeFromTop(34);scanButton.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);scanDefaultsButton.setBounds(controls.removeFromLeft(190));controls.removeFromLeft(12);assignButton.setBounds(controls.removeFromLeft(118));controls.removeFromLeft(6);libraryToolsButton.setBounds(controls.removeFromLeft(115));controls.removeFromLeft(6);moreSamplesButton.setBounds(controls.removeFromLeft(110));moreSamplesButton.setEnabled(hasMoreSamples);bounds.removeFromTop(8);auto content=bounds;const int left=juce::jlimit(320,440,content.getWidth()*2/5);indexedList.setBounds(content.removeFromLeft(left));content.removeFromLeft(12);sampleMap->setBounds(content);}
     else if(page==1){auto grid=bounds.removeFromLeft(bounds.getWidth()*3/5);const int gap=10;const int padW=(grid.getWidth()-3*gap)/4,padH=(grid.getHeight()-3*gap)/4;for(size_t i=0;i<pads.size();++i){const int row=static_cast<int>(i/4),col=static_cast<int>(i%4);pads[i].setBounds(grid.getX()+col*(padW+gap),grid.getY()+row*(padH+gap),padW,padH);}bounds.removeFromLeft(18);selectedPadTitle.setBounds(bounds.removeFromTop(38));bounds.removeFromTop(6);sampleDetails.setBounds(bounds.removeFromTop(58));bounds.removeFromTop(8);waveform->setBounds(bounds.removeFromTop(154));bounds.removeFromTop(8);layerSummary.setBounds(bounds.removeFromTop(juce::jmin(180,bounds.getHeight()/2)));bounds.removeFromTop(12);auto row=bounds.removeFromTop(34);velocityRange.setBounds(row.removeFromLeft(100));row.removeFromLeft(8);clearPadButton.setBounds(row.removeFromLeft(108));row.removeFromLeft(8);loadButton.setBounds(row);bounds.removeFromTop(14);}
-    else if(page==2){auto toolbar=bounds.removeFromTop(36);playSequenceButton.setBounds(toolbar.removeFromLeft(82));toolbar.removeFromLeft(6);clearSequenceButton.setBounds(toolbar.removeFromLeft(116));toolbar.removeFromLeft(6);importMidiButton.setBounds(toolbar.removeFromLeft(96));toolbar.removeFromLeft(6);exportSequenceButton.setBounds(toolbar.removeFromLeft(110));toolbar.removeFromLeft(12);tempoEditor.setBounds(toolbar.removeFromLeft(70));toolbar.removeFromLeft(8);barSelect.setBounds(toolbar.removeFromLeft(92));bounds.removeFromTop(16);const int labelW=122;const int cellW=juce::jmax(30,(bounds.getWidth()-labelW-15*4)/16);const size_t barOffset=static_cast<size_t>(juce::jlimit(0,3,barSelect.getSelectedId()-1))*16;for(int row=0;row<8;++row){auto line=bounds.removeFromTop(juce::jmax(36,bounds.getHeight()/8));laneLabels[static_cast<size_t>(row)].setBounds(line.removeFromLeft(labelW));line.removeFromLeft(6);for(int step=0;step<16;++step){steps[static_cast<size_t>(row)][barOffset+static_cast<size_t>(step)].setBounds(line.removeFromLeft(cellW));line.removeFromLeft(4);}}}
+    else if(page==2){auto toolbar=bounds.removeFromTop(36);playSequenceButton.setBounds(toolbar.removeFromLeft(82));toolbar.removeFromLeft(6);clearSequenceButton.setBounds(toolbar.removeFromLeft(116));toolbar.removeFromLeft(6);importMidiButton.setBounds(toolbar.removeFromLeft(96));toolbar.removeFromLeft(6);browseMidiButton.setBounds(toolbar.removeFromLeft(142));toolbar.removeFromLeft(6);exportSequenceButton.setBounds(toolbar.removeFromLeft(110));toolbar.removeFromLeft(12);tempoEditor.setBounds(toolbar.removeFromLeft(70));toolbar.removeFromLeft(8);barSelect.setBounds(toolbar.removeFromLeft(92));bounds.removeFromTop(16);const int labelW=122;const int cellW=juce::jmax(30,(bounds.getWidth()-labelW-15*4)/16);const size_t barOffset=static_cast<size_t>(juce::jlimit(0,3,barSelect.getSelectedId()-1))*16;for(int row=0;row<8;++row){auto line=bounds.removeFromTop(juce::jmax(36,bounds.getHeight()/8));laneLabels[static_cast<size_t>(row)].setBounds(line.removeFromLeft(labelW));line.removeFromLeft(6);for(int step=0;step<16;++step){steps[static_cast<size_t>(row)][barOffset+static_cast<size_t>(step)].setBounds(line.removeFromLeft(cellW));line.removeFromLeft(4);}}}
     else{auto top=bounds.removeFromTop(36);profileSelect.setBounds(top.removeFromLeft(210));top.removeFromLeft(8);profileName.setBounds(top.removeFromLeft(190));top.removeFromLeft(8);loadProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);saveProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);importCsvButton.setBounds(top.removeFromLeft(95));top.removeFromLeft(6);exportCsvButton.setBounds(top.removeFromLeft(95));bounds.removeFromTop(12);auto edit=bounds.removeFromTop(36);mappingInstrument.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingArticulation.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingNote.setBounds(edit.removeFromLeft(110));edit.removeFromLeft(8);setMappingButton.setBounds(edit.removeFromLeft(120));edit.removeFromLeft(8);removeMappingButton.setBounds(edit.removeFromLeft(130));bounds.removeFromTop(14);mappingSummary.setBounds(bounds);}
 }
 
@@ -333,7 +317,7 @@ void MagDrumAudioProcessorEditor::scanDefaultLibraryFolders()
         return;
     }
 
-    defaultLibraryFolders=findDefaultDrumLibraryFolders();
+    defaultLibraryFolders=magdrum::library::findDefaultLibraryFolders();
     if(defaultLibraryFolders.empty())
     {
         status.setText("No default library folders were found. Use Add sample folder to choose a custom location.",juce::dontSendNotification);
@@ -343,6 +327,9 @@ void MagDrumAudioProcessorEditor::scanDefaultLibraryFolders()
     defaultLibraryFolderIndex=0;
     defaultLibraryIndexedCount=0;
     defaultLibraryErrorCount=0;
+    defaultMidiPatterns.clear();
+    browseMidiButton.setButtonText("Find drum MIDI");
+    browseMidiButton.setEnabled(false);
     scanningDefaultLibraries=true;
     scanDefaultsButton.setEnabled(false);
     startNextDefaultLibraryFolder();
@@ -352,17 +339,73 @@ void MagDrumAudioProcessorEditor::startNextDefaultLibraryFolder()
 {
     if(defaultLibraryFolderIndex>=defaultLibraryFolders.size())
     {
-        const auto folderCount=defaultLibraryFolders.size();
-        scanningDefaultLibraries=false;
-        defaultLibraryFolders.clear();
-        scanDefaultsButton.setEnabled(true);
-        refreshSourceKitFilters();
-        refreshSamples();
-        status.setText("Library scan complete · "+juce::String(defaultLibraryIndexedCount)+" audio samples indexed across "+juce::String(static_cast<int>(folderCount))+" locations · "+juce::String(defaultLibraryErrorCount)+" errors.",juce::dontSendNotification);
+        searchDefaultMidiPatterns();
         return;
     }
 
     startSampleScan(defaultLibraryFolders[defaultLibraryFolderIndex]);
+}
+
+void MagDrumAudioProcessorEditor::searchDefaultMidiPatterns()
+{
+    if(defaultLibraryFolders.empty())
+    {
+        finishDefaultMidiPatternSearch({});
+        return;
+    }
+    scanButton.setEnabled(false);
+    scanButton.setButtonText("Searching MIDI…");
+    status.setText("Searching detected library folders for drum MIDI patterns…",juce::dontSendNotification);
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    auto completion=[safe](std::vector<juce::File> patterns)
+    {
+        juce::MessageManager::callAsync([safe,patterns=std::move(patterns)]() mutable
+        {
+            if(safe!=nullptr)
+                safe->finishDefaultMidiPatternSearch(std::move(patterns));
+        });
+    };
+    scanWorkers.addJob(new PluginMidiPatternDiscoveryJob(defaultLibraryFolders,std::move(completion)),true);
+}
+
+void MagDrumAudioProcessorEditor::finishDefaultMidiPatternSearch(std::vector<juce::File> patterns)
+{
+    defaultMidiPatterns=std::move(patterns);
+    const auto folderCount=static_cast<int>(defaultLibraryFolders.size());
+    scanningDefaultLibraries=false;
+    defaultLibraryFolders.clear();
+    scanButton.setEnabled(true);
+    scanButton.setButtonText("Add sample folder");
+    scanDefaultsButton.setEnabled(true);
+    browseMidiButton.setButtonText(defaultMidiPatterns.empty()?"Find drum MIDI":"Drum MIDI ("+juce::String(static_cast<int>(defaultMidiPatterns.size()))+")");
+    browseMidiButton.setEnabled(true);
+    refreshSourceKitFilters();
+    refreshSamples();
+    status.setText("Library scan complete · "+juce::String(defaultLibraryIndexedCount)+" audio samples indexed across "+juce::String(folderCount)+" locations · "+juce::String(static_cast<int>(defaultMidiPatterns.size()))+" drum MIDI patterns found · "+juce::String(defaultLibraryErrorCount)+" errors.",juce::dontSendNotification);
+}
+
+void MagDrumAudioProcessorEditor::browseDefaultMidiPatterns()
+{
+    if(defaultMidiPatterns.empty())
+    {
+        status.setText("Run Scan installed libraries to search their default locations for drum MIDI patterns.",juce::dontSendNotification);
+        return;
+    }
+    juce::PopupMenu menu;
+    const auto count=juce::jmin(200,static_cast<int>(defaultMidiPatterns.size()));
+    for(int i=0;i<count;++i)
+    {
+        const auto& file=defaultMidiPatterns[static_cast<size_t>(i)];
+        menu.addItem(i+1,file.getFileName()+"   ·   "+file.getParentDirectory().getFileName());
+    }
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&browseMidiButton),[safe](int result)
+    {
+        if(safe==nullptr||result<1||result>static_cast<int>(safe->defaultMidiPatterns.size()))
+            return;
+        const auto file=safe->defaultMidiPatterns[static_cast<size_t>(result-1)];
+        safe->loadMidiPatternFile(file);
+    });
 }
 
 void MagDrumAudioProcessorEditor::startSampleScan(const juce::File& folder)
@@ -387,6 +430,7 @@ void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stat
             scanningDefaultLibraries=false;
             defaultLibraryFolders.clear();
             scanDefaultsButton.setEnabled(true);
+            browseMidiButton.setEnabled(true);
             status.setText("Library scan cancelled · "+juce::String(defaultLibraryIndexedCount)+" audio samples indexed so far.",juce::dontSendNotification);
             return;
         }
@@ -495,7 +539,32 @@ void MagDrumAudioProcessorEditor::chooseMappingCsv(bool exportCsv)
 void MagDrumAudioProcessorEditor::importMidiPattern()
 {
     chooser=std::make_unique<juce::FileChooser>("Import drum MIDI pattern",juce::File(),"*.mid;*.midi");juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-    chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[safe](const juce::FileChooser& fc){if(safe==nullptr)return;const auto file=fc.getResult();if(!file.existsAsFile())return;MidiPattern pattern;const auto report=MidiPatternIO{}.read(file,safe->mappingProfile,pattern);if(!report.ok){safe->status.setText("Could not import the selected MIDI file.",juce::dontSendNotification);return;}for(size_t lane=0;lane<safe->steps.size();++lane)for(size_t step=0;step<safe->steps[lane].size();++step){safe->steps[lane][step].setToggleState(false,juce::dontSendNotification);safe->stepVelocities[lane][step]=100;safe->steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}int imported=0,outside=0;for(const auto& event:pattern.events){int lane=-1;switch(event.instrument){case DrumInstrument::Kick:lane=0;break;case DrumInstrument::Snare:case DrumInstrument::Rimshot:lane=1;break;case DrumInstrument::HiHat:lane=event.articulation==DrumArticulation::Open?3:2;break;case DrumInstrument::Tom:lane=4;break;case DrumInstrument::Ride:lane=5;break;case DrumInstrument::Crash:lane=6;break;case DrumInstrument::Clap:lane=7;break;default:break;}const int step=juce::roundToInt(event.positionBeats*4.0);if(lane<0||step<0||step>=64){++outside;continue;}safe->steps[static_cast<size_t>(lane)][static_cast<size_t>(step)].setToggleState(true,juce::dontSendNotification);safe->stepVelocities[static_cast<size_t>(lane)][static_cast<size_t>(step)]=event.velocity;safe->steps[static_cast<size_t>(lane)][static_cast<size_t>(step)].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[static_cast<size_t>(lane)]).withAlpha(static_cast<float>(event.velocity)/127.0f));++imported;}for(const auto& meta:pattern.tempoAndSignature)if(meta.message.isTempoMetaEvent()){const double seconds=meta.message.getTempoSecondsPerQuarterNote();if(seconds>0.0)safe->tempoEditor.setText(juce::String(juce::roundToInt(60.0/seconds)),juce::dontSendNotification);break;}safe->savePluginEditorState();safe->status.setText("Imported "+juce::String(imported)+" hits from "+file.getFileName()+". "+juce::String(report.unmappedNotes.size())+" unmapped notes; "+juce::String(report.ambiguousNotes.size())+" ambiguous notes; "+juce::String(outside)+" hits outside the four-bar grid.",juce::dontSendNotification);});
+    chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[safe](const juce::FileChooser& fc){if(safe!=nullptr)safe->loadMidiPatternFile(fc.getResult());});
+}
+
+void MagDrumAudioProcessorEditor::loadMidiPatternFile(const juce::File& file)
+{
+    if(!file.existsAsFile())return;
+    MidiPattern pattern;
+    const auto report=MidiPatternIO{}.read(file,mappingProfile,pattern);
+    if(!report.ok){status.setText("Could not import the selected MIDI file.",juce::dontSendNotification);return;}
+    for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step){steps[lane][step].setToggleState(false,juce::dontSendNotification);stepVelocities[lane][step]=100;steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}
+    int imported=0,outside=0;
+    for(const auto& event:pattern.events)
+    {
+        int lane=-1;
+        switch(event.instrument){case DrumInstrument::Kick:lane=0;break;case DrumInstrument::Snare:case DrumInstrument::Rimshot:lane=1;break;case DrumInstrument::HiHat:lane=event.articulation==DrumArticulation::Open?3:2;break;case DrumInstrument::Tom:lane=4;break;case DrumInstrument::Ride:lane=5;break;case DrumInstrument::Crash:lane=6;break;case DrumInstrument::Clap:lane=7;break;default:break;}
+        const int step=juce::roundToInt(event.positionBeats*4.0);
+        if(lane<0||step<0||step>=64){++outside;continue;}
+        const auto row=static_cast<size_t>(lane),column=static_cast<size_t>(step);
+        steps[row][column].setToggleState(true,juce::dontSendNotification);
+        stepVelocities[row][column]=event.velocity;
+        steps[row][column].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(event.velocity)/127.0f));
+        ++imported;
+    }
+    for(const auto& meta:pattern.tempoAndSignature)if(meta.message.isTempoMetaEvent()){const double seconds=meta.message.getTempoSecondsPerQuarterNote();if(seconds>0.0)tempoEditor.setText(juce::String(juce::roundToInt(60.0/seconds)),juce::dontSendNotification);break;}
+    savePluginEditorState();
+    status.setText("Imported "+juce::String(imported)+" hits from "+file.getFileName()+". "+juce::String(report.unmappedNotes.size())+" unmapped notes; "+juce::String(report.ambiguousNotes.size())+" ambiguous notes; "+juce::String(outside)+" hits outside the four-bar grid.",juce::dontSendNotification);
 }
 void MagDrumAudioProcessorEditor::updateLayerSummary()
 {
@@ -521,7 +590,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&loadProfileButton){const auto name=profileSelect.getText();if(name=="General MIDI"){mappingProfile=MidiMappingProfile::generalMidi();}else if(const auto loaded=database.loadMappingProfile(name))mappingProfile=*loaded;else{status.setText("Could not load mapping profile.",juce::dontSendNotification);return;}profileName.setText(name,juce::dontSendNotification);updateDrumNotes();refreshMappingSummary();status.setText("Loaded MIDI profile: "+name,juce::dontSendNotification);return;}
     if(button==&saveProfileButton){const auto name=profileName.getText().trim();if(name.isEmpty()||!database.saveMappingProfile(name,mappingProfile)){status.setText("Could not save mapping profile.",juce::dontSendNotification);return;}int id=0;for(int i=0;i<profileSelect.getNumItems();++i)if(profileSelect.getItemText(i)==name)id=profileSelect.getItemId(i);if(id==0){id=profileSelect.getNumItems()+1;profileSelect.addItem(name,id);}profileSelect.setSelectedId(id,juce::dontSendNotification);savePluginEditorState();status.setText("Saved MIDI profile: "+name,juce::dontSendNotification);return;}
     if(button==&setMappingButton||button==&removeMappingButton){const int instrument=mappingInstrument.getSelectedId()-1,articulation=mappingArticulation.getSelectedId()-1,note=mappingNote.getText().getIntValue();if(instrument<0||articulation<0||(button==&setMappingButton&&(note<0||note>127))){status.setText("Choose a drum, articulation and MIDI note from 0 to 127.",juce::dontSendNotification);return;}const bool changed=button==&setMappingButton?mappingProfile.setMapping({static_cast<DrumInstrument>(instrument),static_cast<DrumArticulation>(articulation),static_cast<std::uint8_t>(note)}):mappingProfile.removeMapping(static_cast<DrumInstrument>(instrument),static_cast<DrumArticulation>(articulation));if(changed){database.saveMappingProfile(profileName.getText().trim().isEmpty()?"General MIDI":profileName.getText().trim(),mappingProfile);updateDrumNotes();refreshMappingSummary();savePluginEditorState();status.setText("MIDI mapping updated.",juce::dontSendNotification);}else status.setText("No matching mapping was changed.",juce::dontSendNotification);return;}
-    if(button==&importCsvButton){chooseMappingCsv(false);return;}if(button==&exportCsvButton){chooseMappingCsv(true);return;}if(button==&importMidiButton){importMidiPattern();return;}
+    if(button==&importCsvButton){chooseMappingCsv(false);return;}if(button==&exportCsvButton){chooseMappingCsv(true);return;}if(button==&importMidiButton){importMidiPattern();return;}if(button==&browseMidiButton){browseDefaultMidiPatterns();return;}
     if(button==&playSequenceButton){if(sequencerPlaying){sequencerPlaying=false;stopTimer();playSequenceButton.setButtonText("Play");}else{const int bpm=tempoEditor.getText().getIntValue();if(bpm<30||bpm>300){status.setText("Tempo must be between 30 and 300 BPM.",juce::dontSendNotification);return;}savePluginEditorState();sequenceTempo=bpm;sequenceStep=0;sequencerPlaying=true;playSequenceButton.setButtonText("Stop");startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*4.0))));}return;}
     if(button==&clearSequenceButton){for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step){steps[lane][step].setToggleState(false,juce::dontSendNotification);stepVelocities[lane][step]=100;steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}savePluginEditorState();status.setText("Pattern cleared.",juce::dontSendNotification);return;}
     if(button==&exportSequenceButton){const int bpm=tempoEditor.getText().getIntValue();if(bpm<30||bpm>300){status.setText("Tempo must be between 30 and 300 BPM.",juce::dontSendNotification);return;}savePluginEditorState();MidiPattern pattern;pattern.lengthBeats=16.0;setPatternTempo(pattern,bpm);setPatternTimeSignature(pattern,4,4);for(int row=0;row<8;++row)for(int step=0;step<64;++step)if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState()){DrumEvent event;event.instrument=laneInstruments[static_cast<size_t>(row)];event.articulation=laneArticulations[static_cast<size_t>(row)];event.velocity=static_cast<std::uint8_t>(stepVelocities[static_cast<size_t>(row)][static_cast<size_t>(step)]);event.positionBeats=step*0.25;event.durationBeats=0.12;pattern.events.push_back(event);}chooser=std::make_unique<juce::FileChooser>("Export drum pattern",juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MagDrum-Pattern.mid"),"*.mid",true,false,this);juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);chooser->launchAsync(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles,[safe,pattern](const juce::FileChooser& fc){if(safe==nullptr)return;auto file=fc.getResult();if(file==juce::File())return;if(file.getFileExtension().isEmpty())file=file.withFileExtension(".mid");std::vector<DrumEvent> unsupported;std::vector<MidiFallbackUse> fallbacks;const bool ok=MidiPatternIO{}.write(file,pattern,safe->mappingProfile,true,&unsupported,&fallbacks);safe->status.setText(ok?"Exported MIDI pattern: "+file.getFileName()+". "+juce::String(fallbacks.size())+" mapping fallbacks.":"Could not write MIDI file.",juce::dontSendNotification);});return;}
