@@ -98,8 +98,8 @@ private:
     juce::TextEditor tempoEditor;
     juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"};
     std::array<juce::Label, 8> laneLabels;
-    std::array<std::array<MagDrumStepButton, 64>, 8> steps;
-    std::array<std::array<int, 64>, 8> stepVelocities{};
+    std::array<std::array<MagDrumStepButton, 256>, 8> steps;
+    std::array<std::array<int, 256>, 8> stepVelocities{};
     juce::ComboBox barSelect;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
