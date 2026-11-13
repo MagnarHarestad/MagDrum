@@ -49,6 +49,9 @@ private:
     void updateDrumNotes();
     int stepsPerBar() const;
     int patternStepCount() const;
+    int sequenceTempoAtBeat(double beat) const;
+    void refreshSequenceMetadata();
+    bool editSequenceMetadata(bool remove);
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     void updateSequencerGrid();
@@ -101,7 +104,11 @@ private:
     juce::TextEditor velocityRange;
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load WAV"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
-    juce::TextEditor tempoEditor;
+    juce::TextEditor tempoEditor, metadataBeat, metadataValue;
+    juce::ComboBox metadataType;
+    juce::TextButton setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};
+    juce::Label metadataSummary;
+    std::vector<MidiMetaEvent> sequenceMetadata;
     juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"};
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<MagDrumStepButton, 512>, 8> steps;
