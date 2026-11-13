@@ -105,6 +105,11 @@ if ($PSCmdlet.ShouldProcess("GitHub release $Tag", "Upload $($includedNames.Coun
     if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed for $Tag." }
 
     Write-Host "Created prerelease $Tag with $($includedNames.Count) platform package(s)."
+    $websitePublisher = Join-Path $repoRoot 'tools/Publish-GitHubPages.ps1'
+    if (Test-Path -LiteralPath $websitePublisher -PathType Leaf) {
+        try { & $websitePublisher }
+        catch { Write-Warning "Release succeeded, but the public website update failed: $_" }
+    }
 }
 }
 finally {
