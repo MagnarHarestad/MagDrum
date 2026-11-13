@@ -317,9 +317,38 @@ void MagDrumAudioProcessorEditor::updateSequencerGrid()
 int MagDrumAudioProcessorEditor::getNumRows(){return samples.size();}
 void MagDrumAudioProcessorEditor::paintListBoxItem(int row,juce::Graphics& g,int width,int height,bool selected)
 {
-    if(!juce::isPositiveAndBelow(row,samples.size()))return;const auto& sample=samples.getReference(row);g.fillAll(selected?Palette::Selection:Palette::Panel);g.setColour(categoryColour(sample.category));g.fillRoundedRectangle(6.0f,8.0f,4.0f,static_cast<float>(height-16),2.0f);g.setColour(Palette::Text);g.setFont(13.0f);g.drawText(sample.file.getFileName(),18,4,width-24,19,juce::Justification::centredLeft,true);g.setColour(Palette::Muted);g.setFont(11.0f);const auto info=sample.category+"  ·  "+juce::String(sample.durationSeconds,2)+" s  ·  "+juce::String(static_cast<int>(sample.brightnessHz))+" Hz";g.drawText(info,18,22,width-24,height-23,juce::Justification::centredLeft,true);
+    if(!juce::isPositiveAndBelow(row,samples.size()))return;
+    const auto& sample=samples.getReference(row);
+    g.fillAll(selected?Palette::Selection:Palette::Panel);
+    g.setColour(categoryColour(sample.category));
+    g.fillRoundedRectangle(6.0f,8.0f,4.0f,static_cast<float>(height-16),2.0f);
+    g.setColour(Palette::Text);g.setFont(13.0f);
+    g.drawText(sample.file.getFileName(),18,4,width-24,19,juce::Justification::centredLeft,true);
+    juce::String info=sample.category+"  ·  "+juce::String(sample.durationSeconds,2)+" s  ·  "+juce::String(static_cast<int>(sample.brightnessHz))+" Hz";
+    if(sample.pluginIdentifier.isNotEmpty())
+    {
+        info+="  ·  "+sample.pluginName+" / "+sample.kitName+"  ·  MIDI "+juce::String(sample.midiNote)+"  ·  vel "+juce::String(sample.velocity);
+        if(sample.articulation.isNotEmpty())info+="  ·  "+sample.articulation;
+        if(sample.takeIndex>1)info+="  ·  take "+juce::String(sample.takeIndex);
+    }
+    g.setColour(Palette::Muted);g.setFont(10.5f);
+    g.drawText(info,18,22,width-24,height-23,juce::Justification::centredLeft,true);
 }
-void MagDrumAudioProcessorEditor::selectedRowsChanged(int row){sampleMap->setSelected(row);if(juce::isPositiveAndBelow(row,samples.size()))sampleDetails.setText(samples.getReference(row).file.getFullPathName(),juce::dontSendNotification);}
+void MagDrumAudioProcessorEditor::selectedRowsChanged(int row)
+{
+    sampleMap->setSelected(row);
+    if(!juce::isPositiveAndBelow(row,samples.size()))return;
+    const auto& sample=samples.getReference(row);
+    juce::String details=sample.file.getFullPathName();
+    if(sample.pluginIdentifier.isNotEmpty())
+    {
+        details=sample.pluginName+" / "+sample.kitName+"  ·  MIDI "+juce::String(sample.midiNote)+"  ·  velocity "+juce::String(sample.velocity);
+        if(sample.articulation.isNotEmpty())details+="  ·  "+sample.articulation;
+        if(sample.takeIndex>1)details+="  ·  take "+juce::String(sample.takeIndex);
+        details+="\n"+sample.file.getFullPathName();
+    }
+    sampleDetails.setText(details,juce::dontSendNotification);
+}
 void MagDrumAudioProcessorEditor::listBoxItemDoubleClicked(int row,const juce::MouseEvent&){if(juce::isPositiveAndBelow(row,samples.size())){if(processor.previewSample(samples.getReference(row).file))status.setText("Previewing "+samples.getReference(row).file.getFileName(),juce::dontSendNotification);}}
 
 void MagDrumAudioProcessorEditor::refreshSamples()
