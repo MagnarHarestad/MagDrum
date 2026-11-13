@@ -186,6 +186,11 @@ int main(int argc,char** argv)
         || magdrum::sequencer::stepsPerBar(12,8) != 24
         || magdrum::sequencer::stepsPerBar(8,4) != 32
         || magdrum::sequencer::stepsPerBar(9,4) != 0
+        || magdrum::sequencer::stepsForBars(3,4,4) != 48
+        || magdrum::sequencer::stepsForBars(12,8,2) != 48
+        || magdrum::sequencer::stepsForBars(8,4,16) != 512
+        || magdrum::sequencer::stepsForBars(4,4,0) != 0
+        || magdrum::sequencer::stepsForBars(4,4,17) != 0
         || magdrum::sequencer::maximumSteps != 512)
         return 230;
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::abort();

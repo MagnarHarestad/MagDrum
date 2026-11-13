@@ -13,4 +13,10 @@ constexpr int stepsPerBar(int numerator, int denominator) noexcept
     const int steps = numerator * 16 / denominator;
     return numerator * 16 % denominator == 0 && steps <= maximumStepsPerBar ? steps : 0;
 }
+
+constexpr int stepsForBars(int numerator, int denominator, int bars) noexcept
+{
+    const int perBar = stepsPerBar(numerator, denominator);
+    return perBar > 0 && bars >= 1 && bars <= maximumBars ? perBar * bars : 0;
+}
 }
