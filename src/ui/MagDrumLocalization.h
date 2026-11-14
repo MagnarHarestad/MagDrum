@@ -18,4 +18,9 @@ inline juce::String localisedText(const char* sourceText)
 {
     return juce::LocalisedStrings::translateWithCurrentMappings(sourceText);
 }
+
+inline juce::String localisedText(const juce::String& sourceText)
+{
+    return juce::LocalisedStrings::translateWithCurrentMappings(sourceText);
+}
 }
