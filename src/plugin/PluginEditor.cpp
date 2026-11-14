@@ -445,6 +445,13 @@ void MagDrumAudioProcessorEditor::applyLanguage()
 {
     libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));languageButton.setTooltip(magdrum::ui::localisedText("Menu"));
     sampleSearch.setTextToShowWhenEmpty(magdrum::ui::localisedText("Search indexed samples"),Palette::Muted);
+    searchButton.setButtonText(magdrum::ui::localisedText("Search"));previewButton.setButtonText(magdrum::ui::localisedText("Preview"));assignButton.setButtonText(magdrum::ui::localisedText("Assign to pad"));
+    libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));
+    clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load WAV"));
+    playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
+    importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
+    setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));
+    loadProfileButton.setButtonText(magdrum::ui::localisedText("Load profile"));saveProfileButton.setButtonText(magdrum::ui::localisedText("Save profile"));importCsvButton.setButtonText(magdrum::ui::localisedText("Import CSV"));exportCsvButton.setButtonText(magdrum::ui::localisedText("Export CSV"));setMappingButton.setButtonText(magdrum::ui::localisedText("Set mapping"));removeMappingButton.setButtonText(magdrum::ui::localisedText("Remove mapping"));
     instrumentScannerButton.setTooltip(magdrum::ui::localisedText("Open MagDrum's isolated instrument browser to load VST instruments, choose kits and capture MIDI notes."));
     openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));
     openSourceKitButton.setTooltip(magdrum::ui::localisedText("Open the selected sample's source instrument and recall its saved kit in a separate MagDrum window."));
@@ -461,6 +468,8 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     metadataBeat.setTooltip(magdrum::ui::localisedText("Event position in quarter-note beats from the start of the MIDI pattern."));
     metadataValue.setTooltip(magdrum::ui::localisedText("Tempo in BPM, or a time signature such as 4/4."));
     metadataSummary.setTooltip(magdrum::ui::localisedText("Tempo and time-signature events stored with this sequencer pattern."));
+    scanButton.setTooltip(magdrum::ui::localisedText("Add sample folder"));searchButton.setTooltip(magdrum::ui::localisedText("Search indexed samples"));previewButton.setTooltip(magdrum::ui::localisedText("Preview selected sample"));assignButton.setTooltip(magdrum::ui::localisedText("Assign selected sample to the selected pad"));
+    libraryToolsButton.setTooltip(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setTooltip(magdrum::ui::localisedText("More samples"));clearPadButton.setTooltip(magdrum::ui::localisedText("Clear pad"));loadButton.setTooltip(magdrum::ui::localisedText("Load WAV"));
     profileName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Mapping profile name"),Palette::Muted);
     mappingNote.setTextToShowWhenEmpty(magdrum::ui::localisedText("MIDI note 0–127"),Palette::Muted);
     const int selectedCategory=categoryFilter.getSelectedId(),selectedFeature=featureFilter.getSelectedId(),selectedSort=sortFilter.getSelectedId(),selectedConfidence=confidenceFilter.getSelectedId();
@@ -474,6 +483,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));loadProfileButton.setButtonText(magdrum::ui::localisedText("Load profile"));saveProfileButton.setButtonText(magdrum::ui::localisedText("Save profile"));importCsvButton.setButtonText(magdrum::ui::localisedText("Import CSV"));exportCsvButton.setButtonText(magdrum::ui::localisedText("Export CSV"));setMappingButton.setButtonText(magdrum::ui::localisedText("Set mapping"));removeMappingButton.setButtonText(magdrum::ui::localisedText("Remove mapping"));
     const int selectedMetadata=metadataType.getSelectedId();metadataType.clear(juce::dontSendNotification);metadataType.addItem(magdrum::ui::localisedText("Tempo event"),1);metadataType.addItem(magdrum::ui::localisedText("Time signature"),2);metadataType.setSelectedId(selectedMetadata,juce::dontSendNotification);
     const int selectedInstrument=mappingInstrument.getSelectedId(),selectedArticulation=mappingArticulation.getSelectedId();const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};mappingInstrument.clear(juce::dontSendNotification);for(int i=0;i<9;++i)mappingInstrument.addItem(magdrum::ui::localisedText(instruments[i]),i+1);mappingInstrument.setSelectedId(selectedInstrument,juce::dontSendNotification);const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};mappingArticulation.clear(juce::dontSendNotification);for(int i=0;i<13;++i)mappingArticulation.addItem(magdrum::ui::localisedText(articulations[i]),i+1);mappingArticulation.setSelectedId(selectedArticulation,juce::dontSendNotification);
+    refreshSequenceMetadata();refreshMappingSummary();updateLayerSummary();setNote(selectedNote);
     refreshSourceKitFilters();refreshSamples();sampleMap->repaint();waveform->repaint();repaint();
 }
 
@@ -524,7 +534,7 @@ void MagDrumAudioProcessorEditor::refreshSequenceMetadata()
             summary+=(summary.isEmpty()?"":"   ·   ")+juce::String(numerator)+"/"+juce::String(denominator)+" @ "+juce::String(meta.positionBeats,2);
         }
     }
-    if(summary.isEmpty())summary="No MIDI metadata events; export uses the controls above.";
+    if(summary.isEmpty())summary=magdrum::ui::localisedText("No MIDI metadata events; export uses the controls above.");
     metadataSummary.setText(summary,juce::dontSendNotification);
     metadataSummary.setTooltip(summary);
 }
@@ -1014,8 +1024,11 @@ void MagDrumAudioProcessorEditor::updateDrumNotes()
 
 void MagDrumAudioProcessorEditor::refreshMappingSummary()
 {
-    static const char* instruments[]{"Kick","Snare","HiHat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};static const char* articulations[]{"Default","Center","Rimshot","SideStick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
-    juce::String text="PROFILE: "+profileName.getText()+"\nThis profile maps MIDI file import/export. Cubase pads remain on their named GM notes.\n\n";for(const auto& entry:mappingProfile.entries())text+=juce::String(instruments[static_cast<size_t>(entry.instrument)])+"  /  "+articulations[static_cast<size_t>(entry.articulation)]+"   →   MIDI "+juce::String(entry.note)+"  ("+noteName(entry.note)+")\n";mappingSummary.setText(text,juce::dontSendNotification);
+    static const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};static const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
+    juce::String text=magdrum::ui::localisedText("MIDI mapping")+": "+profileName.getText()+"\n\n";
+    for(const auto& entry:mappingProfile.entries())
+        text+=magdrum::ui::localisedText(instruments[static_cast<size_t>(entry.instrument)])+"  /  "+magdrum::ui::localisedText(articulations[static_cast<size_t>(entry.articulation)])+"   →   MIDI "+juce::String(entry.note)+"  ("+noteName(entry.note)+")\n";
+    mappingSummary.setText(text,juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::savePluginEditorState()
@@ -1120,10 +1133,10 @@ void MagDrumAudioProcessorEditor::loadMidiPatternFile(const juce::File& file)
 void MagDrumAudioProcessorEditor::updateLayerSummary()
 {
     const auto layers=processor.getSampleLayersForNote(selectedNote);juce::String text;
-    if(layers.empty())text="No sample assigned\nLoad a WAV here or assign a library sound from Sample Library.";
-    else for(size_t i=0;i<layers.size();++i){if(i>0)text+="\n";text+="VELOCITY "+juce::String(layers[i].minimumVelocity)+"–"+juce::String(layers[i].maximumVelocity)+"\n"+juce::File(layers[i].path).getFileName();}
+    if(layers.empty())text=magdrum::ui::localisedText("No sample loaded")+"\n"+magdrum::ui::localisedText("Load WAV");
+    else for(size_t i=0;i<layers.size();++i){if(i>0)text+="\n";text+=magdrum::ui::localisedText("Velocity")+" "+juce::String(layers[i].minimumVelocity)+"–"+juce::String(layers[i].maximumVelocity)+"\n"+juce::File(layers[i].path).getFileName();}
     layerSummary.setText(text,juce::dontSendNotification);
-    sampleDetails.setText(layers.empty()?"PAD SAMPLE\nNo sample loaded":juce::String("PAD SAMPLE\n")+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path,juce::dontSendNotification);
+    sampleDetails.setText(magdrum::ui::localisedText(layers.empty()?"PAD SAMPLE\nNo sample loaded":"PAD SAMPLE")+(layers.empty()?juce::String():"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path),juce::dontSendNotification);
     waveform->setFile(layers.empty()?juce::File():juce::File(layers.front().path));
 }
 
