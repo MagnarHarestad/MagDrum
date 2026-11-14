@@ -54,6 +54,10 @@ private:
     bool editSequenceMetadata(bool remove);
     MidiPattern currentSequencePattern() const;
     void reviewMidiChanges();
+    void syncSequenceEventsFromGrid();
+    void syncSequenceEventForCell(int lane, int step);
+    void syncSequencerGridFromEvents();
+    void openMidiEventEditor();
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     void updateSequencerGrid();
@@ -114,7 +118,10 @@ private:
     std::vector<MidiMetaEvent> sequenceMetadata;
     MidiPattern importedMidiBaseline;
     bool hasImportedMidiBaseline = false;
-    juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"}, reviewMidiButton{"Review changes"};
+    juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"}, editMidiEventsButton{"Edit hits"}, reviewMidiButton{"Review changes"};
+    std::vector<DrumEvent> sequenceEvents;
+    bool sequenceEventsInitialised = false;
+    MidiPattern midiEventEditingPattern;
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<MagDrumStepButton, 512>, 8> steps;
     std::array<std::array<int, 512>, 8> stepVelocities{};
@@ -128,6 +135,7 @@ private:
     juce::Label mappingSummary;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::DocumentWindow> comparisonWindow;
+    std::unique_ptr<juce::DocumentWindow> midiEventWindow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessorEditor)
 };
