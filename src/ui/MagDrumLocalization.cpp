@@ -5,7 +5,6 @@ namespace magdrum::ui
 {
 namespace
 {
-constexpr const char* english = nullptr;
 constexpr auto german = R"translations(language: German
 countries: de
 "SAMPLE LIBRARY" = "SAMPLE-BIBLIOTHEK"
@@ -523,6 +522,9 @@ countries: de
 "VST3 preset search cancelled." = "VST3-Preset-Suche abgebrochen."
 "Wait for the current instrument scan to finish." = "Warten Sie, bis der aktuelle Instrument-Scan abgeschlossen ist."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Wenn aktiviert, verwenden nicht unterstützte Artikulationen eine Zuordnung desselben Drum-Instruments. Alle Ersetzungen werden nach dem Export aufgelistet."
+"PAD GAIN" = "Verstärkung"
+"PAD PAN" = "Panorama"
+"PAD TUNE" = "Stimmung"
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1041,6 +1043,9 @@ countries: fr
 "VST3 preset search cancelled." = "Recherche de presets VST3 annulée."
 "Wait for the current instrument scan to finish." = "Attendez la fin de l’analyse de l’instrument en cours."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Si activé, les articulations non prises en charge utilisent un mappage du même instrument de batterie. Chaque substitution est listée après l’export."
+"PAD GAIN" = "Gain"
+"PAD PAN" = "Panoramique"
+"PAD TUNE" = "Accord"
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -1559,6 +1564,9 @@ countries: es
 "VST3 preset search cancelled." = "Búsqueda de presets VST3 cancelada."
 "Wait for the current instrument scan to finish." = "Espera a que termine el análisis del instrumento actual."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Al activarlo, las articulaciones no compatibles usan una asignación del mismo instrumento de batería. Cada sustitución aparece tras exportar."
+"PAD GAIN" = "Ganancia"
+"PAD PAN" = "Panorama"
+"PAD TUNE" = "Afinación"
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -2077,6 +2085,9 @@ countries: se
 "VST3 preset search cancelled." = "Sökning efter VST3-presets avbröts."
 "Wait for the current instrument scan to finish." = "Vänta tills den pågående instrumentsökningen är klar."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "När detta är aktiverat använder artikulationer som saknar stöd en mappning för samma truminstrument. Alla ersättningar listas efter export."
+"PAD GAIN" = "Nivå"
+"PAD PAN" = "Panorering"
+"PAD TUNE" = "Stämning"
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -2595,6 +2606,9 @@ countries: no
 "VST3 preset search cancelled." = "Søk etter VST3-forhåndsinnstillinger avbrutt."
 "Wait for the current instrument scan to finish." = "Vent til instrumentskanningen er ferdig."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Når dette er aktivert, bruker ustøttede artikulasjoner en tilordning for samme trommeinstrument. Alle erstatninger listes etter eksport."
+"PAD GAIN" = "Nivå"
+"PAD PAN" = "Panorering"
+"PAD TUNE" = "Stemning"
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -3113,6 +3127,9 @@ countries: dk
 "VST3 preset search cancelled." = "Søgning efter VST3-presets annulleret."
 "Wait for the current instrument scan to finish." = "Vent, til den aktuelle instrumentscanning er færdig."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Når det er slået til, bruger ikke-understøttede artikulationer en mapping for samme trommeinstrument. Alle erstatninger vises efter eksport."
+"PAD GAIN" = "Niveau"
+"PAD PAN" = "Panorering"
+"PAD TUNE" = "Stemning"
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -3631,12 +3648,16 @@ countries: fi
 "VST3 preset search cancelled." = "VST3-preset-haku peruutettu."
 "Wait for the current instrument scan to finish." = "Odota nykyisen instrumenttiskannauksen valmistumista."
 "When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export." = "Kun tämä on käytössä, tukemattomat artikulaatiot käyttävät saman rumpusoittimen määritystä. Kaikki korvaukset luetellaan viennin jälkeen."
+"PAD GAIN" = "Vahvistus"
+"PAD PAN" = "Panorointi"
+"PAD TUNE" = "Vire"
 )translations";
 
 Language selected = Language::english;
 const char* catalog(Language language)
 {
     switch (language) {
+        case Language::english: return nullptr;
         case Language::german: return german;
         case Language::french: return french;
         case Language::spanish: return spanish;
@@ -3644,7 +3665,7 @@ const char* catalog(Language language)
         case Language::norwegian: return norwegian;
         case Language::danish: return danish;
         case Language::finnish: return finnish;
-        default: return english;
+        default: return nullptr;
     }
 }
 void applyMappings()

@@ -139,6 +139,9 @@ private:
     std::unique_ptr<MagDrumWaveform> waveform;
     std::array<juce::TextButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
+    juce::Label gainLabel, panLabel, tuneLabel;
+    juce::Slider gainSlider, panSlider, tuneSlider;
+    bool updatingPadControls = false;
     juce::TextEditor velocityRange;
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load WAV"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};

@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 MagDrumAudioProcessor::MagDrumAudioProcessor()
@@ -138,14 +139,41 @@ bool MagDrumAudioProcessor::previewSample(const juce::File& file)
         for (auto& voice : voices) if (voice.sample == old) voice = {};
     previewData = std::move(sample);
     auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
-    voice = {previewData.get(), 0.0, 0.85f, true};
+    voice = {previewData.get(), 0.0, 0.85f, 1.0f, 1.0f, 1.0, true};
     return true;
 }
 
 void MagDrumAudioProcessor::triggerNote(int note, int velocity)
 {
-    if (note < 0 || note > 127) return;
+    if (note < 0 || note > 127)
+        return;
     const juce::ScopedLock lock(sampleLock);
+    startNoteVoice(note, velocity);
+}
+
+MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(int note) const
+{
+    if (note < 0 || note > 127)
+        return {};
+    const auto index = static_cast<size_t>(note);
+    return {noteGainDb[index].load(std::memory_order_relaxed),
+            notePan[index].load(std::memory_order_relaxed),
+            noteTuneSemitones[index].load(std::memory_order_relaxed)};
+}
+
+void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters)
+{
+    if (note < 0 || note > 127)
+        return;
+    const auto index = static_cast<size_t>(note);
+    const auto finiteOrZero = [](float value) { return std::isfinite(value) ? value : 0.0f; };
+    noteGainDb[index].store(juce::jlimit(-60.0f, 6.0f, finiteOrZero(parameters.gainDb)), std::memory_order_relaxed);
+    notePan[index].store(juce::jlimit(-1.0f, 1.0f, finiteOrZero(parameters.pan)), std::memory_order_relaxed);
+    noteTuneSemitones[index].store(juce::jlimit(-24.0f, 24.0f, finiteOrZero(parameters.tuneSemitones)), std::memory_order_relaxed);
+}
+
+void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
+{
     const int clampedVelocity = juce::jlimit(1, 127, velocity);
     const SampleData* sample = nullptr;
     for (const auto& slot : sampleSlots[static_cast<size_t>(note)])
@@ -156,8 +184,24 @@ void MagDrumAudioProcessor::triggerNote(int note, int velocity)
     }
     if (sample != nullptr && sample->audio.getNumSamples() > 0)
     {
+        const auto parameters = getNoteParameters(note);
+        const float pan = parameters.pan;
+        float leftPanGain = 1.0f, rightPanGain = 1.0f;
+        if (sample->audio.getNumChannels() == 1)
+        {
+            const float angle = (pan + 1.0f) * juce::MathConstants<float>::pi * 0.25f;
+            leftPanGain = std::cos(angle);
+            rightPanGain = std::sin(angle);
+        }
+        else
+        {
+            if (pan > 0.0f) leftPanGain = 1.0f - pan;
+            else if (pan < 0.0f) rightPanGain = 1.0f + pan;
+        }
+        const float gain = (clampedVelocity / 127.0f) * juce::Decibels::decibelsToGain(parameters.gainDb);
+        const double playbackRate = std::exp2(static_cast<double>(parameters.tuneSemitones) / 12.0);
         auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
-        voice = {sample, 0.0, clampedVelocity / 127.0f, true};
+        voice = {sample, 0.0, gain, leftPanGain, rightPanGain, playbackRate, true};
     }
 }
 
@@ -206,21 +250,8 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             {
                 const int note = message.getNoteNumber();
                 const int velocity = juce::jlimit(1, 127, static_cast<int>(std::lround(message.getFloatVelocity() * 127.0f)));
-                const SampleData* sample = nullptr;
-                for (const auto& slot : sampleSlots[static_cast<size_t>(note)])
-                {
-                    const auto* candidate = slot.load(std::memory_order_acquire);
-                    if (candidate != nullptr && velocity >= candidate->minimumVelocity && velocity <= candidate->maximumVelocity)
-                    {
-                        sample = candidate;
-                        break;
-                    }
-                }
-                if (sample != nullptr && sample->audio.getNumSamples() > 0)
-                {
-                    auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
-                    voice = {sample, 0.0, message.getFloatVelocity(), true};
-                }
+                if (juce::isPositiveAndBelow(note, 128))
+                    startNoteVoice(note, velocity);
             }
             hasEvent = iterator.getNextEvent(message, eventSample);
         }
@@ -239,9 +270,9 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
                 const auto* data = audio.getReadPointer(juce::jmin(channel, audio.getNumChannels() - 1));
                 return (data[index] + (data[next] - data[index]) * fraction) * voice.gain;
             };
-            left += readInterpolated(0);
-            right += readInterpolated(audio.getNumChannels() > 1 ? 1 : 0);
-            voice.position += voice.sample->sampleRate / outputSampleRate;
+            left += readInterpolated(0) * voice.leftPanGain;
+            right += readInterpolated(audio.getNumChannels() > 1 ? 1 : 0) * voice.rightPanGain;
+            voice.position += (voice.sample->sampleRate / outputSampleRate) * voice.playbackRate;
         }
         if (buffer.getNumChannels() == 1) buffer.setSample(0, i, 0.5f * (left + right));
         else { buffer.setSample(0, i, left); buffer.setSample(1, i, right); }
@@ -259,6 +290,16 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
         for (int note = 0; note < 128; ++note)
         {
             const auto noteIndex = static_cast<size_t>(note);
+            const auto parameters = getNoteParameters(note);
+            if (std::abs(parameters.gainDb) > 0.000001f || std::abs(parameters.pan) > 0.000001f
+                || std::abs(parameters.tuneSemitones) > 0.000001f)
+            {
+                auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
+                savedParameters->setAttribute("note", note);
+                savedParameters->setAttribute("gainDb", parameters.gainDb);
+                savedParameters->setAttribute("pan", parameters.pan);
+                savedParameters->setAttribute("tuneSemitones", parameters.tuneSemitones);
+            }
             int layerCount = 0;
             const SampleData* onlyLayer = nullptr;
             juce::String onlyPath;
@@ -296,8 +337,19 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
     struct SavedLayer { int minimumVelocity = 1; int maximumVelocity = 127; juce::String path; };
     std::array<std::vector<SavedLayer>, 128> savedLayers;
     std::array<bool, 128> hasExplicitLayers{};
+    std::array<NoteParameters, 128> savedParameters{};
     for (auto* child = state->getFirstChildElement(); child != nullptr; child = child->getNextElement())
     {
+        if (child->hasTagName("PAD_SETTINGS"))
+        {
+            const int note = child->getIntAttribute("note", -1);
+            if (juce::isPositiveAndBelow(note, 128))
+                savedParameters[static_cast<size_t>(note)] = {
+                    static_cast<float>(child->getDoubleAttribute("gainDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("pan", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("tuneSemitones", 0.0))};
+            continue;
+        }
         if (!child->hasTagName("SAMPLE_LAYER"))
             continue;
         const int note = child->getIntAttribute("note", -1);
@@ -339,8 +391,11 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
         for (auto& voice : voices) voice = {};
     }
     for (int note = 0; note < 128; ++note)
+    {
+        setNoteParameters(note, savedParameters[static_cast<size_t>(note)]);
         for (const auto& layer : savedLayers[static_cast<size_t>(note)])
             loadSampleForVelocityRange(note, layer.minimumVelocity, layer.maximumVelocity, juce::File(layer.path));
+    }
 }
 
 void MagDrumAudioProcessor::setPluginEditorState(const juce::XmlElement& value)

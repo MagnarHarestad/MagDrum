@@ -14,6 +14,13 @@ public:
         juce::String path;
     };
 
+    struct NoteParameters
+    {
+        float gainDb = 0.0f;
+        float pan = 0.0f;
+        float tuneSemitones = 0.0f;
+    };
+
     MagDrumAudioProcessor();
     void prepareToPlay(double, int) override;
     void releaseResources() override;
@@ -39,6 +46,8 @@ public:
     bool clearSamplesForNote(int midiNote);
     bool previewSample(const juce::File&);
     void triggerNote(int midiNote, int velocity = 100);
+    NoteParameters getNoteParameters(int midiNote) const;
+    void setNoteParameters(int midiNote, NoteParameters);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
     juce::String getSamplePathForNote(int midiNote) const;
     void setPluginEditorState(const juce::XmlElement&);
@@ -57,6 +66,9 @@ private:
         const SampleData* sample = nullptr;
         double position = 0.0;
         float gain = 0.0f;
+        float leftPanGain = 1.0f;
+        float rightPanGain = 1.0f;
+        double playbackRate = 1.0;
         bool active = false;
     };
 
@@ -67,6 +79,9 @@ private:
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
     std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
+    std::array<std::atomic<float>, 128> noteGainDb{};
+    std::array<std::atomic<float>, 128> notePan{};
+    std::array<std::atomic<float>, 128> noteTuneSemitones{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
@@ -74,6 +89,7 @@ private:
     std::unique_ptr<juce::XmlElement> editorState = std::make_unique<juce::XmlElement>("PLUGIN_EDITOR_STATE");
     std::array<Voice, maxVoices> voices{};
     int nextVoice = 0;
+    void startNoteVoice(int midiNote, int velocity);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessor)
 };

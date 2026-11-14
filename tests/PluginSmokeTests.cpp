@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <atomic>
+#include <limits>
 #include <thread>
 
 namespace
@@ -36,6 +37,33 @@ double renderPeak(MagDrumAudioProcessor& processor, int note, int velocity)
     double peak = 0.0;
     for (int channel = 0; channel < audio.getNumChannels(); ++channel)
         for (int sample = 0; sample < audio.getNumSamples(); ++sample)
+            peak = juce::jmax(peak, std::abs(static_cast<double>(audio.getSample(channel, sample))));
+    return peak;
+}
+
+std::array<double, 2> renderChannelPeaks(MagDrumAudioProcessor& processor, int note, int velocity)
+{
+    juce::AudioBuffer<float> audio(2, 128);
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(10, note, static_cast<juce::uint8>(velocity)), 0);
+    processor.processBlock(audio, midi);
+    std::array<double, 2> peaks{};
+    for (int channel = 0; channel < audio.getNumChannels(); ++channel)
+        for (int sample = 0; sample < audio.getNumSamples(); ++sample)
+            peaks[static_cast<size_t>(channel)] = juce::jmax(peaks[static_cast<size_t>(channel)],
+                std::abs(static_cast<double>(audio.getSample(channel, sample))));
+    return peaks;
+}
+
+double renderPeakInRange(MagDrumAudioProcessor& processor, int note, int velocity, int start, int length)
+{
+    juce::AudioBuffer<float> audio(2, start + length);
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(10, note, static_cast<juce::uint8>(velocity)), 0);
+    processor.processBlock(audio, midi);
+    double peak = 0.0;
+    for (int channel = 0; channel < audio.getNumChannels(); ++channel)
+        for (int sample = start; sample < start + length; ++sample)
             peak = juce::jmax(peak, std::abs(static_cast<double>(audio.getSample(channel, sample))));
     return peak;
 }
@@ -139,6 +167,56 @@ int main(int argc, char** argv)
         return 13;
     }
 
+    MagDrumAudioProcessor controlStateSource;
+    if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
+    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f});
+    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f});
+    const auto clampedParameters = controlStateSource.getNoteParameters(37);
+    if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
+        || std::abs(clampedParameters.pan + 1.0f) > 0.001f
+        || std::abs(clampedParameters.tuneSemitones - 24.0f) > 0.001f) return 23;
+    juce::MemoryBlock controlState;
+    controlStateSource.getStateInformation(controlState);
+    MagDrumAudioProcessor controlStateRestored;
+    controlStateRestored.setStateInformation(controlState.getData(), static_cast<int>(controlState.getSize()));
+    const auto restoredParameters = controlStateRestored.getNoteParameters(36);
+    if (std::abs(restoredParameters.gainDb + 6.0f) > 0.001f
+        || std::abs(restoredParameters.pan + 1.0f) > 0.001f
+        || std::abs(restoredParameters.tuneSemitones - 12.0f) > 0.001f
+        || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
+    controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::infinity(),
+                                               -std::numeric_limits<float>::infinity()});
+    const auto finiteParameters = controlStateSource.getNoteParameters(38);
+    if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
+        || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
+
+    MagDrumAudioProcessor gainReference, gainReduced;
+    if (!gainReference.loadSampleForNote(36, sample) || !gainReduced.loadSampleForNote(36, sample)) return 25;
+    gainReference.prepareToPlay(44100.0, 128);
+    gainReduced.prepareToPlay(44100.0, 128);
+    gainReduced.setNoteParameters(36, {-6.0f, 0.0f, 0.0f});
+    const double unattenuatedPeak = renderPeak(gainReference, 36, 127);
+    const double attenuatedPeak = renderPeak(gainReduced, 36, 127);
+    if (unattenuatedPeak <= 0.05 || std::abs(attenuatedPeak / unattenuatedPeak - 0.501187) > 0.02) return 26;
+
+    MagDrumAudioProcessor leftPan, rightPan;
+    if (!leftPan.loadSampleForNote(36, sample) || !rightPan.loadSampleForNote(36, sample)) return 27;
+    leftPan.prepareToPlay(44100.0, 128);
+    rightPan.prepareToPlay(44100.0, 128);
+    leftPan.setNoteParameters(36, {0.0f, -1.0f, 0.0f});
+    rightPan.setNoteParameters(36, {0.0f, 1.0f, 0.0f});
+    const auto leftPeaks = renderChannelPeaks(leftPan, 36, 127);
+    const auto rightPeaks = renderChannelPeaks(rightPan, 36, 127);
+    if (leftPeaks[0] < 0.05 || leftPeaks[1] > 0.001
+        || rightPeaks[1] < 0.05 || rightPeaks[0] > 0.001) return 28;
+
+    MagDrumAudioProcessor octaveUp;
+    if (!octaveUp.loadSampleForNote(36, sample)) return 29;
+    octaveUp.prepareToPlay(44100.0, 128);
+    octaveUp.setNoteParameters(36, {0.0f, 0.0f, 12.0f});
+    if (renderPeakInRange(octaveUp, 36, 127, 500, 100) > 0.0) return 30;
+
     const auto softLayer = root.getChildFile("kick-soft.wav");
     const auto hardLayer = root.getChildFile("kick-hard.wav");
     if (!writeFixture(softLayer, 0.10f) || !writeFixture(hardLayer, 0.22f)) return 15;
@@ -205,8 +283,15 @@ int main(int argc, char** argv)
     restored.releaseResources();
     lowVelocity.releaseResources();
     restoredLayers.releaseResources();
+    controlStateSource.releaseResources();
+    controlStateRestored.releaseResources();
+    gainReference.releaseResources();
+    gainReduced.releaseResources();
+    leftPan.releaseResources();
+    rightPan.releaseResources();
+    octaveUp.releaseResources();
     emptyNote.releaseResources();
     root.deleteRecursively();
-    std::cout << "Scoped file copy, cancellation, MIDI playback, velocity and empty-note checks passed.\n";
+    std::cout << "Scoped file copy, cancellation, MIDI playback, velocity, pad gain/pan/tune, state restoration and empty-note checks passed.\n";
     return 0;
 }
