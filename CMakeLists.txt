@@ -71,7 +71,8 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
 
  add_dependencies(MagDrumTests MagDrumPlugin_VST3 MagDrumPluginTests)
  add_dependencies(MagDrumPluginTests MagDrumPlugin_VST3)
- add_test(NAME MagDrumTests COMMAND MagDrumTests "$<TARGET_FILE:MagDrumPlugin_VST3>" "$<TARGET_FILE:MagDrumPluginTests>")
+ get_target_property(MAGDRUM_VST3_TEST_BUNDLE MagDrumPlugin_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
+ add_test(NAME MagDrumTests COMMAND MagDrumTests "${MAGDRUM_VST3_TEST_BUNDLE}" "$<TARGET_FILE:MagDrumPluginTests>")
 endif()
 
 if(MAGDRUM_BUILD_CLASSIFIER_EVALUATION AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
