@@ -61,6 +61,7 @@ private:
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     void updateSequencerGrid();
+    void refreshStepTooltips();
     void refreshMappingSummary();
     void savePluginEditorState();
     void restorePluginEditorState();
