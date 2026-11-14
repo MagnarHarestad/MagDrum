@@ -108,10 +108,19 @@ public:
 
         const auto face = bounds.withTrimmedBottom(isButtonDown ? 0.5f : 2.0f)
                                .translated(0.0f, isButtonDown ? 1.5f : 0.0f);
+        // A narrow inset bevel adds the machined rim seen on hardware controls.
         juce::ColourGradient faceGradient(base.brighter(0.2f), face.getX(), face.getY(),
                                           base.darker(0.12f), face.getX(), face.getBottom(), false);
         g.setGradientFill(faceGradient);
         g.fillRoundedRectangle(face, radius);
+
+        const auto innerFace = face.reduced(2.0f);
+        juce::ColourGradient innerGradient(base.brighter(isButtonDown ? 0.04f : 0.13f),
+                                           innerFace.getX(), innerFace.getY(),
+                                           base.darker(isButtonDown ? 0.16f : 0.24f),
+                                           innerFace.getX(), innerFace.getBottom(), false);
+        g.setGradientFill(innerGradient);
+        g.fillRoundedRectangle(innerFace, juce::jmax(2.0f, radius - 2.0f));
 
         const auto texture = darkBackgroundTexture();
         if (texture.isValid())
@@ -134,6 +143,9 @@ public:
         g.setColour(base.brighter(0.54f).withAlpha(button.isEnabled() ? (isButtonDown ? 0.34f : 0.74f) : 0.2f));
         g.drawLine(face.getX() + radius, face.getY() + 1.0f,
                    face.getRight() - radius, face.getY() + 1.0f, isButtonDown ? 0.7f : 1.15f);
+        g.setColour(juce::Colours::black.withAlpha(button.isEnabled() ? 0.32f : 0.15f));
+        g.drawLine(face.getX() + radius, face.getBottom() - 1.0f,
+                   face.getRight() - radius, face.getBottom() - 1.0f, 1.0f);
         g.setColour((active || isMouseOverButton || isButtonDown) ? stateColour.withAlpha(0.95f)
                                                                  : base.brighter(0.20f).withAlpha(0.74f));
         g.drawRoundedRectangle(face, radius, isMouseOverButton || isButtonDown || active ? 1.3f : 0.9f);
@@ -235,6 +247,14 @@ public:
         glossClip.addEllipse(centreX - radius + 2.0f, centreY - radius + 2.0f, diameter - 4.0f, diameter - 4.0f);
         g.saveState();
         g.reduceClipRegion(glossClip);
+        // Concentric, low-contrast machining catches light as the control turns.
+        for (int groove = 1; groove <= 4; ++groove)
+        {
+            const float inset = 4.0f + static_cast<float>(groove) * 2.3f;
+            g.setColour(Palette::Text.withAlpha(engaged ? 0.042f : 0.024f));
+            g.drawEllipse(centreX - radius + inset, centreY - radius + inset,
+                          diameter - inset * 2.0f, diameter - inset * 2.0f, 0.7f);
+        }
         juce::Path upperGloss;
         upperGloss.addEllipse(centreX - radius * 0.74f, centreY - radius * 0.84f, radius * 1.48f, radius * 1.05f);
         juce::ColourGradient gloss(Palette::Text.withAlpha(engaged ? 0.32f : 0.24f), centreX - radius * 0.12f, centreY - radius * 0.68f,
@@ -248,8 +268,12 @@ public:
         g.fillEllipse(centreX - radius * 0.91f, splitY, radius * 1.82f, radius * 0.82f);
         g.restoreState();
 
-        const float ringWidth = engaged ? 2.4f : 1.8f;
-        g.setColour(Palette::Accent.withAlpha(engaged ? 0.95f : 0.62f));
+        const float ringWidth = engaged ? 2.6f : 2.0f;
+        juce::Path outerRing;
+        outerRing.addEllipse(centreX - radius - 0.5f, centreY - radius - 0.5f,
+                             diameter + 1.0f, diameter + 1.0f);
+        juce::DropShadow(Palette::Accent.withAlpha(engaged ? 0.68f : 0.32f), engaged ? 12 : 7, {}).drawForPath(g, outerRing);
+        g.setColour(Palette::Accent.withAlpha(engaged ? 0.98f : 0.74f));
         g.drawEllipse(centreX - radius + 1.0f, centreY - radius + 1.0f,
                       diameter - 2.0f, diameter - 2.0f, ringWidth);
         const auto glint = juce::Point<float>(centreX + radius * 0.55f, centreY - radius * 0.53f);
