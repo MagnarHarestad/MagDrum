@@ -35,27 +35,30 @@ juce::String describeMidiMapping(const MidiNoteMapping& mapping)
  static constexpr const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
  const auto instrument=static_cast<size_t>(mapping.instrument);
  const auto articulation=static_cast<size_t>(mapping.articulation);
- if(instrument>=std::size(instruments)||articulation>=std::size(articulations))return "Unknown mapping";
- return juce::String(instruments[instrument])+" / "+articulations[articulation];
+ if(instrument>=std::size(instruments)||articulation>=std::size(articulations))return magdrum::ui::localisedText("Unknown mapping");
+ return magdrum::ui::localisedText(instruments[instrument])+" / "+magdrum::ui::localisedText(articulations[articulation]);
 }
 
 juce::String describeMidiEvent(const DrumEvent& event)
 {
- return describeMidiMapping({event.instrument,event.articulation,0})+" — velocity "+juce::String(event.velocity)
-     +", beat "+juce::String(event.positionBeats,3)+", length "+juce::String(event.durationBeats,3);
+ return describeMidiMapping({event.instrument,event.articulation,0})+" — "+magdrum::ui::localisedText("Velocity")+" "+juce::String(event.velocity)
+     +", "+magdrum::ui::localisedText("Beat")+" "+juce::String(event.positionBeats,3)+", "+magdrum::ui::localisedText("Length in beats")+" "+juce::String(event.durationBeats,3);
 }
 
 juce::String describeMidiMetadata(const MidiMetaEvent& meta)
 {
  if(meta.message.isTempoMetaEvent())
-  return "Tempo "+juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote())))
-      +" BPM at beat "+juce::String(meta.positionBeats,3);
+  return magdrum::ui::localisedText("Tempo {tempo} BPM at beat {beat}")
+      .replace("{tempo}",juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote()))))
+      .replace("{beat}",juce::String(meta.positionBeats,3));
  if(meta.message.isTimeSignatureMetaEvent())
  {
   int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);
-  return "Meter "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(meta.positionBeats,3);
+  return magdrum::ui::localisedText("Time signature {meter} at beat {beat}")
+      .replace("{meter}",juce::String(numerator)+"/"+juce::String(denominator))
+      .replace("{beat}",juce::String(meta.positionBeats,3));
  }
- return "MIDI metadata at beat "+juce::String(meta.positionBeats,3);
+ return magdrum::ui::localisedText("MIDI metadata at beat {beat}").replace("{beat}",juce::String(meta.positionBeats,3));
 }
 
 juce::String describeMidiPatternDiff(const MidiPattern& imported,const MidiPattern& current)
@@ -63,17 +66,17 @@ juce::String describeMidiPatternDiff(const MidiPattern& imported,const MidiPatte
  const auto diff=compareMidiPatterns(imported,current);
  const int removed=static_cast<int>(diff.removedEvents.size()+diff.removedMetadata.size());
  const int added=static_cast<int>(diff.addedEvents.size()+diff.addedMetadata.size());
- if(removed==0&&added==0&&!diff.lengthChanged)return "No changes from the imported MIDI pattern.";
+ if(removed==0&&added==0&&!diff.lengthChanged)return magdrum::ui::localisedText("No changes from the imported MIDI pattern.");
 
- juce::String report="Imported MIDI — removed from current pattern ("+juce::String(removed)+"):\n";
+ juce::String report=magdrum::ui::localisedText("Imported MIDI — removed from current pattern ({count}):").replace("{count}",juce::String(removed))+"\n";
  for(const auto& event:diff.removedEvents)report+="  "+describeMidiEvent(event)+"\n";
  for(const auto& meta:diff.removedMetadata)report+="  "+describeMidiMetadata(meta)+"\n";
- if(removed==0)report+="  None\n";
- report+="\nCurrent pattern — added since import ("+juce::String(added)+"):\n";
+ if(removed==0)report+="  "+magdrum::ui::localisedText("None")+"\n";
+ report+="\n"+magdrum::ui::localisedText("Current pattern — added since import ({count}):").replace("{count}",juce::String(added))+"\n";
  for(const auto& event:diff.addedEvents)report+="  "+describeMidiEvent(event)+"\n";
  for(const auto& meta:diff.addedMetadata)report+="  "+describeMidiMetadata(meta)+"\n";
- if(added==0)report+="  None\n";
- if(diff.lengthChanged)report+="\nPattern length: "+juce::String(imported.lengthBeats,3)+" → "+juce::String(current.lengthBeats,3)+" beats\n";
+ if(added==0)report+="  "+magdrum::ui::localisedText("None")+"\n";
+ if(diff.lengthChanged)report+="\n"+magdrum::ui::localisedText("Pattern length: {old} → {new} beats").replace("{old}",juce::String(imported.lengthBeats,3)).replace("{new}",juce::String(current.lengthBeats,3))+"\n";
  return report;
 }
 }
@@ -90,7 +93,7 @@ private:
  juce::AudioFormatManager formats;juce::AudioThumbnailCache cache{8};juce::AudioThumbnail thumbnail;juce::File currentFile;
 };
 
-class MidiPatternEditor final : public juce::Component, private juce::ListBoxModel, private juce::Button::Listener
+class MidiPatternEditor final : public juce::Component, private juce::ListBoxModel, private juce::Button::Listener, private juce::ChangeListener
 {
 public:
  explicit MidiPatternEditor(MidiPattern& value,const MidiPattern& importedValue,bool hasImportedValue):pattern(value),importedPattern(importedValue),hasImportedPattern(hasImportedValue),events("Drum events",this)
@@ -115,8 +118,10 @@ public:
   saveMeta.setButtonText("Set at beat");removeMeta.setButtonText("Remove at beat");saveMeta.addListener(this);removeMeta.addListener(this);addAndMakeVisible(saveMeta);addAndMakeVisible(removeMeta);
   compare.setButtonText("Compare with imported");compare.addListener(this);compare.setEnabled(hasImportedPattern);addAndMakeVisible(compare);
   bool tempoAtStartFound=false,signatureAtStartFound=false;for(const auto& meta:pattern.tempoAndSignature)if(meta.positionBeats==0.0){if(meta.message.isTempoMetaEvent()&&!tempoAtStartFound){tempo.setText(juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote()))),juce::dontSendNotification);tempoAtStartFound=true;}if(meta.message.isTimeSignatureMetaEvent()&&!signatureAtStartFound){int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);timeSignature.setText(juce::String(numerator)+"/"+juce::String(denominator),juce::dontSendNotification);signatureAtStartFound=true;}}
-  refreshMetadataSummary();message.setText("Edit drum events or change tempo and meter at any beat.",juce::dontSendNotification);addAndMakeVisible(message);
+  addAndMakeVisible(message);magdrum::ui::languageChangeBroadcaster().addChangeListener(this);applyLanguage();refreshMetadataSummary();
  }
+ ~MidiPatternEditor()override{magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);}
+ void changeListenerCallback(juce::ChangeBroadcaster*)override{applyLanguage();events.updateContent();refreshMetadataSummary();}
  void resized()override
  {
   auto area=getLocalBounds().reduced(12);events.setBounds(area.removeFromTop(155));area.removeFromTop(5);
@@ -126,6 +131,16 @@ public:
   row=area.removeFromTop(30);message.setBounds(row.removeFromLeft(610));row.removeFromLeft(6);compare.setBounds(row);
  }
 private:
+ void applyLanguage(){
+  const int instrumentId=instrument.getSelectedId(),articulationId=articulation.getSelectedId(),metadataTypeId=metadataType.getSelectedId();
+  const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};
+  const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
+  instrument.clear(juce::dontSendNotification);for(int i=0;i<9;++i)instrument.addItem(magdrum::ui::localisedText(instruments[i]),i+1);instrument.setSelectedId(instrumentId,juce::dontSendNotification);
+  articulation.clear(juce::dontSendNotification);for(int i=0;i<13;++i)articulation.addItem(magdrum::ui::localisedText(articulations[i]),i+1);articulation.setSelectedId(articulationId,juce::dontSendNotification);
+  metadataType.clear(juce::dontSendNotification);metadataType.addItem(magdrum::ui::localisedText("Tempo"),1);metadataType.addItem(magdrum::ui::localisedText("Time signature"),2);metadataType.setSelectedId(metadataTypeId>0?metadataTypeId:1,juce::dontSendNotification);
+  events.setName(magdrum::ui::localisedText("Drum events"));velocity.setTextToShowWhenEmpty(magdrum::ui::localisedText("Velocity"),juce::Colours::grey);beat.setTextToShowWhenEmpty(magdrum::ui::localisedText("Beat position"),juce::Colours::grey);duration.setTextToShowWhenEmpty(magdrum::ui::localisedText("Duration beats"),juce::Colours::grey);
+  apply.setButtonText(magdrum::ui::localisedText("Apply edit"));remove.setButtonText(magdrum::ui::localisedText("Delete event"));metadataBeatLabel.setText(magdrum::ui::localisedText("At beat"),juce::dontSendNotification);tempoLabel.setText(magdrum::ui::localisedText("BPM"),juce::dontSendNotification);timeSignatureLabel.setText(magdrum::ui::localisedText("Meter"),juce::dontSendNotification);saveMeta.setButtonText(magdrum::ui::localisedText("Set at beat"));removeMeta.setButtonText(magdrum::ui::localisedText("Remove at beat"));compare.setButtonText(magdrum::ui::localisedText("Compare with imported"));message.setText(magdrum::ui::localisedText("Edit drum events or change tempo and meter at any beat."),juce::dontSendNotification);
+ }
  int getNumRows()override{return static_cast<int>(pattern.events.size());}
  void paintListBoxItem(int row,juce::Graphics& g,int width,int height,bool selected)override
  {
@@ -136,7 +151,7 @@ private:
   const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
   const auto instrumentIndex=static_cast<size_t>(event.instrument);const auto articulationIndex=static_cast<size_t>(event.articulation);
   const auto instrumentName=instrumentIndex<9?instruments[instrumentIndex]:"Unknown";const auto articulationName=articulationIndex<13?articulations[articulationIndex]:"Unknown";
-  g.setColour(magdrum::ui::Palette::Text);g.drawText(juce::String(row+1)+".  "+instrumentName+" / "+articulationName+"     vel "+juce::String(event.velocity)+"     beat "+juce::String(event.positionBeats,3)+"     length "+juce::String(event.durationBeats,3),8,0,width-16,height,juce::Justification::centredLeft);
+  g.setColour(magdrum::ui::Palette::Text);g.drawText(juce::String(row+1)+".  "+magdrum::ui::localisedText(instrumentName)+" / "+magdrum::ui::localisedText(articulationName)+"     "+magdrum::ui::localisedText("Velocity")+" "+juce::String(event.velocity)+"     "+magdrum::ui::localisedText("Beat")+" "+juce::String(event.positionBeats,3)+"     "+magdrum::ui::localisedText("Length in beats")+" "+juce::String(event.durationBeats,3),8,0,width-16,height,juce::Justification::centredLeft);
  }
  void selectedRowsChanged(int row)override
  {
@@ -145,16 +160,16 @@ private:
  }
  void buttonClicked(juce::Button* button)override
  {
-   if(button==&compare){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,"MIDI pattern diff",describeMidiPatternDiff(importedPattern,pattern),"Close");return;}
-  if(button==&saveMeta||button==&removeMeta){const double position=metadataBeat.getText().getDoubleValue();if(!std::isfinite(position)||position<0.0){message.setText("Enter a non-negative beat position.",juce::dontSendNotification);return;}const bool editingTempo=metadataType.getSelectedId()==1;if(button==&removeMeta){const bool removed=editingTempo?removePatternTempo(pattern,position):removePatternTimeSignature(pattern,position);message.setText(removed?"Metadata removed at beat "+juce::String(position,3)+".":"No matching metadata exists at that beat.",juce::dontSendNotification);}else if(editingTempo){const int bpm=tempo.getText().getIntValue();if(!setPatternTempo(pattern,bpm,position)){message.setText("Use a tempo from 20 to 300 BPM and a non-negative beat.",juce::dontSendNotification);return;}message.setText("Tempo set to "+juce::String(bpm)+" BPM at beat "+juce::String(position,3)+".",juce::dontSendNotification);}else{const auto text=timeSignature.getText().trim();const int slash=text.indexOfChar('/');if(slash<=0){message.setText("Use a time signature such as 4/4.",juce::dontSendNotification);return;}const int numerator=text.substring(0,slash).getIntValue(),denominator=text.substring(slash+1).getIntValue();if(!setPatternTimeSignature(pattern,numerator,denominator,position)){message.setText("Use a numerator 1–32 and denominator 1, 2, 4, 8 or 16.",juce::dontSendNotification);return;}message.setText("Time signature set to "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(position,3)+".",juce::dontSendNotification);}refreshMetadataSummary();return;}
-  const int row=events.getSelectedRow();if(!juce::isPositiveAndBelow(row,pattern.events.size())){message.setText("Select a drum event first.",juce::dontSendNotification);return;}
-  if(button==&remove){pattern.events.erase(pattern.events.begin()+row);events.updateContent();events.selectRow(juce::jmin(row,static_cast<int>(pattern.events.size())-1));message.setText("Event deleted.",juce::dontSendNotification);return;}
+   if(button==&compare){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,magdrum::ui::localisedText("MIDI pattern diff"),describeMidiPatternDiff(importedPattern,pattern),magdrum::ui::localisedText("Close"));return;}
+  if(button==&saveMeta||button==&removeMeta){const double position=metadataBeat.getText().getDoubleValue();if(!std::isfinite(position)||position<0.0){message.setText(magdrum::ui::localisedText("Enter a non-negative beat position."),juce::dontSendNotification);return;}const bool editingTempo=metadataType.getSelectedId()==1;if(button==&removeMeta){const bool removed=editingTempo?removePatternTempo(pattern,position):removePatternTimeSignature(pattern,position);message.setText(removed?magdrum::ui::localisedText("Metadata removed at beat {beat}.").replace("{beat}",juce::String(position,3)):magdrum::ui::localisedText("No matching metadata exists at that beat."),juce::dontSendNotification);}else if(editingTempo){const int bpm=tempo.getText().getIntValue();if(!setPatternTempo(pattern,bpm,position)){message.setText(magdrum::ui::localisedText("Use a tempo from 20 to 300 BPM and a non-negative beat."),juce::dontSendNotification);return;}message.setText(magdrum::ui::localisedText("Tempo set to {tempo} BPM at beat {beat}.").replace("{tempo}",juce::String(bpm)).replace("{beat}",juce::String(position,3)),juce::dontSendNotification);}else{const auto text=timeSignature.getText().trim();const int slash=text.indexOfChar('/');if(slash<=0){message.setText(magdrum::ui::localisedText("Use a time signature such as 4/4."),juce::dontSendNotification);return;}const int numerator=text.substring(0,slash).getIntValue(),denominator=text.substring(slash+1).getIntValue();if(!setPatternTimeSignature(pattern,numerator,denominator,position)){message.setText(magdrum::ui::localisedText("Use a numerator 1–32 and denominator 1, 2, 4, 8 or 16."),juce::dontSendNotification);return;}message.setText(magdrum::ui::localisedText("Time signature set to {meter} at beat {beat}.").replace("{meter}",juce::String(numerator)+"/"+juce::String(denominator)).replace("{beat}",juce::String(position,3)),juce::dontSendNotification);}refreshMetadataSummary();return;}
+  const int row=events.getSelectedRow();if(!juce::isPositiveAndBelow(row,pattern.events.size())){message.setText(magdrum::ui::localisedText("Select a drum event first."),juce::dontSendNotification);return;}
+  if(button==&remove){pattern.events.erase(pattern.events.begin()+row);events.updateContent();events.selectRow(juce::jmin(row,static_cast<int>(pattern.events.size())-1));message.setText(magdrum::ui::localisedText("Event deleted."),juce::dontSendNotification);return;}
   const int newVelocity=velocity.getText().getIntValue();const double newBeat=beat.getText().getDoubleValue(),newDuration=duration.getText().getDoubleValue();
-  if(instrument.getSelectedId()<1||instrument.getSelectedId()>9||articulation.getSelectedId()<1||articulation.getSelectedId()>13||newVelocity<1||newVelocity>127||newBeat<0.0||newDuration<=0.0||!std::isfinite(newBeat)||!std::isfinite(newDuration)){message.setText("Use a valid instrument, articulation, velocity 1–127, beat position and positive duration.",juce::dontSendNotification);return;}
+  if(instrument.getSelectedId()<1||instrument.getSelectedId()>9||articulation.getSelectedId()<1||articulation.getSelectedId()>13||newVelocity<1||newVelocity>127||newBeat<0.0||newDuration<=0.0||!std::isfinite(newBeat)||!std::isfinite(newDuration)){message.setText(magdrum::ui::localisedText("Use a valid instrument, articulation, velocity 1–127, beat position and positive duration."),juce::dontSendNotification);return;}
   auto& event=pattern.events[static_cast<size_t>(row)];event.instrument=static_cast<DrumInstrument>(instrument.getSelectedId()-1);event.articulation=static_cast<DrumArticulation>(articulation.getSelectedId()-1);event.velocity=static_cast<std::uint8_t>(newVelocity);event.positionBeats=newBeat;event.durationBeats=newDuration;
-  std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});events.updateContent();events.selectRow(row);message.setText("Event updated and pattern resorted by beat position.",juce::dontSendNotification);
+  std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});events.updateContent();events.selectRow(row);message.setText(magdrum::ui::localisedText("Event updated and pattern resorted by beat position."),juce::dontSendNotification);
  }
- void refreshMetadataSummary(){juce::String summary;for(const auto& meta:pattern.tempoAndSignature){if(meta.message.isTempoMetaEvent())summary+="Tempo "+juce::String(static_cast<int>(std::round(60.0/meta.message.getTempoSecondsPerQuarterNote())))+" BPM at beat "+juce::String(meta.positionBeats,3)+"\n";else if(meta.message.isTimeSignatureMetaEvent()){int numerator=4,denominator=4;meta.message.getTimeSignatureInfo(numerator,denominator);summary+="Meter "+juce::String(numerator)+"/"+juce::String(denominator)+" at beat "+juce::String(meta.positionBeats,3)+"\n";}}if(summary.isEmpty())summary="No tempo or time-signature events.";metadataSummary.setText(summary,juce::dontSendNotification);}
+ void refreshMetadataSummary(){juce::String summary;for(const auto& meta:pattern.tempoAndSignature)if(meta.message.isTempoMetaEvent()||meta.message.isTimeSignatureMetaEvent())summary+=describeMidiMetadata(meta)+"\n";if(summary.isEmpty())summary=magdrum::ui::localisedText("No tempo or time-signature events.");metadataSummary.setText(summary,juce::dontSendNotification);}
  MidiPattern& pattern;const MidiPattern& importedPattern;bool hasImportedPattern=false;juce::ListBox events;juce::ComboBox instrument,articulation,metadataType;juce::TextEditor velocity,beat,duration,metadataBeat,tempo,timeSignature,metadataSummary;juce::TextButton apply,remove,saveMeta,removeMeta,compare;juce::Label message,metadataBeatLabel,tempoLabel,timeSignatureLabel;
 };
 
@@ -171,7 +186,7 @@ public:
  int stepVelocity=100;bool customVelocity=false;
 };
 
-class DrumStepSequencer final : public juce::Component
+class DrumStepSequencer final : public juce::Component, private juce::ChangeListener
 {
 public:
  explicit DrumStepSequencer(MidiPattern& value,std::function<void()> previewCallback,std::function<void(bool)> loopCallback,bool loopEnabled):pattern(value),onPreview(std::move(previewCallback)),onLoopChange(std::move(loopCallback))
@@ -183,8 +198,10 @@ public:
   append.setButtonText("Append one bar to pattern");append.onClick=[this]{appendBar();};addAndMakeVisible(append);
   preview.setButtonText("Preview pattern");preview.onClick=[this]{if(onPreview)onPreview();};addAndMakeVisible(preview);
   loopPreview.setButtonText("Loop preview");loopPreview.setToggleState(loopEnabled,juce::dontSendNotification);loopPreview.setTooltip("Repeat the rendered pattern preview until stopped or another sound is played.");loopPreview.onClick=[this]{if(onLoopChange)onLoopChange(loopPreview.getToggleState());};addAndMakeVisible(loopPreview);
-  message.setColour(juce::Label::textColourId,magdrum::ui::Palette::Muted);addAndMakeVisible(message);updateGridForPattern();
+   message.setColour(juce::Label::textColourId,magdrum::ui::Palette::Muted);addAndMakeVisible(message);magdrum::ui::languageChangeBroadcaster().addChangeListener(this);applyLanguage();updateGridForPattern();
  }
+ ~DrumStepSequencer()override{magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);}
+ void changeListenerCallback(juce::ChangeBroadcaster*)override{applyLanguage();updateGridForPattern();}
  void resized()override
  {
   auto area=getLocalBounds().reduced(14);auto head=area.removeFromTop(30);head.removeFromLeft(112);for(int step=0;step<16;++step){auto& owned=stepLabels[static_cast<size_t>(step)];if(owned==nullptr){owned=std::make_unique<juce::Label>();owned->setText(juce::String(step+1),juce::dontSendNotification);owned->setColour(juce::Label::textColourId,magdrum::ui::Palette::Muted);owned->setJustificationType(juce::Justification::centred);addAndMakeVisible(*owned);}owned->setBounds(head.removeFromLeft(54));}
@@ -192,22 +209,29 @@ public:
   area.removeFromTop(6);auto controls=area.removeFromTop(32);velocityLabel.setBounds(controls.removeFromLeft(62));velocity.setBounds(controls.removeFromLeft(58));controls.removeFromLeft(8);append.setBounds(controls.removeFromLeft(190));controls.removeFromLeft(6);preview.setBounds(controls.removeFromLeft(138));controls.removeFromLeft(6);loopPreview.setBounds(controls.removeFromLeft(110));controls.removeFromLeft(8);message.setBounds(controls);
  }
 private:
+  void applyLanguage(){
+   static constexpr const char* names[]{"Kick","Snare","Closed hi-hat","Open hi-hat","Clap","Tom","Ride","Crash"};
+   for(size_t i=0;i<labels.size();++i)labels[i].setText(magdrum::ui::localisedText(names[i]),juce::dontSendNotification);
+   velocityLabel.setText(magdrum::ui::localisedText("Velocity"),juce::dontSendNotification);
+   append.setButtonText(magdrum::ui::localisedText("Append one bar to pattern"));preview.setButtonText(magdrum::ui::localisedText("Preview pattern"));loopPreview.setButtonText(magdrum::ui::localisedText("Loop preview"));
+   loopPreview.setTooltip(magdrum::ui::localisedText("Repeat the rendered pattern preview until stopped or another sound is played."));
+  }
  void updateGridForPattern()
  {
   double latestEventBeat=-1.0,latestMetaBeat=-1.0;for(const auto& event:pattern.events)latestEventBeat=juce::jmax(latestEventBeat,event.positionBeats);for(const auto& meta:pattern.tempoAndSignature)latestMetaBeat=juce::jmax(latestMetaBeat,meta.positionBeats);
   const double timelineEnd=juce::jmax(0.0,juce::jmax(pattern.lengthBeats,juce::jmax(latestEventBeat,latestMetaBeat)));int numerator=4,denominator=4;double signatureBeat=0.0;for(const auto& meta:pattern.tempoAndSignature)if(meta.positionBeats<=timelineEnd&&meta.message.isTimeSignatureMetaEvent()){meta.message.getTimeSignatureInfo(numerator,denominator);signatureBeat=meta.positionBeats;}
-  if(denominator<1||16%denominator!=0){activeSteps=0;message.setText("This meter cannot be represented by the current 16-step grid.",juce::dontSendNotification);return;}const int requestedSteps=numerator*(16/denominator);if(requestedSteps<1||requestedSteps>16){activeSteps=0;message.setText("This meter needs more than 16 steps per bar; the sequencer leaves the pattern unchanged.",juce::dontSendNotification);return;}
+   if(denominator<1||16%denominator!=0){activeSteps=0;message.setText(magdrum::ui::localisedText("This meter cannot be represented by the current 16-step grid."),juce::dontSendNotification);return;}const int requestedSteps=numerator*(16/denominator);if(requestedSteps<1||requestedSteps>16){activeSteps=0;message.setText(magdrum::ui::localisedText("This meter needs more than 16 steps per bar; the sequencer leaves the pattern unchanged."),juce::dontSendNotification);return;}
   activeSteps=requestedSteps;stepBeats=4.0/static_cast<double>(denominator)/4.0;barLength=static_cast<double>(numerator)*4.0/static_cast<double>(denominator);
   if(pattern.lengthBeats>0.0){const double patternEnd=juce::jmax(pattern.lengthBeats,latestEventBeat);startBeat=signatureBeat+juce::jmax(0.0,std::ceil((patternEnd-signatureBeat)/barLength-1.0e-9))*barLength;}else if(latestEventBeat<0.0)startBeat=latestMetaBeat>=0.0?latestMetaBeat:0.0;else if(signatureBeat>latestEventBeat)startBeat=signatureBeat;else startBeat=signatureBeat+(std::floor((timelineEnd-signatureBeat)/barLength)+1.0)*barLength;
   for(int row=0;row<8;++row)for(int step=0;step<16;++step){auto& button=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];button.setEnabled(step<activeSteps);if(step>=activeSteps)button.setToggleState(false,juce::dontSendNotification);}
-  message.setText("Meter "+juce::String(numerator)+"/"+juce::String(denominator)+": "+juce::String(activeSteps)+" steps. Left-click toggles; right-click sets velocity 1–127.",juce::dontSendNotification);
+   message.setText(magdrum::ui::localisedText("Meter {meter}: {steps} steps. Left-click toggles; right-click sets velocity 1–127.").replace("{meter}",juce::String(numerator)+"/"+juce::String(denominator)).replace("{steps}",juce::String(activeSteps)),juce::dontSendNotification);
  }
  void appendBar()
  {
-  updateGridForPattern();if(activeSteps==0)return;const int value=velocity.getText().getIntValue();if(value<1||value>127){message.setText("Velocity must be between 1 and 127.",juce::dontSendNotification);return;}
+   updateGridForPattern();if(activeSteps==0)return;const int value=velocity.getText().getIntValue();if(value<1||value>127){message.setText(magdrum::ui::localisedText("Velocity must be between 1 and 127."),juce::dontSendNotification);return;}
   static const DrumInstrument instruments[]{DrumInstrument::Kick,DrumInstrument::Snare,DrumInstrument::HiHat,DrumInstrument::HiHat,DrumInstrument::Clap,DrumInstrument::Tom,DrumInstrument::Ride,DrumInstrument::Crash};
   for(int row=0;row<8;++row)for(int step=0;step<activeSteps;++step){auto& cell=steps[static_cast<size_t>(row)][static_cast<size_t>(step)];if(cell.getToggleState()){DrumEvent event;event.instrument=instruments[row];event.articulation=row==2?DrumArticulation::Closed:row==3?DrumArticulation::Open:DrumArticulation::Default;event.velocity=static_cast<std::uint8_t>(cell.customVelocity?cell.stepVelocity:value);event.positionBeats=startBeat+static_cast<double>(step)*stepBeats;event.durationBeats=row==3?stepBeats*1.2:stepBeats*0.5;pattern.events.push_back(event);}}
-  const double appendedAt=startBeat;const int appendedSteps=activeSteps;pattern.lengthBeats=juce::jmax(pattern.lengthBeats,startBeat+static_cast<double>(activeSteps)*stepBeats);std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});updateGridForPattern();message.setText("Added a "+juce::String(appendedSteps)+"-step bar at beat "+juce::String(appendedAt,2)+". Next bar begins at beat "+juce::String(startBeat,2)+".",juce::dontSendNotification);
+   const double appendedAt=startBeat;const int appendedSteps=activeSteps;pattern.lengthBeats=juce::jmax(pattern.lengthBeats,startBeat+static_cast<double>(activeSteps)*stepBeats);std::stable_sort(pattern.events.begin(),pattern.events.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});updateGridForPattern();message.setText(magdrum::ui::localisedText("Added a {steps}-step bar at beat {at}. Next bar begins at beat {next}.").replace("{steps}",juce::String(appendedSteps)).replace("{at}",juce::String(appendedAt,2)).replace("{next}",juce::String(startBeat,2)),juce::dontSendNotification);
  }
  MidiPattern& pattern;std::array<juce::Label,8>labels;std::array<std::array<StepCellButton,16>,8>steps;std::array<std::unique_ptr<juce::Label>,16>stepLabels;juce::TextEditor velocity;juce::Label velocityLabel,message;juce::TextButton append,preview;juce::ToggleButton loopPreview;std::function<void()>onPreview;std::function<void(bool)>onLoopChange;double startBeat=0.0,stepBeats=0.25,barLength=4.0;int activeSteps=16;
 };
