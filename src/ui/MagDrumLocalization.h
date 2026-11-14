@@ -13,7 +13,7 @@ Language currentLanguage();
 juce::ChangeBroadcaster& languageChangeBroadcaster();
 void setLanguage(Language language);
 juce::String languageName(Language language);
-void showLanguageMenu(juce::Component& target, std::function<void()> onChanged = {});
+void showApplicationMenu(juce::Component& target, std::function<void()> onChanged = {});
 
 inline juce::String localisedText(const char* sourceText)
 {

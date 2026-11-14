@@ -2799,12 +2799,13 @@ void initialiseMagDrumLocalization()
     applyMappings();
 }
 
-void showLanguageMenu(juce::Component& target, std::function<void()> onChanged)
+void showApplicationMenu(juce::Component& target, std::function<void()> onChanged)
 {
     juce::PopupMenu menu;
-    menu.addItem(0, localisedText("Language"), false);
+    juce::PopupMenu languages;
     for (int i = 0; i < 8; ++i)
-        menu.addItem(i + 1, localisedText(languageName(static_cast<Language>(i))), true, static_cast<int>(currentLanguage()) == i);
+        languages.addItem(i + 1, localisedText(languageName(static_cast<Language>(i))), true, static_cast<int>(currentLanguage()) == i);
+    menu.addSubMenu(localisedText("Language"), languages);
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target), [onChanged = std::move(onChanged)](int result) {
         if (result < 1 || result > 8) return;
         setLanguage(static_cast<Language>(result - 1));
