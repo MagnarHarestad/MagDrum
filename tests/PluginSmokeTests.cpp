@@ -167,6 +167,23 @@ int main(int argc, char** argv)
         return 13;
     }
 
+    MagDrumAudioProcessor queuedTrigger;
+    if (!queuedTrigger.loadSampleForNote(36, sample)) return 32;
+    queuedTrigger.prepareToPlay(44100.0, 128);
+    queuedTrigger.triggerNote(36, 127);
+    juce::AudioBuffer<float> queuedAudio(2, 128);
+    juce::MidiBuffer queuedMidi;
+    queuedTrigger.processBlock(queuedAudio, queuedMidi);
+    double queuedPeak = 0.0;
+    for (int channel = 0; channel < queuedAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < queuedAudio.getNumSamples(); ++sampleIndex)
+            queuedPeak = juce::jmax(queuedPeak, std::abs(static_cast<double>(queuedAudio.getSample(channel, sampleIndex))));
+    if (queuedPeak <= 0.05 || !queuedMidi.isEmpty())
+    {
+        std::cerr << "Queued UI trigger render check failed: peak=" << queuedPeak << '\n';
+        return 33;
+    }
+
     MagDrumAudioProcessor controlStateSource;
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
     controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f});
@@ -281,6 +298,7 @@ int main(int argc, char** argv)
     if (renderPeak(emptyNote, 37, 100) != 0.0) return 14;
 
     restored.releaseResources();
+    queuedTrigger.releaseResources();
     lowVelocity.releaseResources();
     restoredLayers.releaseResources();
     controlStateSource.releaseResources();

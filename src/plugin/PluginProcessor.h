@@ -45,6 +45,8 @@ public:
     bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&);
     bool clearSamplesForNote(int midiNote);
     bool previewSample(const juce::File&);
+    // UI-thread pad/sequencer triggers are queued for the next audio block.
+    // The queue is bounded so this call never blocks the host's audio thread.
     void triggerNote(int midiNote, int velocity = 100);
     NoteParameters getNoteParameters(int midiNote) const;
     void setNoteParameters(int midiNote, NoteParameters);
@@ -74,6 +76,14 @@ private:
 
     static constexpr int maxVoices = 32;
     static constexpr int maxVelocityLayers = 8;
+    static constexpr int pendingTriggerCapacity = 256;
+    struct PendingNoteTrigger
+    {
+        int midiNote = 0;
+        int velocity = 100;
+    };
+    juce::AbstractFifo pendingTriggerFifo{pendingTriggerCapacity};
+    std::array<PendingNoteTrigger, pendingTriggerCapacity> pendingTriggers{};
     double outputSampleRate = 44100.0;
     juce::AudioFormatManager formats;
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};

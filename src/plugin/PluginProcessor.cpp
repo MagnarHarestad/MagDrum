@@ -147,8 +147,16 @@ void MagDrumAudioProcessor::triggerNote(int note, int velocity)
 {
     if (note < 0 || note > 127)
         return;
-    const juce::ScopedLock lock(sampleLock);
-    startNoteVoice(note, velocity);
+
+    int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
+    pendingTriggerFifo.prepareToWrite(1, start1, size1, start2, size2);
+    const int writeCount = size1 + size2;
+    if (size1 > 0)
+        pendingTriggers[static_cast<size_t>(start1)] = {note, juce::jlimit(1, 127, velocity)};
+    else if (size2 > 0)
+        pendingTriggers[static_cast<size_t>(start2)] = {note, juce::jlimit(1, 127, velocity)};
+    if (writeCount > 0)
+        pendingTriggerFifo.finishedWrite(writeCount);
 }
 
 MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(int note) const
@@ -237,15 +245,29 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     buffer.clear();
     if (!sampleLock.tryEnter()) { midi.clear(); return; }
     struct CallbackUnlock { juce::CriticalSection& lock; ~CallbackUnlock() { lock.exit(); } } unlock{sampleLock};
-    juce::MidiBuffer::Iterator iterator(midi);
-    juce::MidiMessage message;
-    int eventSample = 0;
-    bool hasEvent = iterator.getNextEvent(message, eventSample);
+
+    int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
+    pendingTriggerFifo.prepareToRead(pendingTriggerCapacity, start1, size1, start2, size2);
+    const auto consumeQueuedTriggers = [this](int start, int count)
+    {
+        for (int index = 0; index < count; ++index)
+        {
+            const auto& trigger = pendingTriggers[static_cast<size_t>(start + index)];
+            startNoteVoice(trigger.midiNote, trigger.velocity);
+        }
+    };
+    consumeQueuedTriggers(start1, size1);
+    consumeQueuedTriggers(start2, size2);
+    pendingTriggerFifo.finishedRead(size1 + size2);
+
+    auto midiIterator = midi.cbegin();
+    const auto midiEnd = midi.cend();
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
-        while (hasEvent && eventSample <= i)
+        while (midiIterator != midiEnd && (*midiIterator).samplePosition <= i)
         {
+            const auto message = (*midiIterator).getMessage();
             if (message.isNoteOn())
             {
                 const int note = message.getNoteNumber();
@@ -253,7 +275,7 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
                 if (juce::isPositiveAndBelow(note, 128))
                     startNoteVoice(note, velocity);
             }
-            hasEvent = iterator.getNextEvent(message, eventSample);
+            ++midiIterator;
         }
 
         float left = 0.0f, right = 0.0f;
