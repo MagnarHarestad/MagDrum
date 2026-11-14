@@ -88,6 +88,10 @@ private:
     void finishPluginInventoryScan(int exitCode, bool cancelled);
     void choosePluginPreset();
     void startPluginPresetImport();
+    void startPluginProgramDiscovery();
+    void finishPluginProgramDiscovery(int exitCode, bool cancelled, juce::StringArray programs,
+                                      const juce::String& message);
+    void startPluginProgramImport();
     void finishPluginPresetImport(int exitCode, bool cancelled, juce::MemoryBlock state,
                                   const juce::String& message, const juce::String& pluginIdentifier,
                                   const juce::String& kitName);
@@ -160,10 +164,10 @@ private:
     juce::TextEditor profileName, mappingNote;
     juce::TextButton loadProfileButton{"Load profile"}, saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
     juce::Label mappingSummary;
-    juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode;
+    juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
     juce::TextEditor pluginPresetKitName;
-    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"};
+    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
     juce::Label pluginScanProgress, pluginScanInfo;
     std::unique_ptr<juce::FileChooser> chooser;
@@ -173,11 +177,17 @@ private:
     juce::File selectedPluginPresetFile;
     std::shared_ptr<std::atomic<bool>> pluginPresetImportCancellation;
     bool pluginPresetImportRunning = false;
+    bool pluginProgramScanRunning = false;
+    bool pluginPresetImportFromProgram = false;
+    juce::String pluginProgramScanIdentifier;
     juce::ThreadPool pluginPresetImportWorkers{1};
+    std::shared_ptr<std::atomic<bool>> pluginProgramScanCancellation;
+    juce::ThreadPool pluginProgramScanWorkers{1};
 
     friend class VstPluginNoteScanJob;
     friend class PluginInventoryScanJob;
     friend class PluginPresetImportJob;
+    friend class PluginProgramDiscoveryJob;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessorEditor)
 };

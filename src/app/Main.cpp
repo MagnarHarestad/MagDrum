@@ -668,6 +668,7 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     const auto presetFile = juce::File(request->getProperty("presetFile").toString());
     const auto stateFile = juce::File(request->getProperty("stateFile").toString());
     const auto resultFile = juce::File(request->getProperty("resultFile").toString());
+    const auto operation = request->getProperty("operation").toString();
     const auto workingDirectory = requestFile.getParentDirectory();
     const auto writeResult = [&resultFile](bool ok, const juce::String& message)
     {
@@ -679,8 +680,10 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     if (descriptionFile.getParentDirectory() != workingDirectory
         || stateFile.getParentDirectory() != workingDirectory
         || resultFile.getParentDirectory() != workingDirectory
-        || ! presetFile.existsAsFile() || ! presetFile.getFileExtension().equalsIgnoreCase(".vstpreset")
-        || presetFile.getSize() <= 0 || presetFile.getSize() > 512LL * 1024LL * 1024LL)
+        || (operation != "enumeratePrograms" && operation != "loadProgram" && operation != "loadPreset")
+        || (operation == "loadPreset" && (! presetFile.existsAsFile()
+            || ! presetFile.getFileExtension().equalsIgnoreCase(".vstpreset")
+            || presetFile.getSize() <= 0 || presetFile.getSize() > 512LL * 1024LL * 1024LL)))
         return 3;
 
     const auto xml = juce::XmlDocument::parse(descriptionFile);
@@ -702,8 +705,42 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
         return 5;
     }
 
+    if (operation == "enumeratePrograms")
+    {
+        const auto discovered = discoverPluginPrograms(*plugin);
+        if (discovered.exceedsLimit)
+        {
+            writeResult(false, magdrum::ui::localisedText("This instrument exposes too many programs to list here."));
+            return 10;
+        }
+        juce::Array<juce::var> programs;
+        for (const auto& program : discovered.programs)
+        {
+            auto* item = new juce::DynamicObject();
+            item->setProperty("index", program.index);
+            item->setProperty("name", program.name);
+            programs.add(juce::var(item));
+        }
+        auto* result = new juce::DynamicObject();
+        result->setProperty("ok", true);
+        result->setProperty("message", juce::String());
+        result->setProperty("programs", programs);
+        return resultFile.replaceWithText(juce::JSON::toString(juce::var(result), true)) ? 0 : 9;
+    }
+
+    if (operation == "loadProgram")
+    {
+        const int programIndex = request->getProperty("programIndex");
+        if (! juce::isPositiveAndBelow(programIndex, plugin->getNumPrograms()))
+        {
+            writeResult(false, magdrum::ui::localisedText("Choose a valid program from this instrument first."));
+            return 11;
+        }
+        plugin->setCurrentProgram(programIndex);
+    }
+
     juce::MemoryBlock preset;
-    if (! presetFile.loadFileAsData(preset) || preset.isEmpty())
+    if (operation == "loadPreset" && (! presetFile.loadFileAsData(preset) || preset.isEmpty()))
     {
         writeResult(false, magdrum::ui::localisedText("The selected VST3 preset could not be read."));
         return 6;
@@ -720,8 +757,9 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
         bool supported = false;
         bool loaded = false;
     } loader(preset);
-    plugin->getExtensions(loader);
-    if (! loader.supported || ! loader.loaded)
+    if (operation == "loadPreset")
+        plugin->getExtensions(loader);
+    if (operation == "loadPreset" && (! loader.supported || ! loader.loaded))
     {
         writeResult(false, magdrum::ui::localisedText("This preset could not be loaded by the selected VST3 instrument."));
         return 7;

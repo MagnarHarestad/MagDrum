@@ -2,7 +2,7 @@
 
 MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Browse WAV sample libraries alongside sounds from drum instruments, audition them, and transfer drum patterns through semantic MIDI mappings.
 
-**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. The latest Windows x64 test release is v0.1.1-test.107; the Windows ARM64 test package remains v0.1.1-test.103. The ARM64 app and VST3 have been cross-compiled on an x64 host but have not been run on native ARM64 Windows. JUCE omitted the optional VST3 `moduleinfo.json`; hosts can still load the module factory, although scanning may take longer.
+**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. The latest Windows x64 test release is v0.1.1-test.108; the Windows ARM64 test package remains v0.1.1-test.103. The ARM64 app and VST3 have been cross-compiled on an x64 host but have not been run on native ARM64 Windows. JUCE omitted the optional VST3 `moduleinfo.json`; hosts can still load the module factory, although scanning may take longer.
 
 **Website:** [MagDrum landing page](https://magnarharestad.github.io/MagDrum-Website/). The public GitHub Pages site is maintained in the [MagDrum-Website repository](https://github.com/MagnarHarestad/MagDrum-Website); its page source is mirrored from [docs/index.html](docs/index.html).
 
