@@ -2359,14 +2359,21 @@ juce::String languageName(Language language)
 }
 
 Language currentLanguage() { return selected; }
+juce::ChangeBroadcaster& languageChangeBroadcaster()
+{
+    static juce::ChangeBroadcaster broadcaster;
+    return broadcaster;
+}
 
 void setLanguage(Language language)
 {
+    if (selected == language) return;
     selected = language;
     applyMappings();
     const auto directory = getMagDrumDataDirectory();
     if (directory != juce::File() && (directory.createDirectory().wasOk() || directory.isDirectory()))
         directory.getChildFile("language.txt").replaceWithText(languageName(language));
+    languageChangeBroadcaster().sendSynchronousChangeMessage();
 }
 
 void initialiseMagDrumLocalization()

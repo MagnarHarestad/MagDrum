@@ -27,6 +27,7 @@ public:
 class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Button::Listener,
                                           private juce::ListBoxModel,
+                                          private juce::ChangeListener,
                                           private juce::Timer
 {
 public:
@@ -42,6 +43,7 @@ public:
 private:
     void buttonClicked(juce::Button*) override;
     void timerCallback() override;
+    void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void refreshSamples();
     void setPage(int);
