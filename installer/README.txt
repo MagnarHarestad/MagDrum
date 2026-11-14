@@ -1,6 +1,6 @@
 MagDrum test package for Windows (x64)
 
-The package contains the standalone MagDrum app and the MagDrum VST3 instrument.
+The package contains the standalone MagDrum app and the MagDrum VST3 instrument. The VST3 bundle includes a matching-architecture MagDrum.exe helper used by its instrument-scanner button.
 To install the VST3 for Cubase, close Cubase and run Install-MagDrum.ps1 from
 PowerShell. By default the script installs to the standard per-user VST3 folder:
 %LOCALAPPDATA%\Programs\Common\VST3. No administrator access is needed.
@@ -15,8 +15,9 @@ Then open Cubase 15 and choose Studio > VST Plug-in Manager > Rescan All.
 Add MagDrum as an instrument track and route a MIDI track to it. The plugin
 loads WAV, AIFF or FLAC samples that you select in its editor. This is an
 unsigned test build; Windows may show a security prompt because the package
-is not code-signed. The app and plugin are separate: the plugin is for Cubase,
-and the standalone app is the sample library/scanner.
+is not code-signed. The instrument scanner opens as a separate MagDrum window
+so third-party instrument crashes remain outside Cubase. It uses the same local
+sample database as the VST's sample browser.
 
 The package also contains LICENSE, THIRD-PARTY-NOTICES.md, JUCE-LICENSE.md
 and VST3-SDK-LICENSE.txt. MagDrum's original source code is licensed under

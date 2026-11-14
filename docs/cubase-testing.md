@@ -5,16 +5,17 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 ## Install and load
 
 1. Download `MagDrum-Windows-x64.zip` from the latest MagDrum test release and extract it.
-2. Close Cubase. Run the included `Install-MagDrum.ps1` from PowerShell. The default is a per-user VST3 install and does not require administrator access.
+2. Close Cubase. Run the included `Install-MagDrum.ps1` from PowerShell. The default is a per-user VST3 install and does not require administrator access. The package keeps a matching `MagDrum.exe` scanner helper inside the VST3 bundle.
 3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list.
 4. Create an instrument track with MagDrum and open its editor.
 
 ## Use the plug-in views
 
 1. **Sample Library:** click **Add sample folder** and choose your drum library folder. The VST scans it in the background and shows progress in its status line; scanning can be cancelled and unchanged files are skipped. When the scan finishes, find, filter and audition samples in the list or sample map.
-2. **Drum Machine:** select one of the named General MIDI pads. Load a WAV directly or assign a selected library sample. The panel at right shows the pad's waveform and velocity layers. Click the pad to audition it.
-3. **Sequencer:** enter hits on the eight category-specific lanes, set the tempo and preview the pattern. Use **Export MIDI** to save a one-bar pattern, then import that file into a Cubase MIDI track.
-4. To test external MIDI input, create or play a Cubase part that sends note 36 with velocity 100. Cubase's displayed octave name for note 36 depends on its MIDI octave-numbering preference, so verify the MIDI note number if no sound plays.
+2. **Plugin instruments:** click **Plugin instruments**. Confirm the separate MagDrum window opens, select or scan a VST instrument, save a kit and scan MIDI notes. Return to the VST and press **Search** to refresh; captured samples should appear with source, kit, note and velocity details. The instrument editor and scan controls live in the helper window in this release; native controls in the VST remain unfinished.
+3. **Drum Machine:** select one of the named General MIDI pads. Load a WAV directly or assign a selected library sample. The panel at right shows the pad's waveform and velocity layers. Click the pad to audition it.
+4. **Sequencer:** enter hits on the eight category-specific lanes, set the tempo and preview the pattern. Use **Export MIDI** to save a one-bar pattern, then import that file into a Cubase MIDI track.
+5. To test external MIDI input, create or play a Cubase part that sends note 36 with velocity 100. Cubase's displayed octave name for note 36 depends on its MIDI octave-numbering preference, so verify the MIDI note number if no sound plays.
 
 ## Check project state and velocity layers
 

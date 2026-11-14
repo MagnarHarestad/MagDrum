@@ -105,6 +105,12 @@ try {
     if (-not $app) { throw 'The Windows standalone app was not produced.' }
     if (-not $plugin) { throw 'The Windows VST3 bundle was not produced.' }
 
+    $pluginModule = Get-ChildItem -LiteralPath $plugin.FullName -Recurse -File -Filter 'MagDrum.vst3' |
+        Select-Object -First 1
+    if (-not $pluginModule) { throw 'The Windows VST3 module binary was not found inside its bundle.' }
+    $pluginArchitectureDirectory = $pluginModule.Directory.FullName
+    Copy-Item -LiteralPath $app.FullName -Destination (Join-Path $pluginArchitectureDirectory 'MagDrum.exe') -Force
+
     $stagingName = 'package-local-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
     $stagingDirectory = Join-Path $buildDirectory $stagingName
     New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
