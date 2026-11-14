@@ -80,6 +80,7 @@ private:
     void refreshSourceKitFilters();
     void showLibraryTools();
     void handleLibraryTool(int);
+    void applyLanguage();
     juce::File selectedSample() const;
 
     magdrum::ui::LookAndFeel theme;
@@ -100,6 +101,7 @@ private:
     juce::ThreadPool scanWorkers{1};
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextButton mapsTab{"MIDI MAPS"};
+    juce::TextButton languageButton{"☰"};
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
     juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, instrumentScannerButton{"Plugin instruments"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
