@@ -52,6 +52,8 @@ private:
     int sequenceTempoAtBeat(double beat) const;
     void refreshSequenceMetadata();
     bool editSequenceMetadata(bool remove);
+    MidiPattern currentSequencePattern() const;
+    void reviewMidiChanges();
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     void updateSequencerGrid();
@@ -110,7 +112,9 @@ private:
     juce::TextButton setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};
     juce::Label metadataSummary;
     std::vector<MidiMetaEvent> sequenceMetadata;
-    juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"};
+    MidiPattern importedMidiBaseline;
+    bool hasImportedMidiBaseline = false;
+    juce::TextButton importMidiButton{"Import MIDI"}, browseMidiButton{"Find drum MIDI"}, reviewMidiButton{"Review changes"};
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<MagDrumStepButton, 512>, 8> steps;
     std::array<std::array<int, 512>, 8> stepVelocities{};
