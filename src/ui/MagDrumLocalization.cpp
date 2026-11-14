@@ -605,6 +605,12 @@ countries: de
 " (first matching profile entry). Candidates: " = " (erster passender Profileintrag). Kandidaten: "
 "Fallback: " = "Ersatzzuordnung: "
 "Omitted: " = "Ausgelassen: "
+
+"Select a folder containing VST3 presets" = "Ordner mit VST3-Presets auswählen"
+"Import a MagDrum mapping profile CSV" = "MagDrum-Mappingprofil-CSV importieren"
+"Export mapping profile CSV" = "Mappingprofil-CSV exportieren"
+"Export MagDrum metadata archive" = "MagDrum-Metadatenarchiv exportieren"
+"Import MagDrum metadata archive" = "MagDrum-Metadatenarchiv importieren"
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1206,6 +1212,12 @@ countries: fr
 " (first matching profile entry). Candidates: " = " (première entrée correspondante du profil). Candidats : "
 "Fallback: " = "Remplacement : "
 "Omitted: " = "Ignoré : "
+
+"Select a folder containing VST3 presets" = "Sélectionner un dossier contenant des préréglages VST3"
+"Import a MagDrum mapping profile CSV" = "Importer un profil de mappage MagDrum au format CSV"
+"Export mapping profile CSV" = "Exporter un profil de mappage au format CSV"
+"Export MagDrum metadata archive" = "Exporter l’archive de métadonnées MagDrum"
+"Import MagDrum metadata archive" = "Importer l’archive de métadonnées MagDrum"
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -1807,6 +1819,12 @@ countries: es
 " (first matching profile entry). Candidates: " = " (primera entrada coincidente del perfil). Candidatos: "
 "Fallback: " = "Alternativa: "
 "Omitted: " = "Omitido: "
+
+"Select a folder containing VST3 presets" = "Seleccionar una carpeta con ajustes preestablecidos VST3"
+"Import a MagDrum mapping profile CSV" = "Importar perfil de asignación CSV de MagDrum"
+"Export mapping profile CSV" = "Exportar perfil de asignación CSV"
+"Export MagDrum metadata archive" = "Exportar archivo de metadatos de MagDrum"
+"Import MagDrum metadata archive" = "Importar archivo de metadatos de MagDrum"
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -2408,6 +2426,12 @@ countries: se
 " (first matching profile entry). Candidates: " = " (första matchande profilposten). Kandidater: "
 "Fallback: " = "Reservmappning: "
 "Omitted: " = "Utelämnat: "
+
+"Select a folder containing VST3 presets" = "Välj en mapp som innehåller VST3-förinställningar"
+"Import a MagDrum mapping profile CSV" = "Importera MagDrums mappningsprofil från CSV"
+"Export mapping profile CSV" = "Exportera mappningsprofil som CSV"
+"Export MagDrum metadata archive" = "Exportera MagDrums metadataarkiv"
+"Import MagDrum metadata archive" = "Importera MagDrums metadataarkiv"
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -3009,6 +3033,12 @@ countries: no
 " (first matching profile entry). Candidates: " = " (første treff i profilen). Kandidater: "
 "Fallback: " = "Reservetilordning: "
 "Omitted: " = "Utelatt: "
+
+"Select a folder containing VST3 presets" = "Velg en mappe med VST3-forhåndsinnstillinger"
+"Import a MagDrum mapping profile CSV" = "Importer MagDrum-tilordningsprofil fra CSV"
+"Export mapping profile CSV" = "Eksporter tilordningsprofil som CSV"
+"Export MagDrum metadata archive" = "Eksporter MagDrums metadataarkiv"
+"Import MagDrum metadata archive" = "Importer MagDrums metadataarkiv"
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -3610,6 +3640,12 @@ countries: dk
 " (first matching profile entry). Candidates: " = " (første matchende profilpost). Kandidater: "
 "Fallback: " = "Reservetilordning: "
 "Omitted: " = "Udeladt: "
+
+"Select a folder containing VST3 presets" = "Vælg en mappe med VST3-forudindstillinger"
+"Import a MagDrum mapping profile CSV" = "Importér MagDrum-tilknytningsprofil fra CSV"
+"Export mapping profile CSV" = "Eksportér tilknytningsprofil som CSV"
+"Export MagDrum metadata archive" = "Eksportér MagDrums metadataarkiv"
+"Import MagDrum metadata archive" = "Importér MagDrums metadataarkiv"
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -4211,6 +4247,12 @@ countries: fi
 " (first matching profile entry). Candidates: " = " (profiilin ensimmäinen vastaava määritys). Ehdokkaat: "
 "Fallback: " = "Varamääritys: "
 "Omitted: " = "Pois jätetty: "
+
+"Select a folder containing VST3 presets" = "Valitse VST3-esiasetuksia sisältävä kansio"
+"Import a MagDrum mapping profile CSV" = "Tuo MagDrum-määritysprofiili CSV-tiedostosta"
+"Export mapping profile CSV" = "Vie määritysprofiili CSV-tiedostona"
+"Export MagDrum metadata archive" = "Vie MagDrumin metatietoarkisto"
+"Import MagDrum metadata archive" = "Tuo MagDrumin metatietoarkisto"
 )translations";
 
 Language selected = Language::english;
