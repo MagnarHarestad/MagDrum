@@ -8,6 +8,7 @@
 #include "core/PluginScanProcess.h"
 #include "core/PluginPrograms.h"
 #include "core/PluginPresetFiles.h"
+#include "core/PluginSourceKitRequest.h"
 #include "core/PatternAudioRenderer.h"
 #include "core/LoopingAudioSource.h"
 #include "core/PluginVelocityLayerAnalyzer.h"
@@ -232,6 +233,7 @@ public:
   refreshLanguageFilters();formats.registerBasicFormats();juce::addDefaultFormatsToManager(pluginFormats);if(audioEnabled)setAudioChannels(0,2);initDb();loadPluginList();knownPlugins.addChangeListener(this);syncPluginInventory();refresh();
  }
   ~MainComponent()override{stopTimer();knownPlugins.removeChangeListener(this);pluginScanCancellation.store(true);sampleScanCancellation.store(true);if(patternPreviewCancellation)patternPreviewCancellation->store(true);comparisonWindow.reset();pluginWindow.reset();midiPatternWindow.reset();stepSequencerWindow.reset();pluginEditorWindow.reset();metadataWorkers.removeAllJobs(true,-1);browseWorkers.removeAllJobs(true,-1);workers.removeAllJobs(true,-1);selectedPlugin.reset();if(audioEnabled)shutdownAudio();transport.setSource(nullptr);source.reset();if(patternPreviewFile.existsAsFile())patternPreviewFile.deleteFile();}
+ void openSourceKitRequest(const PluginSourceKitRequest& request){openSourceKitByIdentifier(request);}
  void prepareToPlay(int n,double r)override{transport.prepareToPlay(n,r);} void getNextAudioBlock(const juce::AudioSourceChannelInfo&i)override{transport.getNextAudioBlock(i);} void releaseResources()override{transport.releaseResources();}
  void timerCallback()override{stopTimer();refresh(false);}
  void paint(juce::Graphics&g)override{magdrum::ui::paintTexturedBackground(g,getLocalBounds(),0.42f);g.setColour(magdrum::ui::Palette::Border);g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(20.0f),12.0f,1.0f);g.setColour(magdrum::ui::Palette::Accent);g.fillRoundedRectangle(22,22,5,44,2);}
@@ -453,6 +455,7 @@ private:
  void syncPluginInventory(){for(const auto& plugin:knownPlugins.getTypes()){if(!plugin.isInstrument)continue;database.upsertPluginInstrument({plugin.createIdentifierString(),plugin.pluginFormatName,plugin.name,plugin.manufacturerName,plugin.category,plugin.fileOrIdentifier,plugin.version});}}
  void changeListenerCallback(juce::ChangeBroadcaster*)override{if(auto xml=knownPlugins.createXml())xml->writeTo(pluginListFile);syncPluginInventory();refresh(true);}
  void openSelectedSourceKit(){const int row=rows.getSelectedRow();if(!juce::isPositiveAndBelow(row,visible.size())){status.setText("Select a captured plugin sound first.",juce::dontSendNotification);return;}const auto file=visible.getReference(row);const auto found=browseRecordsByPath.find(file.getFullPathName().toStdString());if(found==browseRecordsByPath.end()||found->second.pluginIdentifier.isEmpty()){status.setText("The selected sample has no saved plugin source kit.",juce::dontSendNotification);return;}const auto identifier=found->second.pluginIdentifier;const auto kitName=found->second.kitName;for(const auto& description:knownPlugins.getTypes())if(description.createIdentifierString()==identifier){loadPluginInstrument(description,kitName);return;}status.setText("The source instrument is not installed or discovered. Scan its plugin folder first.",juce::dontSendNotification);}
+ void openSourceKitByIdentifier(const PluginSourceKitRequest& request){if(!request.isValid()){status.setText(magdrum::ui::localisedText("The saved source kit request is invalid."),juce::dontSendNotification);return;}for(const auto& description:knownPlugins.getTypes())if(description.isInstrument&&description.createIdentifierString()==request.pluginIdentifier){loadPluginInstrument(description,request.kitName);return;}status.setText(magdrum::ui::localisedText("The source instrument is not installed or discovered. Scan its plugin folder first."),juce::dontSendNotification);}
  void loadPluginInstrument(const juce::PluginDescription& description,const juce::String& kitToRecall={}){if(pluginScanRunning.load()){status.setText("Wait for the current instrument scan to finish.",juce::dontSendNotification);return;}if(selectedPlugin&&selectedPluginIdentifier==description.createIdentifierString()){if(!kitToRecall.isEmpty()){if(recallSelectedPluginKit(kitToRecall))status.setText("Recalled source kit: "+kitToRecall,juce::dontSendNotification);else status.setText("The source kit state could not be recalled.",juce::dontSendNotification);}showSelectedPluginEditor();return;}pluginEditorWindow.reset();selectedPlugin.reset();selectedPluginIdentifier=description.createIdentifierString();selectedPluginFormat=description.pluginFormatName;selectedPluginDescription=description;status.setText("Loading "+description.name+"…",juce::dontSendNotification);const auto generation=++pluginLoadGeneration;juce::Component::SafePointer<MainComponent>safe(this);pluginFormats.createPluginInstanceAsync(description,44100.0,512,[safe,description,generation,kitToRecall](std::unique_ptr<juce::AudioPluginInstance> instance,const juce::String& error){if(safe==nullptr||generation!=safe->pluginLoadGeneration)return;if(!instance){safe->selectedPluginIdentifier.clear();safe->selectedPluginFormat.clear();safe->selectedPluginDescription={};safe->status.setText("Could not load plugin: "+error,juce::dontSendNotification);return;}safe->selectedPluginName=description.name;safe->selectedPlugin=std::move(instance);if(kitToRecall.isNotEmpty()){if(safe->recallSelectedPluginKit(kitToRecall))safe->status.setText("Loaded "+description.name+" and recalled source kit: "+kitToRecall,juce::dontSendNotification);else safe->status.setText("Loaded "+description.name+", but its saved source kit state could not be recalled.",juce::dontSendNotification);}else safe->status.setText("Loaded "+description.name+". Select a kit in its editor, close it, then save or scan the kit state.",juce::dontSendNotification);safe->showSelectedPluginEditor();});}
  bool loadVst3Preset(const juce::File& file){if(pluginScanRunning.load()||!selectedPlugin||selectedPluginFormat!="VST3"||!file.existsAsFile()||file.getSize()<=0||file.getSize()>512LL*1024LL*1024LL)return false;juce::MemoryBlock preset;if(!file.loadFileAsData(preset)||preset.isEmpty())return false;struct PresetLoader final:juce::ExtensionsVisitor{explicit PresetLoader(const juce::MemoryBlock& dataToLoad):data(dataToLoad){}void visitVST3Client(const VST3Client& client)override{supported=true;loaded=client.setPreset(data);}const juce::MemoryBlock&data;bool supported=false,loaded=false;};PresetLoader loader(preset);selectedPlugin->getExtensions(loader);if(!loader.supported||!loader.loaded)return false;selectedPlugin->updateHostDisplay();return true;}
  void showSelectedPluginEditor(){if(!selectedPlugin)return;if(!selectedPlugin->hasEditor()){status.setText("This plugin has no editor. Its current state can still be saved as a kit.",juce::dontSendNotification);return;}auto* editor=selectedPlugin->createEditorIfNeeded();if(editor==nullptr){status.setText("The plugin editor could not be created.",juce::dontSendNotification);return;}if(pluginEditorWindow==nullptr)pluginEditorWindow=std::make_unique<PluginEditorWindow>(*this,editor,selectedPluginName);pluginEditorWindow->toFront(true);}
@@ -619,8 +622,96 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 void MainComponent::openPluginBrowser(){if(pluginWindow==nullptr)pluginWindow=std::make_unique<PluginWindow>(*this);pluginWindow->toFront(true);status.setText(juce::String(database.getPluginInstruments().size())+" plugin instruments indexed.",juce::dontSendNotification);}
-class MagDrumApplication final:public juce::JUCEApplication{
-public:const juce::String getApplicationName()override{return"MagDrum";}const juce::String getApplicationVersion()override{return JUCE_APPLICATION_VERSION_STRING;}bool moreThanOneInstanceAllowed()override{return true;}void initialise(const juce::String& commandLine)override{magdrum::ui::initialiseMagDrumLocalization();juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);juce::StringArray arguments;arguments.addTokens(commandLine,true);if(arguments.size()==2&&arguments[0]=="--magdrum-plugin-scan-worker"){const auto request=juce::File(arguments[1]);if(!juce::Thread::launch([request]{PluginScanProcess::runWorker(request);juce::MessageManager::callAsync([]{if(auto* app=juce::JUCEApplication::getInstance())app->quit();});}))quit();return;}const auto logs=getMagDrumDataDirectory().getChildFile("logs");StructuredLogger::initialise(logs);StructuredLogger::log(StructuredLogger::Level::info,"application.started",{{"version",getApplicationVersion()},{"platform",juce::SystemStats::getOperatingSystemName()}});const bool openPlugins=arguments.size()==1&&arguments[0]=="--magdrum-plugin-browser";window=std::make_unique<Window>(openPlugins);if(openPlugins)window->openPluginBrowser();}void shutdown()override{window.reset();juce::LookAndFeel::setDefaultLookAndFeel(nullptr);StructuredLogger::log(StructuredLogger::Level::info,"application.stopped");}void systemRequestedQuit()override{quit();}void anotherInstanceStarted(const juce::String&)override{}
-private:magdrum::ui::LookAndFeel lookAndFeel;class Window final:public juce::DocumentWindow{public:explicit Window(bool scannerOnly=false):DocumentWindow("MagDrum",magdrum::ui::Palette::Background,allButtons){setUsingNativeTitleBar(true);setContentOwned(new MainComponent(!scannerOnly),true);centreWithSize(1140,790);setVisible(true);}void openPluginBrowser(){if(auto* main=dynamic_cast<MainComponent*>(getContentComponent()))main->openPluginBrowser();}void closeButtonPressed()override{juce::JUCEApplication::getInstance()->systemRequestedQuit();}};std::unique_ptr<Window>window;
+class MagDrumApplication final : public juce::JUCEApplication
+{
+public:
+    const juce::String getApplicationName() override { return "MagDrum"; }
+    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
+    bool moreThanOneInstanceAllowed() override { return true; }
+
+    void initialise(const juce::String& commandLine) override
+    {
+        magdrum::ui::initialiseMagDrumLocalization();
+        juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+        juce::StringArray arguments;
+        arguments.addTokens(commandLine, true);
+        if (arguments.size() == 2 && arguments[0] == "--magdrum-plugin-scan-worker")
+        {
+            const auto request = juce::File(arguments[1].unquoted());
+            if (! juce::Thread::launch([request]
+                {
+                    PluginScanProcess::runWorker(request);
+                    juce::MessageManager::callAsync([]
+                    {
+                        if (auto* app = juce::JUCEApplication::getInstance()) app->quit();
+                    });
+                }))
+                quit();
+            return;
+        }
+
+        const auto logs = getMagDrumDataDirectory().getChildFile("logs");
+        StructuredLogger::initialise(logs);
+        StructuredLogger::log(StructuredLogger::Level::info, "application.started",
+                              {{"version", getApplicationVersion()}, {"platform", juce::SystemStats::getOperatingSystemName()}});
+        const bool openPlugins = arguments.size() == 1 && arguments[0] == "--magdrum-plugin-browser";
+        const bool openSourceKit = arguments.size() == 2 && arguments[0] == "--magdrum-open-source-kit";
+        window = std::make_unique<Window>(openPlugins);
+        if (openPlugins)
+            window->openPluginBrowser();
+        else if (openSourceKit)
+            window->openSourceKitRequest(juce::File(arguments[1].unquoted()));
+    }
+
+    void shutdown() override
+    {
+        window.reset();
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+        StructuredLogger::log(StructuredLogger::Level::info, "application.stopped");
+    }
+
+    void systemRequestedQuit() override { quit(); }
+    void anotherInstanceStarted(const juce::String&) override {}
+
+private:
+    magdrum::ui::LookAndFeel lookAndFeel;
+
+    class Window final : public juce::DocumentWindow
+    {
+    public:
+        explicit Window(bool scannerOnly = false)
+            : DocumentWindow("MagDrum", magdrum::ui::Palette::Background, allButtons)
+        {
+            setUsingNativeTitleBar(true);
+            setContentOwned(new MainComponent(! scannerOnly), true);
+            centreWithSize(1140, 790);
+            setVisible(true);
+        }
+
+        void openPluginBrowser()
+        {
+            if (auto* main = dynamic_cast<MainComponent*>(getContentComponent()))
+                main->openPluginBrowser();
+        }
+
+        void openSourceKitRequest(const juce::File& file)
+        {
+            const auto json = file.existsAsFile() && file.getSize() <= 65536
+                ? file.loadFileAsString() : juce::String();
+            file.deleteFile();
+            const auto request = PluginSourceKitRequest::fromVar(juce::JSON::parse(json));
+            if (auto* main = dynamic_cast<MainComponent*>(getContentComponent()))
+            {
+                if (request)
+                    main->openSourceKitRequest(*request);
+                else
+                    main->openSourceKitRequest({});
+            }
+        }
+
+        void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
+    };
+
+    std::unique_ptr<Window> window;
 };
 START_JUCE_APPLICATION(MagDrumApplication)

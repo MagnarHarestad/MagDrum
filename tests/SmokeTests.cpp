@@ -10,6 +10,7 @@
 #include "core/PluginScanProcess.h"
 #include "core/PluginPrograms.h"
 #include "core/PluginPresetFiles.h"
+#include "core/PluginSourceKitRequest.h"
 #include "core/PatternAudioRenderer.h"
 #include "core/LoopingAudioSource.h"
 #include "core/PluginVelocityLayerAnalyzer.h"
@@ -198,6 +199,7 @@ int main(int argc,char** argv)
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;
     if(!matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.099,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.1,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.1,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::mediumSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::longSample,2.0,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,999.9)||matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::midBrightness,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,3000.0)||matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,0.0))return 110;
     const auto logLine=StructuredLogger::formatEvent(StructuredLogger::Level::warning,"test.event",{{"detail","quoted \"text\"\nline"}},"2026-01-02T03:04:05Z");const auto parsedLog=juce::JSON::parse(logLine);if(!parsedLog.isObject()||parsedLog.getDynamicObject()->getProperty("level").toString()!="warning"||parsedLog.getDynamicObject()->getProperty("event").toString()!="test.event"||parsedLog.getDynamicObject()->getProperty("detail").toString()!="quoted \"text\"\nline")return 114;
+    const PluginSourceKitRequest sourceKitRequest{"VST3|Magnar|Instrument|UUID", "Återkallat kit"};const auto parsedSourceKitRequest=PluginSourceKitRequest::fromVar(juce::JSON::parse(juce::JSON::toString(sourceKitRequest.toVar(),false)));if(!parsedSourceKitRequest||parsedSourceKitRequest->pluginIdentifier!=sourceKitRequest.pluginIdentifier||parsedSourceKitRequest->kitName!=sourceKitRequest.kitName)return 240;if(PluginSourceKitRequest::fromVar(juce::JSON::parse("{\"kitName\":\"missing identifier\"}")))return 241;auto oversizedSourceKitRequest=sourceKitRequest;oversizedSourceKitRequest.pluginIdentifier=juce::String::repeatedString("x",4097);if(oversizedSourceKitRequest.isValid())return 242;
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;

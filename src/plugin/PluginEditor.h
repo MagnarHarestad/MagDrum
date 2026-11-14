@@ -73,6 +73,7 @@ private:
     void chooseSampleFolder();
     void scanDefaultLibraryFolders();
     void launchInstrumentScanner();
+    void openSourceKitForSelectedSample();
     void startNextDefaultLibraryFolder();
     void startSampleScan(const juce::File&);
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
@@ -104,7 +105,7 @@ private:
     juce::TextButton languageButton{"☰"};
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
-    juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, instrumentScannerButton{"Plugin instruments"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
+    juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, searchButton{"Search"}, previewButton{"Preview"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
     std::unique_ptr<MagDrumWaveform> waveform;
