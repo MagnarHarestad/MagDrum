@@ -179,7 +179,7 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
     return false;
 }
 
-int main(int argc,char** argv)
+int runSmokeTests(int argc,char** argv)
 {
     if (magdrum::sequencer::stepsPerBar(3,4) != 12
         || magdrum::sequencer::stepsPerBar(5,4) != 20
@@ -600,4 +600,12 @@ int main(int argc,char** argv)
     LoopingAudioSource loopingSource(previewFormats.createReaderFor(previewFile));const auto loopLength=loopingSource.getTotalLength();if(loopLength!=previewReader->lengthInSamples)return 120;loopingSource.setLooping(true);loopingSource.setNextReadPosition(loopLength-32);juce::AudioBuffer<float> loopBlock(2,64);loopingSource.getNextAudioBlock({&loopBlock,0,64});if(loopingSource.getNextReadPosition()!=32)return 121;for(int channel=0;channel<2;++channel)for(int i=0;i<64;++i){const int expectedIndex=i<32?static_cast<int>(loopLength)-32+i:i-32;if(std::abs(loopBlock.getSample(channel,i)-previewAudio.getSample(channel,expectedIndex))>0.00001f)return 122;}loopingSource.setLooping(false);loopingSource.setNextReadPosition(loopLength-8);loopBlock.clear();loopingSource.getNextAudioBlock({&loopBlock,0,16});for(int channel=0;channel<2;++channel)for(int i=8;i<16;++i)if(std::abs(loopBlock.getSample(channel,i))>0.00001f)return 123;
     int previewCancelChecks=0;const auto cancelledPreviewFile=root.getChildFile("cancelled-preview.wav");const auto cancelledPreview=PatternAudioRenderer{}.render(previewPattern,previewSamples,cancelledPreviewFile,[&]{return ++previewCancelChecks>=3;});if(cancelledPreview.ok||cancelledPreview.error!="Preview cancelled."||cancelledPreviewFile.existsAsFile())return 78;
     return 0;
+}
+
+int main(int argc, char** argv)
+{
+    const auto result = runSmokeTests(argc, argv);
+    if (result != 0)
+        std::cerr << "MagDrumTests failed with diagnostic code " << result << ".\n";
+    return result;
 }
