@@ -1,5 +1,6 @@
-# MagDrum Windows x64 package
+# MagDrum local test packages
 
-The Windows x64 app and VST3 are packaged in `MagDrum-Windows-x64.zip` for GitHub release [v0.1.1-test.116](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.116). This update fixes the remaining untranslated pad sample text and MIDI tempo label. The package includes the standalone app, VST3 bundle, installer and license notices.
+Release [v0.1.1-test.117](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.117) contains the Windows x64 ZIP and Linux x64 tarball. Both Windows CTest suites and both Linux CTest suites passed (2/2 on each platform). The Windows ZIP includes the standalone app, VST3 bundle, installer and license notices. The Linux tarball includes the standalone app, VST3 bundle and license notices. Linux still needs a smoke test in a native Linux DAW.
 
-SHA-256: `609e7834ddaaad2979c15dcdd9e15742735f3d6510ea69c99c9d4b9686bf59e1`.
+Windows x64 SHA-256: `07453aefd8ea324ec8d9d846b4d81e33bf8050dd53d5d1d1ce7f9dd6b66768d1`  
+Linux x64 SHA-256: `d0ba46ddbfd13e840c50fc71abdd6a4ee41f91f7010f57c07a3ae91bd402a913`

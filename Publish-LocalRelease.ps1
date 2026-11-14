@@ -96,7 +96,7 @@ if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
 if ($includedNames -contains 'MagDrum-Linux-x64.tar.gz') {
     $noteLines += @(
         '',
-        'Linux x64 was built in WSL Ubuntu 24.04. The app and VST3 compile, and the plugin tests pass. The app integration test passes when invoked directly with the CTest arguments but CTest reports it failed without output; a native Linux host smoke test remains pending.'
+        'Linux x64 was built in WSL Ubuntu 24.04. Both CTest suites pass, the app and VST3 are x86-64, and linked dependencies resolve in WSL. A native Linux host smoke test remains pending.'
     )
 }
 $notesPath = Join-Path $env:TEMP ("MagDrum-$Tag-release-notes.txt")
