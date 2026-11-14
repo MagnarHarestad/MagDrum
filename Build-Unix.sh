@@ -61,9 +61,11 @@ ctest --test-dir "$build_dir" -C Release --output-on-failure
 stage="$build_dir/package-local"
 rm -rf "$stage"
 mkdir -p "$stage"
+juce_source="$build_dir/_deps/juce-src"
+[[ -f "$juce_source/LICENSE.md" ]] || { echo "JUCE license was not found under the configured build directory: $juce_source" >&2; exit 1; }
 cp "$repo_root/LICENSE" "$repo_root/THIRD-PARTY-NOTICES.md" "$stage/"
-cp "$repo_root/build/_deps/juce-src/LICENSE.md" "$stage/JUCE-LICENSE.md"
-cp "$repo_root/build/_deps/juce-src/modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt" "$stage/VST3-SDK-LICENSE.txt"
+cp "$juce_source/LICENSE.md" "$stage/JUCE-LICENSE.md"
+cp "$juce_source/modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt" "$stage/VST3-SDK-LICENSE.txt"
 if [[ "$host_os" == "Darwin" ]]; then
   app="$(find "$build_dir" -type d -path '*/MagDrum_artefacts/Release/MagDrum.app' -print -quit)"
   vst="$(find "$build_dir" -type d -path '*/MagDrumPlugin_artefacts/Release/VST3/MagDrum.vst3' -print -quit)"
@@ -72,7 +74,7 @@ if [[ "$host_os" == "Darwin" ]]; then
   ditto "$app" "$stage/MagDrum.app"
   ditto "$vst" "$stage/MagDrum.vst3"
   ditto "$au" "$stage/MagDrum.component"
-  cp "$repo_root/installer/README.txt" "$stage/README.txt"
+  cp "$repo_root/installer/README-macOS.txt" "$stage/README.txt"
   archive="$repo_root/latest-publish/MagDrum-$platform.zip"
   mkdir -p "$(dirname "$archive")"
   ditto -c -k --sequesterRsrc --keepParent "$stage" "$archive"
@@ -83,7 +85,7 @@ else
   [[ -f "$app" && -x "$app" && -n "$vst" ]] || { echo "Expected Linux app and VST3 bundle were not both produced." >&2; exit 1; }
   cp "$app" "$stage/MagDrum"
   cp -a "$vst" "$stage/MagDrum.vst3"
-  cp "$repo_root/installer/README.txt" "$stage/README.txt"
+  cp "$repo_root/installer/README-Linux.txt" "$stage/README.txt"
   archive="$repo_root/latest-publish/MagDrum-$platform.tar.gz"
   mkdir -p "$(dirname "$archive")"
   tar -C "$stage" -czf "$archive" .
