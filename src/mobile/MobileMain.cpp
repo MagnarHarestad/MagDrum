@@ -38,35 +38,31 @@ public:
         title.setText("MagDrum", juce::dontSendNotification);
         title.setFont(juce::Font(30.0f, juce::Font::bold));
         addAndMakeVisible(title);
-        importFolder.setButtonText("Import audio files"); importFolder.addListener(this); addAndMakeVisible(importFolder);
-        cancelImport.setButtonText("Cancel"); cancelImport.addListener(this); cancelImport.setEnabled(false); addAndMakeVisible(cancelImport);
-        play.setButtonText("Play selected"); play.addListener(this); addAndMakeVisible(play);
-        stop.setButtonText("Stop"); stop.addListener(this); addAndMakeVisible(stop);
-        importMidi.setButtonText("Import MIDI"); importMidi.addListener(this); addAndMakeVisible(importMidi);
-        exportMidi.setButtonText("Export MIDI"); exportMidi.addListener(this); addAndMakeVisible(exportMidi);
-        midiFallback.setButtonText("Allow articulation fallback");
-        midiFallback.setTooltip("When enabled, unsupported articulations use a mapping for the same drum instrument. The export report lists every substitution.");
+        languageButton.setButtonText("☰");
+        languageButton.onClick = [this] { magdrum::ui::showApplicationMenu(languageButton, [this] { applyLanguage(); }); };
+        addAndMakeVisible(languageButton);
+        importFolder.addListener(this); addAndMakeVisible(importFolder);
+        cancelImport.addListener(this); cancelImport.setEnabled(false); addAndMakeVisible(cancelImport);
+        play.addListener(this); addAndMakeVisible(play);
+        stop.addListener(this); addAndMakeVisible(stop);
+        importMidi.addListener(this); addAndMakeVisible(importMidi);
+        exportMidi.addListener(this); addAndMakeVisible(exportMidi);
         addAndMakeVisible(midiFallback);
-        profileName.setTextToShowWhenEmpty("Mapping profile name", magdrum::ui::Palette::Muted);
         profileName.setText("General MIDI"); addAndMakeVisible(profileName);
-        savedProfiles.setTextWhenNothingSelected("Saved profiles");
         savedProfiles.onChange = [this] { loadMappingProfile(); }; addAndMakeVisible(savedProfiles);
-        loadProfile.setButtonText("Load profile"); loadProfile.addListener(this); addAndMakeVisible(loadProfile);
-        saveProfile.setButtonText("Save profile"); saveProfile.addListener(this); addAndMakeVisible(saveProfile);
+        loadProfile.addListener(this); addAndMakeVisible(loadProfile);
+        saveProfile.addListener(this); addAndMakeVisible(saveProfile);
         const char* instruments[] { "Kick", "Snare", "Hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion" };
         for (int index = 0; index < 9; ++index) mappingInstrument.addItem(instruments[index], index + 1);
         mappingInstrument.setSelectedId(1); addAndMakeVisible(mappingInstrument);
         const char* articulations[] { "Default", "Center", "Rimshot", "Side stick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge" };
         for (int index = 0; index < 13; ++index) mappingArticulation.addItem(articulations[index], index + 1);
         mappingArticulation.setSelectedId(1); addAndMakeVisible(mappingArticulation);
-        mappingNote.setTextToShowWhenEmpty("MIDI note 0–127", magdrum::ui::Palette::Muted);
         mappingNote.setInputRestrictions(3, "0123456789"); addAndMakeVisible(mappingNote);
-        setMapping.setButtonText("Set note"); setMapping.addListener(this); addAndMakeVisible(setMapping);
-        removeMapping.setButtonText("Remove"); removeMapping.addListener(this); addAndMakeVisible(removeMapping);
+        setMapping.addListener(this); addAndMakeVisible(setMapping);
+        removeMapping.addListener(this); addAndMakeVisible(removeMapping);
         if (databaseReady) refreshSavedProfiles();
-        search.setTextToShowWhenEmpty("Search samples", magdrum::ui::Palette::Muted);
         search.onTextChange = [this] { refresh(); }; addAndMakeVisible(search);
-        loadMore.setButtonText("More");
         loadMore.onClick = [this] { loadMoreSamples(); };
         loadMore.setEnabled(false);
         addAndMakeVisible(loadMore);
@@ -75,14 +71,11 @@ public:
         category.setSelectedId(1); category.onChange = [this] { refresh(); }; addAndMakeVisible(category);
         addAndMakeVisible(rows); rows.setRowHeight(56);
         status.setColour(juce::Label::textColourId, magdrum::ui::Palette::Muted);
-        status.setText(databaseReady ? (browseDatabaseReady ? "Import audio files or search your library."
-                                                             : "The sample index is unavailable for browsing.")
-            : dataDirectory == juce::File() ? "Shared MagDrum storage is unavailable. Check the signed app-group entitlement."
-                                             : "Could not open the MagDrum sound database.", juce::dontSendNotification);
         importFolder.setEnabled(databaseReady);
         importMidi.setEnabled(databaseReady);
         exportMidi.setEnabled(databaseReady);
         addAndMakeVisible(status);
+        applyLanguage();
         refresh();
         setAudioChannels(0, 2);
     }
@@ -116,7 +109,9 @@ public:
     void resized() override
     {
         auto area = getLocalBounds().reduced(16);
-        title.setBounds(area.removeFromTop(48)); area.removeFromTop(8);
+        auto header = area.removeFromTop(48);
+        languageButton.setBounds(header.removeFromRight(48));
+        title.setBounds(header); area.removeFromTop(8);
         if (area.getWidth() < 640)
         {
             auto row = area.removeFromTop(44);
@@ -163,6 +158,49 @@ public:
     }
 
 private:
+    void applyLanguage()
+    {
+        using magdrum::ui::localisedText;
+        importFolder.setButtonText(localisedText("Import audio files"));
+        cancelImport.setButtonText(localisedText("Cancel"));
+        play.setButtonText(localisedText("Play selected"));
+        stop.setButtonText(localisedText("Stop"));
+        importMidi.setButtonText(localisedText("Import MIDI"));
+        exportMidi.setButtonText(localisedText("Export MIDI"));
+        midiFallback.setButtonText(localisedText("Allow articulation fallback"));
+        midiFallback.setTooltip(localisedText("When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export."));
+        profileName.setTextToShowWhenEmpty(localisedText("Mapping profile name"), magdrum::ui::Palette::Muted);
+        savedProfiles.setTextWhenNothingSelected(localisedText("Saved profiles"));
+        loadProfile.setButtonText(localisedText("Load profile"));
+        saveProfile.setButtonText(localisedText("Save profile"));
+        mappingNote.setTextToShowWhenEmpty(localisedText("MIDI note 0–127"), magdrum::ui::Palette::Muted);
+        setMapping.setButtonText(localisedText("Set mapping"));
+        removeMapping.setButtonText(localisedText("Remove mapping"));
+        search.setTextToShowWhenEmpty(localisedText("Search indexed samples"), magdrum::ui::Palette::Muted);
+        loadMore.setButtonText(localisedText("More samples"));
+
+        static constexpr const char* instruments[] { "Kick", "Snare", "Hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion" };
+        static constexpr const char* articulations[] { "Default", "Center", "Rimshot", "Side stick", "Closed", "Open", "Pedal", "Low", "Mid", "High", "Bell", "Bow", "Edge" };
+        static constexpr const char* categories[] { "All categories", "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion", "Unknown" };
+        const auto instrumentId = mappingInstrument.getSelectedId();
+        const auto articulationId = mappingArticulation.getSelectedId();
+        const auto categoryId = category.getSelectedId();
+        mappingInstrument.clear(juce::dontSendNotification);
+        mappingArticulation.clear(juce::dontSendNotification);
+        category.clear(juce::dontSendNotification);
+        for (int i = 0; i < std::size(instruments); ++i) mappingInstrument.addItem(localisedText(instruments[i]), i + 1);
+        for (int i = 0; i < std::size(articulations); ++i) mappingArticulation.addItem(localisedText(articulations[i]), i + 1);
+        for (int i = 0; i < std::size(categories); ++i) category.addItem(localisedText(categories[i]), i + 1);
+        mappingInstrument.setSelectedId(instrumentId, juce::dontSendNotification);
+        mappingArticulation.setSelectedId(articulationId, juce::dontSendNotification);
+        category.setSelectedId(categoryId, juce::dontSendNotification);
+        languageButton.setTooltip(localisedText("Language"));
+        status.setText(databaseReady ? (browseDatabaseReady ? localisedText("Import audio files or search your library.")
+                                                             : localisedText("The sample index is unavailable for browsing."))
+            : dataDirectory == juce::File() ? localisedText("Shared MagDrum storage is unavailable. Check the signed app-group entitlement.")
+                                             : localisedText("Could not open the MagDrum sound database."), juce::dontSendNotification);
+    }
+
     class FileImportJob final : public juce::ThreadPoolJob
     {
     public:
@@ -595,7 +633,7 @@ private:
 
     static constexpr int samplePageSize = 250;
     juce::Label title, status;
-    juce::TextButton importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
+    juce::TextButton languageButton, importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
     juce::ToggleButton midiFallback;
     juce::TextButton loadProfile, saveProfile, setMapping, removeMapping;
     juce::TextEditor search, profileName, mappingNote;
