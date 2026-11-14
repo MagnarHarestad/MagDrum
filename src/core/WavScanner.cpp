@@ -316,7 +316,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             continue;
         }
         std::array<juce::int64, 4> centroidOffsets{};
-        const auto lastCentroidOffset = juce::jmax<juce::int64>(0, sampleCount - fftSize);
+        const auto lastCentroidOffset = std::max<juce::int64>(0, sampleCount - fftSize);
         for (size_t window = 0; window < centroidOffsets.size(); ++window)
             centroidOffsets[window] = lastCentroidOffset * static_cast<juce::int64>(window)
                                     / static_cast<juce::int64>(centroidOffsets.size() - 1);

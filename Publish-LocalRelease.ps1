@@ -93,6 +93,12 @@ if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
         'JUCE omitted the optional VST3 moduleinfo.json during cross-compilation; hosts may take longer to scan the plugin.'
     )
 }
+if ($includedNames -contains 'MagDrum-Linux-x64.tar.gz') {
+    $noteLines += @(
+        '',
+        'Linux x64 was built in WSL Ubuntu 24.04. The app and VST3 compile, and the plugin tests pass. The app integration test passes when invoked directly with the CTest arguments but CTest reports it failed without output; a native Linux host smoke test remains pending.'
+    )
+}
 $notesPath = Join-Path $env:TEMP ("MagDrum-$Tag-release-notes.txt")
 Set-Content -LiteralPath $notesPath -Value $noteLines -Encoding utf8
 

@@ -112,7 +112,7 @@ bool PatternAudioRenderer::loadSample(juce::AudioFormatManager& formats, const j
 
     constexpr double maxSampleSeconds = 15.0;
     const int channels = static_cast<int>(juce::jmin(2u, reader->numChannels));
-    const auto maxSamples = static_cast<std::int64_t>(reader->sampleRate * maxSampleSeconds);
+    const auto maxSamples = static_cast<juce::int64>(reader->sampleRate * maxSampleSeconds);
     const int sampleCount = static_cast<int>(std::min(reader->lengthInSamples, maxSamples));
     PatternAudioSample sample;
     sample.audio.setSize(channels, sampleCount);

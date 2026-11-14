@@ -1163,7 +1163,7 @@ juce::var SampleDatabase::exportPortableMetadata() const
         juce::ignoreUnused(key);
         auto item = juce::var(new juce::DynamicObject());
         item.getDynamicObject()->setProperty("sha256", sample.hash);
-        item.getDynamicObject()->setProperty("size_bytes", juce::var(sample.size));
+        item.getDynamicObject()->setProperty("size_bytes", juce::var(static_cast<juce::int64>(sample.size)));
         juce::Array<juce::var> categories, tags;
         for (const auto& category : sample.categories) categories.add(category);
         for (const auto& tag : sample.tags) tags.add(tag);
