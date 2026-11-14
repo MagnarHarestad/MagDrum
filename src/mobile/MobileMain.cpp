@@ -309,9 +309,14 @@ private:
         graphics.setColour(magdrum::ui::Palette::Text); graphics.setFont(16.0f);
         graphics.drawText(record.file.getFileName(), 12, 5, width - 24, 24, juce::Justification::centredLeft, true);
         graphics.setColour(magdrum::ui::Palette::Muted); graphics.setFont(12.0f);
-        auto details = record.category + "  ·  " + juce::String(record.durationSeconds, 2) + " s  ·  "
+        auto details = magdrum::ui::localisedText(record.category) + "  ·  " + juce::String(record.durationSeconds, 2) + " s  ·  "
             + record.file.getParentDirectory().getFileName();
-        if (!record.classificationTags.isEmpty()) details += "  ·  " + record.classificationTags.joinIntoString(", ");
+        if (!record.classificationTags.isEmpty())
+        {
+            juce::StringArray translatedTags;
+            for (const auto& tag : record.classificationTags) translatedTags.add(magdrum::ui::localisedText(tag));
+            details += "  ·  " + translatedTags.joinIntoString(", ");
+        }
         graphics.drawText(details, 12, 29, width - 24, height - 30,
             juce::Justification::centredLeft, true);
     }
@@ -320,7 +325,7 @@ private:
     {
         if (button == &importFolder)
         {
-            chooser = std::make_unique<juce::FileChooser>("Choose audio files to import", juce::File(),
+            chooser = std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Choose audio files to import"), juce::File(),
                 "*.wav;*.wave;*.aif;*.aiff;*.flac", true, false, this);
             juce::Component::SafePointer<MobileMainComponent> safe(this);
             chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
@@ -335,7 +340,7 @@ private:
         else if (button == &cancelImport)
         {
             importCancellation.store(true);
-            status.setText("Cancelling the current scan…", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Cancelling the current scan…"), juce::dontSendNotification);
         }
         else if (button == &play) playSelected();
         else if (button == &stop) transport.stop();
@@ -369,16 +374,16 @@ private:
         {
             mappingProfile = std::move(*stored);
             profileName.setText(name, juce::dontSendNotification);
-            status.setText("Mapping profile loaded: " + name, juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Mapping profile loaded: %1").replace("%1", name), juce::dontSendNotification);
         }
         else if (name.equalsIgnoreCase("General MIDI"))
         {
             mappingProfile = MidiMappingProfile::generalMidi();
             profileName.setText("General MIDI", juce::dontSendNotification);
-            status.setText("Built-in General MIDI mapping loaded.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Built-in General MIDI mapping loaded."), juce::dontSendNotification);
         }
         else
-            status.setText("Mapping profile not found. Save this profile name to create it.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Mapping profile not found. Save this profile name to create it."), juce::dontSendNotification);
     }
 
     void saveMappingProfile()
@@ -386,16 +391,16 @@ private:
         const auto name = profileName.getText().trim();
         if (name.isEmpty())
         {
-            status.setText("Enter a name for this mapping profile.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Enter a name for this mapping profile."), juce::dontSendNotification);
             return;
         }
         if (!database.saveMappingProfile(name, mappingProfile))
         {
-            status.setText("Could not save the mapping profile.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Could not save the mapping profile."), juce::dontSendNotification);
             return;
         }
         refreshSavedProfiles(name);
-        status.setText("Mapping profile saved: " + name, juce::dontSendNotification);
+        status.setText(magdrum::ui::localisedText("Mapping profile saved: %1").replace("%1", name), juce::dontSendNotification);
     }
 
     void editMapping(bool set)
@@ -407,28 +412,28 @@ private:
             const int note = mappingNote.getText().getIntValue();
             if (mappingNote.getText().trim().isEmpty() || note < 0 || note > 127)
             {
-                status.setText("Enter a MIDI note from 0 to 127.", juce::dontSendNotification);
+                status.setText(magdrum::ui::localisedText("Enter a MIDI note from 0 to 127."), juce::dontSendNotification);
                 return;
             }
             if (!mappingProfile.setMapping({ instrument, articulation, static_cast<std::uint8_t>(note) }))
             {
-                status.setText("The MIDI mapping could not be updated.", juce::dontSendNotification);
+                status.setText(magdrum::ui::localisedText("The MIDI mapping could not be updated."), juce::dontSendNotification);
                 return;
             }
         }
         else if (!mappingProfile.removeMapping(instrument, articulation))
         {
-            status.setText("That instrument and articulation have no mapping to remove.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("That instrument and articulation have no mapping to remove."), juce::dontSendNotification);
             return;
         }
         const auto name = profileName.getText().trim();
         if (name.isEmpty() || !database.saveMappingProfile(name, mappingProfile))
         {
-            status.setText("Mapping changed in memory, but the profile could not be saved. Enter a profile name and save it.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Mapping changed in memory, but the profile could not be saved. Enter a profile name and save it."), juce::dontSendNotification);
             return;
         }
         refreshSavedProfiles(name);
-        status.setText(set ? "MIDI mapping updated and saved." : "MIDI mapping removed and saved.", juce::dontSendNotification);
+        status.setText(magdrum::ui::localisedText(set ? "MIDI mapping updated and saved." : "MIDI mapping removed and saved."), juce::dontSendNotification);
     }
 
     void beginImport(juce::Array<juce::URL> files)
@@ -436,17 +441,23 @@ private:
         if (importRunning || !dataDirectory.isDirectory() || files.isEmpty()) return;
         importRunning = true; importCancellation.store(false);
         importFolder.setEnabled(false); cancelImport.setEnabled(true);
-        status.setText("Copying and indexing audio files…", juce::dontSendNotification);
+        status.setText(magdrum::ui::localisedText("Copying and indexing audio files…"), juce::dontSendNotification);
         workers.addJob(new FileImportJob(*this, std::move(files), dataDirectory, importDirectory, importCancellation), true);
     }
 
     void finishImport(const WavScanner::Stats& stats, std::int64_t indexed, const juce::String& error)
     {
         importRunning = false; importFolder.setEnabled(true); cancelImport.setEnabled(false);
-        if (error.isNotEmpty()) status.setText(error, juce::dontSendNotification);
-        else status.setText((stats.cancelled ? "Import cancelled. " : "Import complete. ")
-            + juce::String(indexed) + " indexed, " + juce::String(stats.filesSkippedUnchanged)
-            + " unchanged, " + juce::String(stats.errors) + " errors.", juce::dontSendNotification);
+        if (error.isNotEmpty()) status.setText(magdrum::ui::localisedText(error), juce::dontSendNotification);
+        else
+        {
+            const auto message = stats.cancelled
+                ? magdrum::ui::localisedText("Import cancelled. %1 indexed, %2 unchanged, %3 errors.")
+                : magdrum::ui::localisedText("Import complete. %1 indexed, %2 unchanged, %3 errors.");
+            status.setText(message.replace("%1", juce::String(indexed))
+                .replace("%2", juce::String(stats.filesSkippedUnchanged))
+                .replace("%3", juce::String(stats.errors)), juce::dontSendNotification);
+        }
         refresh();
     }
 
@@ -531,14 +542,14 @@ private:
         const int index = rows.getSelectedRow();
         if (!juce::isPositiveAndBelow(index, visible.size()))
         {
-            status.setText("Select a sound before playback.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("Select a sound before playback."), juce::dontSendNotification);
             return;
         }
         const auto file = visible.getReference(index).file;
         auto* reader = formats.createReaderFor(file);
         if (reader == nullptr)
         {
-            status.setText("This sound is missing or cannot be decoded.", juce::dontSendNotification);
+            status.setText(magdrum::ui::localisedText("This sound is missing or cannot be decoded."), juce::dontSendNotification);
             return;
         }
         transport.stop(); transport.setSource(nullptr); source.reset(new juce::AudioFormatReaderSource(reader, true));
@@ -547,7 +558,7 @@ private:
 
     void chooseMidiImport()
     {
-        chooser = std::make_unique<juce::FileChooser>("Import a Standard MIDI File", juce::File(), "*.mid;*.midi", true, false, this);
+        chooser = std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Import a Standard MIDI File"), juce::File(), "*.mid;*.midi", true, false, this);
         juce::Component::SafePointer<MobileMainComponent> safe(this);
         chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
             [safe](const juce::FileChooser& fileChooser)
@@ -560,25 +571,25 @@ private:
                 juce::String copyError;
                 if (!MagDrumFiles::copyURLToFile(url, importTemp, {}, copyError))
                 {
-                    safe->status.setText(copyError, juce::dontSendNotification);
+                    safe->status.setText(magdrum::ui::localisedText(copyError), juce::dontSendNotification);
                     return;
                 }
                 MidiPattern imported;
                 const auto report = MidiPatternIO{}.read(importTemp, safe->mappingProfile, imported);
                 importTemp.deleteFile();
-                if (!report.ok) { safe->status.setText(report.error, juce::dontSendNotification); return; }
+                if (!report.ok) { safe->status.setText(magdrum::ui::localisedText(report.error), juce::dontSendNotification); return; }
                 safe->pattern = std::move(imported);
-                safe->status.setText("MIDI imported: " + juce::String(static_cast<int>(safe->pattern.events.size()))
-                    + " semantic events, " + juce::String(static_cast<int>(report.unmappedNotes.size()))
-                    + " unmapped note entries, " + juce::String(static_cast<int>(report.ambiguousNotes.size()))
-                    + " ambiguous assignments.", juce::dontSendNotification);
+                const auto message = magdrum::ui::localisedText("MIDI imported: %1 semantic events, %2 unmapped note entries, %3 ambiguous assignments.");
+                safe->status.setText(message.replace("%1", juce::String(static_cast<int>(safe->pattern.events.size())))
+                    .replace("%2", juce::String(static_cast<int>(report.unmappedNotes.size())))
+                    .replace("%3", juce::String(static_cast<int>(report.ambiguousNotes.size()))), juce::dontSendNotification);
             });
     }
 
     void chooseMidiExport()
     {
-        if (pattern.events.empty()) { status.setText("Import a MIDI pattern before exporting.", juce::dontSendNotification); return; }
-        chooser = std::make_unique<juce::FileChooser>("Export a Standard MIDI File",
+        if (pattern.events.empty()) { status.setText(magdrum::ui::localisedText("Import a MIDI pattern before exporting."), juce::dontSendNotification); return; }
+        chooser = std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Export a Standard MIDI File"),
             dataDirectory.getChildFile("MagDrum.mid"), "*.mid", true, false, this);
         juce::Component::SafePointer<MobileMainComponent> safe(this);
         chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
@@ -598,24 +609,27 @@ private:
                 exportTemp.deleteFile();
                 if (!copied)
                 {
-                    safe->status.setText(copyError.isNotEmpty() ? copyError : "MIDI export failed.", juce::dontSendNotification);
+                    safe->status.setText(magdrum::ui::localisedText(copyError.isNotEmpty() ? copyError : "MIDI export failed."), juce::dontSendNotification);
                     return;
                 }
-                safe->status.setText("MIDI exported; " + juce::String(static_cast<int>(fallbacks.size()))
-                    + " fallback mapping(s), " + juce::String(static_cast<int>(unsupported.size()))
-                    + " unsupported event(s) omitted.", juce::dontSendNotification);
+                const auto message = magdrum::ui::localisedText("MIDI exported; %1 fallback mapping(s), %2 unsupported event(s) omitted.");
+                safe->status.setText(message.replace("%1", juce::String(static_cast<int>(fallbacks.size())))
+                    .replace("%2", juce::String(static_cast<int>(unsupported.size()))), juce::dontSendNotification);
                 if (!fallbacks.empty() || !unsupported.empty())
                 {
                     juce::String report;
                     for (const auto& fallback : fallbacks)
-                        report += "Fallback: " + safe->describeMapping(fallback.requestedEvent.instrument, fallback.requestedEvent.articulation)
-                            + " mapped to " + safe->describeMapping(fallback.requestedEvent.instrument, fallback.mappedArticulation)
-                            + " at MIDI note " + juce::String(fallback.midiNote) + ".\n";
+                        report += magdrum::ui::localisedText("Fallback: %1 mapped to %2 at MIDI note %3.")
+                            .replace("%1", safe->describeMapping(fallback.requestedEvent.instrument, fallback.requestedEvent.articulation))
+                            .replace("%2", safe->describeMapping(fallback.requestedEvent.instrument, fallback.mappedArticulation))
+                            .replace("%3", juce::String(fallback.midiNote)) + "\n";
                     for (const auto& event : unsupported)
-                        report += "Omitted: " + safe->describeMapping(event.instrument, event.articulation)
-                            + ", velocity " + juce::String(event.velocity) + ".\n";
+                        report += magdrum::ui::localisedText("Omitted: %1, velocity %2.")
+                            .replace("%1", safe->describeMapping(event.instrument, event.articulation))
+                            .replace("%2", juce::String(event.velocity)) + "\n";
                     juce::AlertWindow::showMessageBoxAsync(unsupported.empty() ? juce::MessageBoxIconType::InfoIcon
-                        : juce::MessageBoxIconType::WarningIcon, "MIDI export mapping report", report, "Close");
+                        : juce::MessageBoxIconType::WarningIcon, magdrum::ui::localisedText("MIDI export mapping report"),
+                        report, magdrum::ui::localisedText("Close"));
                 }
             });
     }
@@ -627,8 +641,9 @@ private:
         const auto instrumentIndex = static_cast<size_t>(instrument);
         const auto articulationIndex = static_cast<size_t>(articulation);
         if (instrumentIndex >= std::size(instruments) || articulationIndex >= std::size(articulations))
-            return "Unknown mapping";
-        return juce::String(instruments[instrumentIndex]) + " / " + articulations[articulationIndex];
+            return magdrum::ui::localisedText("Unknown mapping");
+        return magdrum::ui::localisedText(instruments[instrumentIndex]) + " / "
+            + magdrum::ui::localisedText(articulations[articulationIndex]);
     }
 
     static constexpr int samplePageSize = 250;
