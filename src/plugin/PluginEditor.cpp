@@ -430,8 +430,10 @@ public:
         const auto roundRobins = PluginRoundRobinAnalyzer{}.analyze(takes);
         if (! db.replacePluginVelocityLayerCandidates(kitId, layers)) ++failures;
         if (! db.replacePluginRoundRobinData(kitId, takes, roundRobins)) ++failures;
-        juce::String summary = juce::String(layers.size()) + " velocity-layer candidates · "
-            + juce::String(static_cast<int>(roundRobins.size())) + " round-robin candidates";
+        juce::String summary = magdrum::ui::localisedText(
+            "{layers} velocity-layer candidates · {roundRobins} round-robin candidates")
+            .replace("{layers}", juce::String(layers.size()))
+            .replace("{roundRobins}", juce::String(static_cast<int>(roundRobins.size())));
         requestDir.deleteRecursively();
         finish(saved, sounding, silent, failures, execution.manifest.cancelled, execution.manifest.error, summary);
         return jobHasFinished;
@@ -1651,10 +1653,19 @@ void MagDrumAudioProcessorEditor::finishPluginNoteScan(int saved, int sounding, 
     openPluginManagerButton.setEnabled(true);
     refreshPluginKits();
     if (databaseReady) { refreshSourceKitFilters(); refreshSamples(); }
-    const auto result = error.isNotEmpty() ? magdrum::ui::localisedText("Plugin note scan failed: ") + error
-        : magdrum::ui::localisedText(cancelled ? "Plugin note scan cancelled." : "Plugin note scan complete.")
-          + " " + juce::String(saved) + " / " + juce::String(sounding) + " / " + juce::String(silent)
-          + " / " + juce::String(failures) + " · " + summary;
+    juce::String result;
+    if (error.isNotEmpty())
+        result = magdrum::ui::localisedText("Plugin note scan failed: {error}")
+            .replace("{error}", magdrum::ui::localisedText(error));
+    else
+        result = magdrum::ui::localisedText(
+            "Plugin note scan {state}: {saved} saved, {sounding} sounding, {silent} silent, {failures} errors. {summary}")
+            .replace("{state}", magdrum::ui::localisedText(cancelled ? "cancelled" : "complete"))
+            .replace("{saved}", juce::String(saved))
+            .replace("{sounding}", juce::String(sounding))
+            .replace("{silent}", juce::String(silent))
+            .replace("{failures}", juce::String(failures))
+            .replace("{summary}", summary);
     pluginScanInfo.setText(result, juce::dontSendNotification);
     pluginScanProgress.setText(result, juce::dontSendNotification);
     status.setText(result, juce::dontSendNotification);
