@@ -13,20 +13,32 @@ that is not the option selected for this project. See the [JUCE 8.0.12 license
 file](https://github.com/juce-framework/JUCE/blob/8.0.12/LICENSE.md) and the
 [JUCE 8 EULA](https://juce.com/legal/juce-8-licence/).
 
-## Other components
+## Windows and Linux package audit
 
-The SQLite 3.54.1 amalgamation fetched by CMake is in the public domain. JUCE
-bundles additional components under their own licenses. Its VST3 SDK copy, for
-example, has an MIT license. JUCE's [`LICENSE.md`](https://github.com/juce-framework/JUCE/blob/8.0.12/LICENSE.md)
-lists its bundled dependencies and their license files. A dependency's license
-and notices remain applicable; MagDrum's AGPLv3 does not replace them.
+The Windows x64 and Linux x64 desktop-app/VST3 packages share pinned JUCE
+modules for audio basics, audio devices, audio formats, processors, processor
+headless, audio utilities, core, cryptography, data structures, DSP, events,
+graphics, GUI basics and GUI extra. The VST3 also links the plugin client module.
+Browser and curl support are disabled. The exact JUCE bundled codecs/rendering components and
+their package license files are inventoried in
+[`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). Package scripts fail if
+any required upstream license file is missing.
 
-Before a stable multi-platform distribution, finish a target-by-target audit of
-the exact JUCE modules and SDKs included in each package, and include all required
-third-party notices. Some optional JUCE components, such as AAX or ASIO, have
-separate terms and are not part of the current Windows VST3 package.
+JUCE's VST3 SDK copy is MIT-licensed. JUCE enables FLAC and Ogg Vorbis decoding
+by default; the package includes FLAC, Ogg Vorbis and libvorbis license texts.
+It also includes the JUCE-bundled JPEG, PNG, zlib, HarfBuzz and SheenBidi license
+texts. SQLite 3.54.1 is in the public domain. Linux uses host-provided audio,
+windowing, graphics and font libraries that the archive does not redistribute.
+
+The macOS package script includes the vendored AudioUnit SDK's Apache 2.0
+license. The macOS VST3/AU packages and iOS/AUv3 product still require native
+builds and a package-specific audit of their actual linked components before
+they can be treated as verified distributions. AAX and ASIO are not linked into
+the Windows/Linux products. JUCE's full license, which lists its wider bundled
+dependencies, remains in every archive; MagDrum's AGPLv3 does not replace any
+third-party license terms.
 
 The GitHub source repository and releases are public. Each published test
 release links to the corresponding source revision, and package archives include
-the project license and third-party notices. Keep the source available with
-binary distribution as required by AGPLv3.
+the project license and applicable third-party notices. Keep the source
+available with binary distribution as required by AGPLv3.

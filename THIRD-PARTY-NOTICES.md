@@ -1,29 +1,50 @@
 # Third-party notices
 
-This is a preliminary inventory for MagDrum's current Windows test packages.
-It does not replace the full license texts distributed with the package.
+This inventory covers the Windows x64 and Linux x64 desktop app and VST3
+packages built with the pinned JUCE 8.0.12 source. The package archives contain
+the full applicable license texts named below. The macOS build script also
+includes the AudioUnit SDK license; those Apple targets still need native build
+and runtime validation.
 
 ## JUCE Framework 8.0.12
 
-Copyright Raw Material Software Limited. JUCE is used under AGPLv3; see
-[`LICENSE`](LICENSE) and the accompanying `JUCE-LICENSE.md`, copied from the
-pinned JUCE 8.0.12 source distribution. That upstream notice lists JUCE's
-bundled third-party components and their license files.
+JUCE is used under AGPLv3. Its full license text is `JUCE-LICENSE.md` in each
+package. The desktop app and VST3 share JUCE modules for audio basics, devices,
+formats, processors and processor headless, audio utilities, core,
+cryptography, data structures, DSP, events, graphics, GUI basics and GUI extra.
+The VST3 additionally links the JUCE plugin client module.
 
-## Steinberg VST3 SDK
+## Bundled components in Windows and Linux packages
 
-The VST3 SDK included by JUCE is copyright Steinberg Media Technologies GmbH
-and licensed under the MIT License. The package includes the corresponding
-`VST3-SDK-LICENSE.txt` from the pinned JUCE source distribution.
+| Component | License | Package file |
+|---|---|---|
+| Steinberg VST3 SDK 3.8.0 | MIT | `VST3-SDK-LICENSE.txt` |
+| Xiph FLAC codec | BSD-style | `FLAC-LICENSE.txt` |
+| Xiph Ogg Vorbis headers | BSD-style | `Ogg-Vorbis-LICENSE.txt` |
+| Xiph libvorbis 1.3.7 | BSD-style | `libvorbis-COPYING.txt` |
+| Independent JPEG Group codec | IJG license | `JPEG-LICENSE.txt` |
+| PNG Reference Library | libpng license | `PNG-LICENSE.txt` |
+| zlib bundled with JUCE | zlib license | `zlib-LICENSE.txt` |
+| HarfBuzz | Old MIT license | `HarfBuzz-LICENSE.txt` |
+| SheenBidi | Apache License 2.0 | `SheenBidi-LICENSE.txt` |
 
-## SQLite
+JUCE enables its bundled FLAC and Ogg Vorbis decoders by default. JPEG and PNG
+image codecs, zlib, HarfBuzz and SheenBidi are included through the linked audio,
+core and graphics modules. The exact text files are copied from the pinned JUCE
+source at package-build time.
 
-MagDrum fetches SQLite 3.54.1. SQLite is in the public domain; see the notice
-in the upstream [SQLite source](https://www.sqlite.org/copyright.html).
+The macOS AU package additionally includes `AudioUnit-SDK-LICENSE.txt` from
+JUCE's vendored AudioUnit SDK. Its Mac and iOS/AUv3 packages still require an
+Apple-platform review before distribution.
 
-## Scope
+## Other components and exclusions
 
-JUCE bundles additional components with separate licenses, and the exact
-components used can vary by platform and build options. Before stable
-multi-platform distribution, complete and verify a package-specific inventory
-of the modules, SDKs, codecs and notices actually included in every target.
+MagDrum fetches SQLite 3.54.1, which is in the public domain. SQLite's source
+contains the applicable notice. Linux packages dynamically use host-provided
+audio, windowing, graphics and font libraries; these system libraries are not
+bundled in the archive.
+
+JUCE's browser and curl support are disabled. AAX, ASIO, LV2, Oboe, CHOC,
+Projucer and example-only dependencies are not linked into these Windows/Linux
+products. The VST3 SDK's nested license files are copies of the same MIT license
+as its top-level license, so one full copy is included.

@@ -64,9 +64,23 @@ mkdir -p "$stage"
 juce_source="$build_dir/_deps/juce-src"
 [[ -f "$juce_source/LICENSE.md" ]] || { echo "JUCE license was not found under the configured build directory: $juce_source" >&2; exit 1; }
 cp "$repo_root/LICENSE" "$repo_root/THIRD-PARTY-NOTICES.md" "$stage/"
-cp "$juce_source/LICENSE.md" "$stage/JUCE-LICENSE.md"
-cp "$juce_source/modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt" "$stage/VST3-SDK-LICENSE.txt"
+copy_third_party_license() {
+  local relative_path="$1" package_name="$2" license_path="$juce_source/$1"
+  [[ -f "$license_path" ]] || { echo "Required third-party license notice was not found in pinned JUCE: $relative_path" >&2; exit 1; }
+  cp "$license_path" "$stage/$package_name"
+}
+copy_third_party_license "LICENSE.md" "JUCE-LICENSE.md"
+copy_third_party_license "modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt" "VST3-SDK-LICENSE.txt"
+copy_third_party_license "modules/juce_audio_formats/codecs/flac/Flac Licence.txt" "FLAC-LICENSE.txt"
+copy_third_party_license "modules/juce_audio_formats/codecs/oggvorbis/Ogg Vorbis Licence.txt" "Ogg-Vorbis-LICENSE.txt"
+copy_third_party_license "modules/juce_audio_formats/codecs/oggvorbis/libvorbis-1.3.7/COPYING" "libvorbis-COPYING.txt"
+copy_third_party_license "modules/juce_graphics/image_formats/jpglib/README" "JPEG-LICENSE.txt"
+copy_third_party_license "modules/juce_graphics/image_formats/pnglib/LICENSE" "PNG-LICENSE.txt"
+copy_third_party_license "modules/juce_core/zip/zlib/README" "zlib-LICENSE.txt"
+copy_third_party_license "modules/juce_graphics/fonts/harfbuzz/COPYING" "HarfBuzz-LICENSE.txt"
+copy_third_party_license "modules/juce_graphics/unicode/sheenbidi/LICENSE" "SheenBidi-LICENSE.txt"
 if [[ "$host_os" == "Darwin" ]]; then
+  copy_third_party_license "modules/juce_audio_plugin_client/AU/AudioUnitSDK/LICENSE.txt" "AudioUnit-SDK-LICENSE.txt"
   app="$(find "$build_dir" -type d -path '*/MagDrum_artefacts/Release/MagDrum.app' -print -quit)"
   vst="$(find "$build_dir" -type d -path '*/MagDrumPlugin_artefacts/Release/VST3/MagDrum.vst3' -print -quit)"
   au="$(find "$build_dir" -type d -path '*/MagDrumPlugin_artefacts/Release/AU/MagDrum.component' -print -quit)"

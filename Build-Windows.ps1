@@ -119,13 +119,25 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingDirectory
     $juceSourceDirectory = Join-Path $dependencyDirectory 'juce-src'
-    $juceLicense = Join-Path $juceSourceDirectory 'LICENSE.md'
-    $vst3License = Join-Path $juceSourceDirectory 'modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt'
-    if (-not (Test-Path -LiteralPath $juceLicense -PathType Leaf) -or -not (Test-Path -LiteralPath $vst3License -PathType Leaf)) {
-        throw 'Required JUCE and VST3 SDK license notices were not found in the pinned JUCE source.'
+    $thirdPartyLicenses = [ordered]@{
+        'LICENSE.md' = 'JUCE-LICENSE.md'
+        'modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt' = 'VST3-SDK-LICENSE.txt'
+        'modules/juce_audio_formats/codecs/flac/Flac Licence.txt' = 'FLAC-LICENSE.txt'
+        'modules/juce_audio_formats/codecs/oggvorbis/Ogg Vorbis Licence.txt' = 'Ogg-Vorbis-LICENSE.txt'
+        'modules/juce_audio_formats/codecs/oggvorbis/libvorbis-1.3.7/COPYING' = 'libvorbis-COPYING.txt'
+        'modules/juce_graphics/image_formats/jpglib/README' = 'JPEG-LICENSE.txt'
+        'modules/juce_graphics/image_formats/pnglib/LICENSE' = 'PNG-LICENSE.txt'
+        'modules/juce_core/zip/zlib/README' = 'zlib-LICENSE.txt'
+        'modules/juce_graphics/fonts/harfbuzz/COPYING' = 'HarfBuzz-LICENSE.txt'
+        'modules/juce_graphics/unicode/sheenbidi/LICENSE' = 'SheenBidi-LICENSE.txt'
     }
-    Copy-Item -LiteralPath $juceLicense -Destination (Join-Path $stagingDirectory 'JUCE-LICENSE.md')
-    Copy-Item -LiteralPath $vst3License -Destination (Join-Path $stagingDirectory 'VST3-SDK-LICENSE.txt')
+    foreach ($licensePath in $thirdPartyLicenses.Keys) {
+        $sourceLicense = Join-Path $juceSourceDirectory $licensePath
+        if (-not (Test-Path -LiteralPath $sourceLicense -PathType Leaf)) {
+            throw "Required third-party license notice was not found in pinned JUCE: $licensePath"
+        }
+        Copy-Item -LiteralPath $sourceLicense -Destination (Join-Path $stagingDirectory $thirdPartyLicenses[$licensePath])
+    }
 
     $zipPath = Join-Path $buildDirectory ($stagingName + "-Windows-$Architecture.zip")
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath
