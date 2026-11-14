@@ -658,6 +658,86 @@ int runIsolatedVst3Discovery()
     return 6;
 }
 
+int runIsolatedVst3PresetWorker(const juce::File& requestFile)
+{
+    const auto requestValue = juce::JSON::parse(requestFile.loadFileAsString());
+    if (! requestValue.isObject())
+        return 2;
+    const auto* request = requestValue.getDynamicObject();
+    const auto descriptionFile = juce::File(request->getProperty("descriptionFile").toString());
+    const auto presetFile = juce::File(request->getProperty("presetFile").toString());
+    const auto stateFile = juce::File(request->getProperty("stateFile").toString());
+    const auto resultFile = juce::File(request->getProperty("resultFile").toString());
+    const auto workingDirectory = requestFile.getParentDirectory();
+    const auto writeResult = [&resultFile](bool ok, const juce::String& message)
+    {
+        auto* result = new juce::DynamicObject();
+        result->setProperty("ok", ok);
+        result->setProperty("message", message);
+        return resultFile.replaceWithText(juce::JSON::toString(juce::var(result), true));
+    };
+    if (descriptionFile.getParentDirectory() != workingDirectory
+        || stateFile.getParentDirectory() != workingDirectory
+        || resultFile.getParentDirectory() != workingDirectory
+        || ! presetFile.existsAsFile() || ! presetFile.getFileExtension().equalsIgnoreCase(".vstpreset")
+        || presetFile.getSize() <= 0 || presetFile.getSize() > 512LL * 1024LL * 1024LL)
+        return 3;
+
+    const auto xml = juce::XmlDocument::parse(descriptionFile);
+    juce::PluginDescription description;
+    if (xml == nullptr || ! description.loadFromXml(*xml)
+        || description.pluginFormatName != "VST3" || ! description.isInstrument)
+    {
+        writeResult(false, magdrum::ui::localisedText("The selected VST3 instrument description is invalid."));
+        return 4;
+    }
+
+    juce::AudioPluginFormatManager formats;
+    juce::addHeadlessDefaultFormatsToManager(formats);
+    juce::String loadError;
+    auto plugin = formats.createPluginInstance(description, 44100.0, 512, loadError);
+    if (plugin == nullptr)
+    {
+        writeResult(false, magdrum::ui::localisedText("Could not load the instrument in the isolated helper: ") + loadError);
+        return 5;
+    }
+
+    juce::MemoryBlock preset;
+    if (! presetFile.loadFileAsData(preset) || preset.isEmpty())
+    {
+        writeResult(false, magdrum::ui::localisedText("The selected VST3 preset could not be read."));
+        return 6;
+    }
+    struct PresetLoader final : juce::ExtensionsVisitor
+    {
+        explicit PresetLoader(const juce::MemoryBlock& presetData) : data(presetData) {}
+        void visitVST3Client(const VST3Client& client) override
+        {
+            supported = true;
+            loaded = client.setPreset(data);
+        }
+        const juce::MemoryBlock& data;
+        bool supported = false;
+        bool loaded = false;
+    } loader(preset);
+    plugin->getExtensions(loader);
+    if (! loader.supported || ! loader.loaded)
+    {
+        writeResult(false, magdrum::ui::localisedText("This preset could not be loaded by the selected VST3 instrument."));
+        return 7;
+    }
+
+    plugin->updateHostDisplay();
+    juce::MemoryBlock state;
+    plugin->getStateInformation(state);
+    if (state.isEmpty() || ! stateFile.replaceWithData(state.getData(), state.getSize()))
+    {
+        writeResult(false, magdrum::ui::localisedText("The instrument did not provide a saveable state for this preset."));
+        return 8;
+    }
+    return writeResult(true, {}) ? 0 : 9;
+}
+
 class MagDrumApplication final : public juce::JUCEApplication
 {
 public:
@@ -676,6 +756,25 @@ public:
             if (! juce::Thread::launch([this]
                 {
                     const auto exitCode = runIsolatedVst3Discovery();
+                    juce::MessageManager::callAsync([this, exitCode]
+                    {
+                        setApplicationReturnValue(exitCode);
+                        quit();
+                    });
+                }))
+            {
+                setApplicationReturnValue(7);
+                quit();
+            }
+            return;
+        }
+
+        if (arguments.size() == 2 && arguments[0] == "--magdrum-vst3-preset-worker")
+        {
+            const auto request = juce::File(arguments[1].unquoted());
+            if (! juce::Thread::launch([this, request]
+                {
+                    const auto exitCode = runIsolatedVst3PresetWorker(request);
                     juce::MessageManager::callAsync([this, exitCode]
                     {
                         setApplicationReturnValue(exitCode);
