@@ -16,7 +16,7 @@ $siteRoot = Join-Path $env:TEMP ('magdrum-pages-' + [guid]::NewGuid().ToString('
 if ($LASTEXITCODE -ne 0) { throw 'Could not clone the public MagDrum website repository.' }
 
 $landingPage = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'docs/index.html'))
-$landingPage = [regex]::Replace($landingPage, 'v\d+\.\d+\.\d+-test\.\d+', $latestRelease)
+$landingPage = $landingPage.Replace('@LATEST_RELEASE@', $latestRelease)
 $landingPage = $landingPage.Replace(
     'https://github.com/MagnarHarestad/MagDrum/releases/latest',
     "https://github.com/MagnarHarestad/MagDrum/releases/tag/$latestRelease")
