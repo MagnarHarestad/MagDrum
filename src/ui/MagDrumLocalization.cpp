@@ -382,6 +382,15 @@ countries: de
 "VST3 instrument scan complete." = "VST3-Instrumentensuche abgeschlossen."
 "VST3 instrument scan failed. Check the MagDrum helper." = "VST3-Instrumentensuche fehlgeschlagen. Überprüfen Sie den MagDrum-Helfer."
 "VST3 instrument scan cancelled." = "VST3-Instrumentensuche abgebrochen."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "Der mitgelieferte MagDrum-Instrumentenscanner wurde neben diesem VST3 nicht gefunden."
+"Import MIDI mapping profile" = "MIDI-Zuordnungsprofil importieren"
+"Hit updated and sorted by beat." = "Treffer aktualisiert und nach Taktschlag sortiert."
+"Export MagDrum metadata" = "MagDrum-Metadaten exportieren"
+"Import MagDrum metadata" = "MagDrum-Metadaten importieren"
+"Export MIDI mapping profile" = "MIDI-Zuordnungsprofil exportieren"
+"Yes" = "Ja"
+"No" = "Nein"
+"Hit added." = "Treffer hinzugefügt."
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -759,6 +768,15 @@ countries: fr
 "VST3 instrument scan complete." = "Recherche d’instruments VST3 terminée."
 "VST3 instrument scan failed. Check the MagDrum helper." = "La recherche d’instruments VST3 a échoué. Vérifiez l’outil MagDrum."
 "VST3 instrument scan cancelled." = "Recherche d’instruments VST3 annulée."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "Le scanner MagDrum fourni pour les instruments est introuvable à côté de ce VST3."
+"Import MIDI mapping profile" = "Importer le profil de mappage MIDI"
+"Hit updated and sorted by beat." = "Frappe mise à jour et triée par temps."
+"Export MagDrum metadata" = "Exporter les métadonnées MagDrum"
+"Import MagDrum metadata" = "Importer les métadonnées MagDrum"
+"Export MIDI mapping profile" = "Exporter le profil de mappage MIDI"
+"Yes" = "Oui"
+"No" = "Non"
+"Hit added." = "Frappe ajoutée."
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -1136,6 +1154,15 @@ countries: es
 "VST3 instrument scan complete." = "Búsqueda de instrumentos VST3 completada."
 "VST3 instrument scan failed. Check the MagDrum helper." = "Error al buscar instrumentos VST3. Comprueba el helper de MagDrum."
 "VST3 instrument scan cancelled." = "Búsqueda de instrumentos VST3 cancelada."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "No se encontró el escáner de instrumentos de MagDrum junto a este VST3."
+"Import MIDI mapping profile" = "Importar perfil de asignación MIDI"
+"Hit updated and sorted by beat." = "Golpe actualizado y ordenado por tiempo."
+"Export MagDrum metadata" = "Exportar metadatos de MagDrum"
+"Import MagDrum metadata" = "Importar metadatos de MagDrum"
+"Export MIDI mapping profile" = "Exportar perfil de asignación MIDI"
+"Yes" = "Sí"
+"No" = "No"
+"Hit added." = "Golpe añadido."
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -1513,6 +1540,15 @@ countries: se
 "VST3 instrument scan complete." = "Sökningen efter VST3-instrument är klar."
 "VST3 instrument scan failed. Check the MagDrum helper." = "Sökningen efter VST3-instrument misslyckades. Kontrollera MagDrums hjälpprogram."
 "VST3 instrument scan cancelled." = "Sökningen efter VST3-instrument avbröts."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "Den medföljande instrumentskannern för MagDrum hittades inte bredvid denna VST3."
+"Import MIDI mapping profile" = "Importera MIDI-mappningsprofil"
+"Hit updated and sorted by beat." = "Slag uppdaterat och sorterat efter taktslag."
+"Export MagDrum metadata" = "Exportera MagDrum-metadata"
+"Import MagDrum metadata" = "Importera MagDrum-metadata"
+"Export MIDI mapping profile" = "Exportera MIDI-mappningsprofil"
+"Yes" = "Ja"
+"No" = "Nej"
+"Hit added." = "Slag tillagt."
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -1890,6 +1926,15 @@ countries: no
 "VST3 instrument scan complete." = "VST3-instrumentsøket er fullført."
 "VST3 instrument scan failed. Check the MagDrum helper." = "VST3-instrumentsøket mislyktes. Kontroller MagDrum-hjelperen."
 "VST3 instrument scan cancelled." = "VST3-instrumentsøket ble avbrutt."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "Den medfølgende instrumentskanneren for MagDrum ble ikke funnet ved siden av denne VST3-en."
+"Import MIDI mapping profile" = "Importer MIDI-tilordningsprofil"
+"Hit updated and sorted by beat." = "Slag oppdatert og sortert etter taktslag."
+"Export MagDrum metadata" = "Eksporter MagDrum-metadata"
+"Import MagDrum metadata" = "Importer MagDrum-metadata"
+"Export MIDI mapping profile" = "Eksporter MIDI-tilordningsprofil"
+"Yes" = "Ja"
+"No" = "Nei"
+"Hit added." = "Slag lagt til."
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -2267,6 +2312,15 @@ countries: dk
 "VST3 instrument scan complete." = "VST3-instrumentsøgningen er fuldført."
 "VST3 instrument scan failed. Check the MagDrum helper." = "VST3-instrumentsøgningen mislykkedes. Kontrollér MagDrum-hjælpeprogrammet."
 "VST3 instrument scan cancelled." = "VST3-instrumentsøgningen blev annulleret."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "Den medfølgende instrumentscanner til MagDrum blev ikke fundet ved siden af denne VST3."
+"Import MIDI mapping profile" = "Importér MIDI-tilknytningsprofil"
+"Hit updated and sorted by beat." = "Slag opdateret og sorteret efter taktslag."
+"Export MagDrum metadata" = "Eksportér MagDrum-metadata"
+"Import MagDrum metadata" = "Importér MagDrum-metadata"
+"Export MIDI mapping profile" = "Eksportér MIDI-tilknytningsprofil"
+"Yes" = "Ja"
+"No" = "Nej"
+"Hit added." = "Slag tilføjet."
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -2644,6 +2698,15 @@ countries: fi
 "VST3 instrument scan complete." = "VST3-soitinhaku valmis."
 "VST3 instrument scan failed. Check the MagDrum helper." = "VST3-soitinhaku epäonnistui. Tarkista MagDrum-apuohjelma."
 "VST3 instrument scan cancelled." = "VST3-soitinhaku peruutettiin."
+"The bundled MagDrum instrument scanner was not found beside this VST3." = "MagDrumin mukana toimitettua soitinhakua ei löytynyt tämän VST3:n vierestä."
+"Import MIDI mapping profile" = "Tuo MIDI-kartoitusprofiili"
+"Hit updated and sorted by beat." = "Osuma päivitetty ja järjestetty tahdin mukaan."
+"Export MagDrum metadata" = "Vie MagDrum-metatiedot"
+"Import MagDrum metadata" = "Tuo MagDrum-metatiedot"
+"Export MIDI mapping profile" = "Vie MIDI-kartoitusprofiili"
+"Yes" = "Kyllä"
+"No" = "Ei"
+"Hit added." = "Osuma lisätty."
 )translations";
 
 Language selected = Language::english;
@@ -2704,11 +2767,9 @@ void initialiseMagDrumLocalization()
 void showLanguageMenu(juce::Component& target, std::function<void()> onChanged)
 {
     juce::PopupMenu menu;
-    juce::PopupMenu languages;
-    const char* keys[] = {"English", "German", "French", "Spanish", "Swedish", "Norwegian", "Danish", "Finnish"};
+    menu.addItem(0, localisedText("Language"), false);
     for (int i = 0; i < 8; ++i)
-        languages.addItem(i + 1, localisedText(keys[i]), true, static_cast<int>(currentLanguage()) == i);
-    menu.addSubMenu(localisedText("Language"), languages);
+        menu.addItem(i + 1, localisedText(languageName(static_cast<Language>(i))), true, static_cast<int>(currentLanguage()) == i);
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target), [onChanged = std::move(onChanged)](int result) {
         if (result < 1 || result > 8) return;
         setLanguage(static_cast<Language>(result - 1));

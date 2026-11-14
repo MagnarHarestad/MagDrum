@@ -15,4 +15,4 @@ The product is not complete until each supported platform has a reproducible bui
 
 Desktop VST3 scanning is not an iOS requirement.
 
-**Latest Windows x64 package — v0.1.1-test.108:** adds in-VST listing of instrument programs and saving a chosen program as a kit. Both Windows x64 CTest targets pass. Windows ARM64 remains at .103 and needs native runtime testing; macOS/Linux require their target hosts. Interacting with plugin-specific editors still uses the standalone manager.
+**Latest Windows x64 package — v0.1.1-test.109:** adds direct language selection from the burger menu and completes missing translations for all eight supported UI languages. The package was built locally; tests were not rerun for this UI update. Windows ARM64 remains at .103 and needs native runtime testing; macOS/Linux require their target hosts. Interacting with plugin-specific editors still uses the standalone manager.
