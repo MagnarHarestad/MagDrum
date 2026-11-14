@@ -141,6 +141,7 @@ public:
     bool upsertPluginInstrument(const PluginInstrumentRecord& plugin);
     juce::Array<PluginInstrumentRecord> getPluginInstruments() const;
     juce::StringArray getPluginKitNames() const;
+    juce::StringArray getPluginKitNames(const juce::String& pluginIdentifier) const;
     std::optional<std::int64_t> savePluginKit(const juce::String& pluginIdentifier, const juce::String& kitName, const juce::MemoryBlock& pluginState);
     std::optional<std::int64_t> getPluginKitId(const juce::String& pluginIdentifier, const juce::String& kitName) const;
     std::optional<juce::MemoryBlock> loadPluginKitState(const juce::String& pluginIdentifier, const juce::String& kitName) const;

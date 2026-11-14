@@ -377,6 +377,7 @@ int main(int argc,char** argv)
     const auto kitId=db.savePluginKit(instrument.identifier,"Test Kit",pluginState);
     if(!kitId||db.savePluginKit(instrument.identifier,"Test Kit",pluginState)!=kitId)return 33;
     if(db.getPluginKitNames().size()!=1||db.getPluginKitNames()[0]!="Fixture Drums / Test Kit")return 158;
+    const auto kitsForInstrument=db.getPluginKitNames(instrument.identifier);if(kitsForInstrument.size()!=1||kitsForInstrument[0]!="Test Kit"||!db.getPluginKitNames("vst3:missing:instrument").isEmpty())return 218;
     if(db.getPluginKitId(instrument.identifier,"Test Kit")!=kitId||db.getPluginKitId(instrument.identifier,"Missing Kit"))return 141;
     const auto restoredKitState=db.loadPluginKitState(instrument.identifier,"Test Kit");if(!restoredKitState||restoredKitState->getSize()!=sizeof(stateBytes)||std::memcmp(restoredKitState->getData(),stateBytes,sizeof(stateBytes))!=0)return 42;
     PluginSoundRecord generatedSound;generatedSound.midiNote=36;generatedSound.velocity=100;generatedSound.articulation="Kick";generatedSound.previewPath=waveFile.getFullPathName();generatedSound.duration=0.4;generatedSound.sampleRate=44100;generatedSound.channels=2;generatedSound.peak=0.8;generatedSound.rms=0.2;generatedSound.spectralFlatness=0.73;generatedSound.transientCount=4;generatedSound.category="Kick";generatedSound.confidence=0.6;

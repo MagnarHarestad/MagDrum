@@ -80,6 +80,12 @@ private:
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
     void loadSamplePage(bool reset);
     void refreshSourceKitFilters();
+    void refreshPluginInventory();
+    void refreshPluginKits();
+    void startPluginNoteScan();
+    void cancelPluginNoteScan();
+    void updatePluginScanProgress(int completed, int total, int note, int velocity);
+    void finishPluginNoteScan(int saved, int sounding, int silent, int failures, bool cancelled, const juce::String& error, const juce::String& summary);
     void showLibraryTools();
     void handleLibraryTool(int);
     void applyLanguage();
@@ -101,8 +107,13 @@ private:
     std::int64_t defaultLibraryErrorCount = 0;
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
+    juce::ThreadPool pluginScanWorkers{1};
+    std::atomic<bool> pluginScanCancellation{false};
+    bool pluginScanRunning = false;
+    juce::Array<juce::PluginDescription> discoveredPluginInstruments;
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextButton mapsTab{"MIDI MAPS"};
+    juce::TextButton pluginScannerTab{"PLUGIN SCANNER"};
     juce::TextButton languageButton{"☰"};
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
@@ -137,9 +148,16 @@ private:
     juce::TextEditor profileName, mappingNote;
     juce::TextButton loadProfileButton{"Load profile"}, saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
     juce::Label mappingSummary;
+    juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode;
+    juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
+    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"};
+    juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
+    juce::Label pluginScanProgress, pluginScanInfo;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::DocumentWindow> comparisonWindow;
     std::unique_ptr<juce::DocumentWindow> midiEventWindow;
+
+    friend class VstPluginNoteScanJob;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessorEditor)
 };
