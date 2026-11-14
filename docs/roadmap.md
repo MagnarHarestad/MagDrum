@@ -15,4 +15,4 @@ The product is not complete until each supported platform has a reproducible bui
 
 Desktop VST3 scanning is not an iOS requirement.
 
-**Latest Windows release — v0.1.1-test.110:** includes x64 and ARM64 packages with the direct language selector. The ARM64 app, VST3 and both test executables were cross-compiled and their PE headers verified as ARM64; runtime and test execution need native ARM64 Windows. x64 tests were not rerun for .110. macOS/Linux still require their target hosts; plugin-specific editors still use the standalone manager.
+**Latest Windows release — v0.1.1-test.110:** includes x64 and ARM64 packages with the direct language selector. The ARM64 app, VST3 and both test executables were cross-compiled and their PE headers verified as ARM64; runtime and test execution need native ARM64 Windows. the .110 x64 source passed both CTest suites (2/2), while ARM64 tests were only compiled. macOS/Linux still require their target hosts; plugin-specific editors still use the standalone manager.
