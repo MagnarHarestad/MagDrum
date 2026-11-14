@@ -8,6 +8,7 @@
 #include "../core/DefaultLibraryDiscovery.h"
 #include "../core/ScopedFileAccess.h"
 #include "../core/WavScanner.h"
+#include "../core/AudioClassifier.h"
 #include "../ui/MagDrumLocalization.h"
 #include <algorithm>
 #include <array>
@@ -273,11 +274,14 @@ public:
         }
         if(error.isEmpty())
         {
+            auto examples=scanDatabase.getManualClassificationExamples();
+            std::shared_ptr<const DrumClassificationModel> learnedModel;
+            if(!examples.empty())learnedModel=std::make_shared<ManualExampleDrumClassificationModel>(std::move(examples));
             int progressCount=0;WavScanner scanner;
             (void)scanner.scan(rootFolder,[this]{return shouldExit()||(cancelFlag&&cancelFlag->load());},
                 [&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},
                 &stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;},resumeAfter,
-                [this,&progressCount,&scanDatabase,scanId](const juce::File& file){if(onProgress&&((++progressCount%25)==1))onProgress(file);return scanDatabase.updateSampleScanCheckpoint(scanId,file);});
+                [this,&progressCount,&scanDatabase,scanId](const juce::File& file){if(onProgress&&((++progressCount%25)==1))onProgress(file);return scanDatabase.updateSampleScanCheckpoint(scanId,file);},std::move(learnedModel));
             if(!scanDatabase.assignSamplesToSource(rootFolder,*sourceId))++stats.errors;
             const auto state=stats.cancelled?"cancelled":"completed";
             if(!scanDatabase.finishSampleScan(scanId,state,stats.filesConsidered,stats.filesSkippedUnchanged,indexed,stats.errors))error="The scan finished, but its history record could not be updated.";
@@ -382,7 +386,10 @@ public:
                 if (source.existsAsFile()) (void) source.copyFileTo(destination);
             }
 
-        const auto analyzed = WavScanner{}.scan(outputDir);
+        auto examples=db.getManualClassificationExamples();
+        std::shared_ptr<const DrumClassificationModel> learnedModel;
+        if(!examples.empty())learnedModel=std::make_shared<ManualExampleDrumClassificationModel>(std::move(examples));
+        const auto analyzed = WavScanner{}.scan(outputDir, {}, {}, nullptr, {}, {}, {}, std::move(learnedModel));
         std::unordered_map<std::string, const ScannedSample*> byPath;
         for (const auto& sample : analyzed) byPath.emplace(sample.file.getFullPathName().toStdString(), &sample);
         int saved = 0, sounding = 0, silent = 0, failures = 0;
@@ -1167,7 +1174,7 @@ void MagDrumAudioProcessorEditor::updateSequencerGrid()
     barSelect.setSelectedId(juce::jlimit(1,bars,selectedBar),juce::dontSendNotification);
     for(size_t lane=0;lane<steps.size();++lane)
         for(size_t step=0;step<steps[lane].size();++step)
-            steps[lane][step].setTooltip(juce::String(laneNames[lane])+" · MIDI "+juce::String(mappedLaneNotes[lane])+" · bar "+juce::String(static_cast<int>(step/static_cast<size_t>(perBar)+1))+" · step "+juce::String(static_cast<int>(step%static_cast<size_t>(perBar)+1))+" · velocity "+juce::String(stepVelocities[lane][step])+" (right-click to edit)");
+            steps[lane][step].setTooltip(magdrum::ui::localisedText(laneDisplayNames[lane])+" · MIDI "+juce::String(mappedLaneNotes[lane])+" · "+magdrum::ui::localisedText("bar")+" "+juce::String(static_cast<int>(step/static_cast<size_t>(perBar)+1))+" · "+magdrum::ui::localisedText("step")+" "+juce::String(static_cast<int>(step%static_cast<size_t>(perBar)+1))+" · "+magdrum::ui::localisedText("Velocity")+" "+juce::String(stepVelocities[lane][step])+" ("+magdrum::ui::localisedText("Right-click to edit")+")");
     refreshStepTooltips();
     resized();
     repaint();
@@ -1655,8 +1662,7 @@ void MagDrumAudioProcessorEditor::finishPluginNoteScan(int saved, int sounding, 
     if (databaseReady) { refreshSourceKitFilters(); refreshSamples(); }
     juce::String result;
     if (error.isNotEmpty())
-        result = magdrum::ui::localisedText("Plugin note scan failed: {error}")
-            .replace("{error}", magdrum::ui::localisedText(error));
+        result = magdrum::ui::localisedText("Plugin note scan failed. Check the selected instrument and scan settings.");
     else
         result = magdrum::ui::localisedText(
             "Plugin note scan {state}: {saved} saved, {sounding} sounding, {silent} silent, {failures} errors. {summary}")
@@ -1899,7 +1905,7 @@ void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stat
         startNextDefaultLibraryFolder();
         return;
     }
-    if(error.isNotEmpty())status.setText(magdrum::ui::localisedText(error),juce::dontSendNotification);
+    if(error.isNotEmpty())status.setText(magdrum::ui::localisedText("Sample folder scan failed. Check the selected folder and try again."),juce::dontSendNotification);
     else status.setText(magdrum::ui::localisedText(stats.cancelled?"Scan cancelled. ":"Scan complete. ")+juce::String(indexed)+" "+magdrum::ui::localisedText("indexed, ")+juce::String(stats.filesSkippedUnchanged)+" "+magdrum::ui::localisedText("unchanged, ")+juce::String(stats.errors)+" "+magdrum::ui::localisedText("errors."),juce::dontSendNotification);
 }
 

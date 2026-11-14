@@ -1,6 +1,7 @@
 #pragma once
 #include "WavScanner.h"
 #include <memory>
+#include <vector>
 
 struct DrumClassification
 {
@@ -16,6 +17,18 @@ class DrumClassificationModel
 public:
     virtual ~DrumClassificationModel() = default;
     virtual DrumClassification classify(const ScannedSample& sample) const = 0;
+};
+
+// A small local example model trained from samples whose drum categories were
+// explicitly corrected by the user. It never modifies those corrections.
+class ManualExampleDrumClassificationModel final : public DrumClassificationModel
+{
+public:
+    explicit ManualExampleDrumClassificationModel(std::vector<ScannedSample> examples);
+    DrumClassification classify(const ScannedSample& sample) const override;
+    std::size_t trainingExampleCount() const { return examples.size(); }
+private:
+    std::vector<ScannedSample> examples;
 };
 
 // Conservative deterministic baseline. Scores are heuristic, never guarantees.

@@ -908,6 +908,58 @@ juce::String SampleDatabase::getCategory(const juce::File& file) const
     juce::String value="Unknown";if(sqlite3_step(q)==SQLITE_ROW){const auto* v=reinterpret_cast<const char*>(sqlite3_column_text(q,0));if(v)value=juce::String::fromUTF8(v);}sqlite3_finalize(q);return value;
 }
 
+std::vector<ScannedSample> SampleDatabase::getManualClassificationExamples(int limit) const
+{
+    std::vector<ScannedSample> examples;
+    if (connection == nullptr || limit <= 0)
+        return examples;
+
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT path,user_category,duration,channels,sample_rate,format,bit_depth,peak,rms,"
+                      "spectral_centroid,spectral_flatness,transient_strength,transient_count,fundamental_hz,"
+                      "pitch_confidence,analysis_version,size_bytes,modified_time_ms,fingerprint,"
+                      "acoustic_fingerprint,acoustic_fingerprint_version FROM samples "
+                      "WHERE user_category<>'' AND user_category<>'Unknown' "
+                      "ORDER BY user_category COLLATE NOCASE,path COLLATE NOCASE LIMIT ?";
+    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK)
+        return examples;
+    sqlite3_bind_int(statement, 1, juce::jlimit(1, 10000, limit));
+
+    while (sqlite3_step(statement) == SQLITE_ROW)
+    {
+        const auto text = [statement](int column)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column));
+            return value != nullptr ? juce::String::fromUTF8(value) : juce::String();
+        };
+        ScannedSample example;
+        example.file = juce::File(text(0));
+        example.category = text(1);
+        example.durationSeconds = sqlite3_column_double(statement, 2);
+        example.channels = sqlite3_column_int(statement, 3);
+        example.sampleRate = sqlite3_column_double(statement, 4);
+        example.format = text(5);
+        example.bitDepth = sqlite3_column_int(statement, 6);
+        example.peak = sqlite3_column_double(statement, 7);
+        example.rms = sqlite3_column_double(statement, 8);
+        example.spectralCentroidHz = sqlite3_column_double(statement, 9);
+        example.spectralFlatness = sqlite3_column_double(statement, 10);
+        example.transientStrength = sqlite3_column_double(statement, 11);
+        example.transientCount = sqlite3_column_int(statement, 12);
+        example.fundamentalHz = sqlite3_column_double(statement, 13);
+        example.pitchConfidence = sqlite3_column_double(statement, 14);
+        example.analysisVersion = sqlite3_column_int(statement, 15);
+        example.fileSizeBytes = sqlite3_column_int64(statement, 16);
+        example.modifiedTimeMillis = sqlite3_column_int64(statement, 17);
+        example.fingerprint = text(18);
+        example.acousticFingerprint = text(19);
+        example.acousticFingerprintVersion = sqlite3_column_int(statement, 20);
+        examples.push_back(std::move(example));
+    }
+    sqlite3_finalize(statement);
+    return examples;
+}
+
 bool SampleDatabase::setUserTags(const juce::File& file, const juce::StringArray& tags)
 {
     if (connection == nullptr) return false;

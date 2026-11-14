@@ -1,8 +1,11 @@
 #pragma once
 #include <functional>
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <juce_audio_formats/juce_audio_formats.h>
+
+class DrumClassificationModel;
 
 inline constexpr int currentSampleAnalysisVersion = 8;
 
@@ -54,5 +57,6 @@ public:
                                     ShouldSkipFile shouldSkipFile = {}, Stats* stats = nullptr,
                                     SampleConsumer sampleConsumer = {},
                                     const juce::String& resumeAfterFile = {},
-                                    FileProgressConsumer fileProgressConsumer = {}) const;
+                                    FileProgressConsumer fileProgressConsumer = {},
+                                    std::shared_ptr<const DrumClassificationModel> classificationModel = {}) const;
 };

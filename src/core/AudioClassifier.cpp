@@ -1,5 +1,8 @@
 #include "AudioClassifier.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <map>
 #include <utility>
 
 namespace
@@ -153,6 +156,38 @@ DrumClassification classify(const ScannedSample& sample) const override
     return out;
 }
 };
+
+std::array<double, 7> normalizedFeatures(const ScannedSample& sample)
+{
+    const auto rms = juce::jmax(sample.rms, 0.00001);
+    const auto centroid = juce::jmax(sample.spectralCentroidHz, 0.0);
+    const auto pitch = sample.pitchConfidence >= 0.35 && sample.fundamentalHz > 0.0
+        ? std::log2(juce::jmax(sample.fundamentalHz, 20.0)) / std::log2(22050.0) : 0.0;
+    return {
+        juce::jlimit(0.0, 1.0, std::log1p(juce::jmax(sample.durationSeconds, 0.0)) / std::log1p(8.0)),
+        centroid > 0.0 ? juce::jlimit(0.0, 1.0, std::log2(centroid + 1.0) / std::log2(22051.0)) : 0.0,
+        juce::jlimit(0.0, 1.0, sample.spectralFlatness),
+        juce::jlimit(0.0, 1.0, std::log1p(juce::jmax(sample.transientStrength, 0.0) / rms) / std::log1p(100.0)),
+        juce::jlimit(0.0, 1.0, static_cast<double>(juce::jmax(0, sample.transientCount)) / 12.0),
+        juce::jlimit(0.0, 1.0, pitch),
+        juce::jlimit(0.0, 1.0, sample.pitchConfidence)
+    };
+}
+
+double featureDistance(const ScannedSample& left, const ScannedSample& right)
+{
+    const auto a = normalizedFeatures(left);
+    const auto b = normalizedFeatures(right);
+    constexpr std::array<double, 7> weights{1.0, 1.0, 0.75, 1.0, 0.5, 0.8, 0.7};
+    double weightedSquares = 0.0;
+    double totalWeight = 0.0;
+    for (size_t index = 0; index < weights.size(); ++index)
+    {
+        weightedSquares += weights[index] * (a[index] - b[index]) * (a[index] - b[index]);
+        totalWeight += weights[index];
+    }
+    return std::sqrt(weightedSquares / totalWeight);
+}
 }
 
 AudioClassifier::AudioClassifier() : classificationModel(std::make_shared<HeuristicDrumClassificationModel>())
@@ -173,5 +208,75 @@ DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
     if (!supported.contains(result.category) || !std::isfinite(result.confidence)
         || result.confidence < 0.0 || result.confidence > 1.0)
         return {};
+    return result;
+}
+
+ManualExampleDrumClassificationModel::ManualExampleDrumClassificationModel(std::vector<ScannedSample> trainingSamples)
+    : examples(std::move(trainingSamples))
+{
+}
+
+DrumClassification ManualExampleDrumClassificationModel::classify(const ScannedSample& sample) const
+{
+    const auto baseline = HeuristicDrumClassificationModel{}.classify(sample);
+    if (baseline.confidence >= 0.75 || sample.durationSeconds <= 0.0 || sample.rms <= 0.00001
+        || sample.peak <= 0.0001 || examples.empty())
+        return baseline;
+
+    static const juce::StringArray supportedCategories{
+        "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat", "Clap",
+        "Tom", "Rimshot", "Ride", "Crash", "Percussion"
+    };
+    struct Neighbour { double distance; const ScannedSample* sample; };
+    std::vector<Neighbour> neighbours;
+    neighbours.reserve(examples.size());
+    for (const auto& example : examples)
+    {
+        if (!supportedCategories.contains(example.category) || example.durationSeconds <= 0.0
+            || example.rms <= 0.00001 || example.peak <= 0.0001)
+            continue;
+        const auto distance = featureDistance(sample, example);
+        if (distance <= 0.28)
+            neighbours.push_back({distance, &example});
+    }
+    if (neighbours.size() < 2)
+        return baseline;
+
+    std::sort(neighbours.begin(), neighbours.end(), [](const Neighbour& left, const Neighbour& right)
+    {
+        return left.distance < right.distance;
+    });
+    if (neighbours.size() > 5)
+        neighbours.resize(5);
+
+    struct Vote { double weight = 0.0, distance = 0.0; int count = 0; };
+    std::map<juce::String, Vote> votes;
+    double totalWeight = 0.0;
+    for (const auto& neighbour : neighbours)
+    {
+        const auto weight = 1.0 / (0.03 + neighbour.distance);
+        auto& vote = votes[neighbour.sample->category];
+        vote.weight += weight;
+        vote.distance += neighbour.distance;
+        ++vote.count;
+        totalWeight += weight;
+    }
+    auto winner = votes.end();
+    for (auto candidate = votes.begin(); candidate != votes.end(); ++candidate)
+        if (winner == votes.end() || candidate->second.weight > winner->second.weight)
+            winner = candidate;
+    if (winner == votes.end() || winner->second.count < 2 || totalWeight <= 0.0)
+        return baseline;
+
+    const auto agreement = winner->second.weight / totalWeight;
+    const auto meanDistance = winner->second.distance / winner->second.count;
+    if (agreement < 0.72 || meanDistance > 0.22)
+        return baseline;
+
+    auto result = baseline;
+    result.category = winner->first;
+    result.confidence = juce::jlimit(0.55, 0.74, 0.54 + agreement * 0.18 + (0.22 - meanDistance) * 0.08);
+    if (!result.tags.contains("User-trained suggestion"))
+        result.tags.add("User-trained suggestion");
     return result;
 }

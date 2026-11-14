@@ -504,7 +504,29 @@ int runSmokeTests(int argc,char** argv)
     if(modelPrediction.category!="Clap"||std::abs(modelPrediction.confidence-0.83)>0.0001||modelPrediction.tags.size()!=1)return 54;
     const AudioClassifier invalidModelClassifier(std::make_shared<FixtureClassificationModel>("unsupported",1.2));
     if(invalidModelClassifier.classify(kickLike).category!="Unknown")return 55;
+    ScannedSample manualExample;manualExample.durationSeconds=0.5;manualExample.channels=1;manualExample.sampleRate=44100;manualExample.peak=0.5;manualExample.rms=0.2;manualExample.spectralCentroidHz=1500;manualExample.spectralFlatness=0.4;manualExample.transientStrength=0.04;manualExample.transientCount=1;manualExample.category="Ride";
+    std::vector<ScannedSample> manualExamples(3,manualExample);manualExamples[0].file=juce::File("manual-ride-a.wav");manualExamples[1].file=juce::File("manual-ride-b.wav");manualExamples[2].file=juce::File("manual-ride-c.wav");
+    const AudioClassifier manualExampleClassifier(std::make_shared<ManualExampleDrumClassificationModel>(manualExamples));
+    auto learnedQuery=manualExample;learnedQuery.category="Unknown";learnedQuery.file=juce::File("unlabeled-audio.wav");
+    const auto learnedPrediction=manualExampleClassifier.classify(learnedQuery);
+    if(learnedPrediction.category!="Ride"||learnedPrediction.confidence<0.55||learnedPrediction.confidence>=0.75||!learnedPrediction.tags.contains("User-trained suggestion"))return 218;
+    learnedQuery.file=juce::File("Kick_01.wav");if(manualExampleClassifier.classify(learnedQuery).category!="Kick")return 219;
+    auto disagreeingExamples=manualExamples;disagreeingExamples[1].category="Crash";disagreeingExamples[2].category="Tom";
+    learnedQuery.file=juce::File("unlabeled-audio.wav");
+    if(AudioClassifier(std::make_shared<ManualExampleDrumClassificationModel>(disagreeingExamples)).classify(learnedQuery).category!="Unknown")return 220;
+    const auto learnedScanRoot=root.getSiblingFile("MagDrumLearnedClassifierScanTest");learnedScanRoot.deleteRecursively();if(!learnedScanRoot.createDirectory().wasOk())return 222;
+    const auto learnedTrainingA=learnedScanRoot.getChildFile("manual-training-a.wav"),learnedTrainingB=learnedScanRoot.getChildFile("manual-training-b.wav");
+    juce::WavAudioFormat learnedWavFormat;
+    if(!writeFormatFixture(learnedWavFormat,learnedTrainingA)||!writeFormatFixture(learnedWavFormat,learnedTrainingB))return 223;
+    auto scanExamples=WavScanner{}.scan(learnedScanRoot);if(scanExamples.size()!=2)return 224;
+    std::vector<ScannedSample> scanManualExamples;for(auto example:scanExamples){example.category="Ride";scanManualExamples.push_back(example);}
+    scanManualExamples.push_back(scanManualExamples.front());
+    const auto modelScanned=WavScanner{}.scan(learnedScanRoot,{}, {},nullptr,{}, {},{},std::make_shared<ManualExampleDrumClassificationModel>(scanManualExamples));
+    if(modelScanned.size()!=2||std::any_of(modelScanned.begin(),modelScanned.end(),[](const ScannedSample& scanned){return scanned.category!="Ride"||scanned.classificationConfidence<=0.0||scanned.classificationConfidence>=0.75||!scanned.classificationTags.contains("User-trained suggestion");}))return 225;
     if(!db.setUserCategory(waveFile,"Snare"))return 14;
+    const auto manualDatabaseExamples=db.getManualClassificationExamples();
+    const auto foundManualExample=std::find_if(manualDatabaseExamples.begin(),manualDatabaseExamples.end(),[&](const ScannedSample& example){return example.file==waveFile;});
+    if(foundManualExample==manualDatabaseExamples.end()||foundManualExample->category!="Snare"||foundManualExample->durationSeconds<=0.0||manualDatabaseExamples.size()!=1)return 221;
     const auto correctedBrowse=db.getSampleBrowseRecords();
     bool correctedSampleIsManual=false;
     for(const auto& record:correctedBrowse)

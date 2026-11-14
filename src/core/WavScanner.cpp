@@ -168,7 +168,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
                                             ShouldSkipFile shouldSkipFile, Stats* stats,
                                             SampleConsumer sampleConsumer,
                                             const juce::String& resumeAfterFile,
-                                            FileProgressConsumer fileProgressConsumer) const
+                                            FileProgressConsumer fileProgressConsumer,
+                                            std::shared_ptr<const DrumClassificationModel> classificationModel) const
 {
     juce::Array<ScannedSample> result;
     if (stats != nullptr) *stats = {};
@@ -177,6 +178,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
 
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
+    const AudioClassifier classifier(std::move(classificationModel));
     juce::Array<juce::File> files;
     for (const auto& entry : juce::RangedDirectoryIterator(root, true, "*", juce::File::findFiles))
     {
@@ -391,7 +393,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.fingerprint = juce::SHA256(file).toHexString();
         sample.acousticFingerprint = createAcousticFingerprint(*reader, fft, fftData, buffer, channelData.getData(), fftSize);
         sample.acousticFingerprintVersion = sample.acousticFingerprint.length() == 128 ? 1 : 0;
-        const auto classification = AudioClassifier{}.classify(sample);
+        const auto classification = classifier.classify(sample);
         sample.category = classification.category;
         sample.classificationTags = classification.tags;
         sample.classificationConfidence = classification.confidence;

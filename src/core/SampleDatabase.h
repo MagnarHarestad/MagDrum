@@ -5,6 +5,7 @@
 #include <optional>
 #include <cstdint>
 #include <vector>
+#include "WavScanner.h"
 
 struct ScannedSample;
 
@@ -160,6 +161,7 @@ public:
     juce::Array<PluginSoundBrowseRecord> getPluginSoundBrowseRecords() const;
     bool setUserCategory(const juce::File& file, const juce::String& category);
     juce::String getCategory(const juce::File& file) const;
+    std::vector<ScannedSample> getManualClassificationExamples(int limit = 2000) const;
     juce::Array<SampleBrowseRecord> searchSampleBrowseRecords(const juce::String& query,
                                                               const juce::String& category,
                                                               int limit, int offset = 0) const;

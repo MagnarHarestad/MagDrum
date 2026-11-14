@@ -2,6 +2,7 @@
 #include "ui/MagDrumLookAndFeel.h"
 #include "ui/MagDrumLocalization.h"
 #include "core/SampleDatabase.h"
+#include "core/AudioClassifier.h"
 #include "core/WavScanner.h"
 #include "core/MidiPatternIO.h"
 #include "core/PluginNoteScanner.h"
@@ -391,8 +392,11 @@ private:
    }
    if(error.isEmpty())
    {
+    auto examples=scanDatabase.getManualClassificationExamples();
+    std::shared_ptr<const DrumClassificationModel> learnedModel;
+    if(!examples.empty())learnedModel=std::make_shared<ManualExampleDrumClassificationModel>(std::move(examples));
     WavScanner scanner;
-    (void) scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;},resumeAfter,[&scanDatabase,scanId](const juce::File& file){return scanDatabase.updateSampleScanCheckpoint(scanId,file);});
+    (void) scanner.scan(root,[this]{return shouldExit()||cancellation.load();},[&scanDatabase](const juce::File& file,std::int64_t size,std::int64_t modified){return scanDatabase.isSampleUnchanged(file,size,modified);},&stats,[&](const ScannedSample& sample){if(!scanDatabase.insertSample(sample,*sourceId))return false;++indexed;return true;},resumeAfter,[&scanDatabase,scanId](const juce::File& file){return scanDatabase.updateSampleScanCheckpoint(scanId,file);},std::move(learnedModel));
     if(!scanDatabase.assignSamplesToSource(root,*sourceId))++stats.errors;
     const auto state=stats.cancelled?"cancelled":"completed";
     if(!scanDatabase.finishSampleScan(scanId,state,stats.filesConsidered,stats.filesSkippedUnchanged,indexed,stats.errors))
