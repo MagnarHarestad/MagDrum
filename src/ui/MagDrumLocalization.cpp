@@ -581,6 +581,12 @@ countries: de
 "PAD GAIN" = "Verstärkung"
 "PAD PAN" = "Panorama"
 "PAD TUNE" = "Stimmung"
+"Choose an audio sample folder" = "Ordner für Audiosamples auswählen"
+"Select a sample to load its waveform" = "Wähle ein Sample, um die Wellenform zu laden"
+"Load the next %1 matching samples…" = "Die nächsten %1 passenden Samples laden…"
+"Manually classified" = "Manuell klassifiziert"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Scan abgebrochen: %1 indexiert, %2 unverändert, %3 Fehler."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Scan abgeschlossen: %1 indexiert, %2 unverändert, %3 Fehler."
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1158,6 +1164,12 @@ countries: fr
 "PAD GAIN" = "Gain"
 "PAD PAN" = "Panoramique"
 "PAD TUNE" = "Accord"
+"Choose an audio sample folder" = "Choisir un dossier d’échantillons audio"
+"Select a sample to load its waveform" = "Sélectionnez un échantillon pour charger sa forme d’onde"
+"Load the next %1 matching samples…" = "Charger les %1 échantillons correspondants suivants…"
+"Manually classified" = "Classé manuellement"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Analyse annulée : %1 indexés, %2 inchangés, %3 erreurs."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Analyse terminée : %1 indexés, %2 inchangés, %3 erreurs."
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -1735,6 +1747,12 @@ countries: es
 "PAD GAIN" = "Ganancia"
 "PAD PAN" = "Panorama"
 "PAD TUNE" = "Afinación"
+"Choose an audio sample folder" = "Elegir una carpeta de muestras de audio"
+"Select a sample to load its waveform" = "Selecciona una muestra para cargar su forma de onda"
+"Load the next %1 matching samples…" = "Cargar los siguientes %1 muestras coincidentes…"
+"Manually classified" = "Clasificado manualmente"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Análisis cancelado: %1 indexados, %2 sin cambios, %3 errores."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Análisis completado: %1 indexados, %2 sin cambios, %3 errores."
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -2312,6 +2330,12 @@ countries: se
 "PAD GAIN" = "Nivå"
 "PAD PAN" = "Panorering"
 "PAD TUNE" = "Stämning"
+"Choose an audio sample folder" = "Välj en mapp med ljudsamplingar"
+"Select a sample to load its waveform" = "Välj ett sample för att läsa in vågformen"
+"Load the next %1 matching samples…" = "Läs in nästa %1 matchande samples…"
+"Manually classified" = "Manuellt klassificerad"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Sökning avbruten: %1 indexerade, %2 oförändrade, %3 fel."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Sökning klar: %1 indexerade, %2 oförändrade, %3 fel."
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -2889,6 +2913,12 @@ countries: no
 "PAD GAIN" = "Nivå"
 "PAD PAN" = "Panorering"
 "PAD TUNE" = "Stemning"
+"Choose an audio sample folder" = "Velg en mappe med lydsampler"
+"Select a sample to load its waveform" = "Velg en sample for å laste inn bølgeformen"
+"Load the next %1 matching samples…" = "Last inn de neste %1 samsvarende samplene…"
+"Manually classified" = "Manuelt klassifisert"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Søk avbrutt: %1 indeksert, %2 uendret, %3 feil."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Søk fullført: %1 indeksert, %2 uendret, %3 feil."
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -3466,6 +3496,12 @@ countries: dk
 "PAD GAIN" = "Niveau"
 "PAD PAN" = "Panorering"
 "PAD TUNE" = "Stemning"
+"Choose an audio sample folder" = "Vælg en mappe med lydsamples"
+"Select a sample to load its waveform" = "Vælg et sample for at indlæse bølgeformen"
+"Load the next %1 matching samples…" = "Indlæs de næste %1 matchende samples…"
+"Manually classified" = "Manuelt klassificeret"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Scanning annulleret: %1 indekseret, %2 uændret, %3 fejl."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Scanning fuldført: %1 indekseret, %2 uændret, %3 fejl."
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -4043,6 +4079,12 @@ countries: fi
 "PAD GAIN" = "Vahvistus"
 "PAD PAN" = "Panorointi"
 "PAD TUNE" = "Vire"
+"Choose an audio sample folder" = "Valitse ääninäytekansio"
+"Select a sample to load its waveform" = "Valitse näyte, jonka aaltomuodon haluat ladata"
+"Load the next %1 matching samples…" = "Lataa seuraavat %1 vastaavaa näytettä…"
+"Manually classified" = "Luokiteltu manuaalisesti"
+"Scan cancelled: %1 indexed, %2 unchanged, %3 errors." = "Skannaus peruutettu: %1 indeksoitu, %2 ennallaan, %3 virhettä."
+"Scan complete: %1 indexed, %2 unchanged, %3 errors." = "Skannaus valmis: %1 indeksoitu, %2 ennallaan, %3 virhettä."
 )translations";
 
 Language selected = Language::english;
