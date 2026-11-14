@@ -1,6 +1,6 @@
 # MagDrum local test packages
 
-Release [v0.1.1-test.118](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.118) contains the Windows x64 ZIP and Linux x64 tarball. Both CTest suites passed on both platforms (2/2 per platform). This update makes the standalone MIDI event editor and step sequencer refresh their translated labels when the language changes, and translates their event messages in all seven additional languages. Translation coverage elsewhere in the standalone app is still being completed. Linux still needs a smoke test in a native Linux DAW.
+Release [v0.1.1-test.119](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.119) contains Windows x64 and Linux x64 packages. Both Release CTest suites passed on each platform (2/2). Plugin MIDI editing, the standalone plugin browser, and auxiliary window titles now refresh their translated controls when the language changes. The catalogs are still incomplete: an audit found 68 application/plugin source strings missing from each of the seven non-English catalogs. Cubase testing of the current Windows VST3 and native Linux DAW smoke testing remain pending.
 
-Windows x64 SHA-256: `2b054a57103e51476fb5390860c2dc9b68414417150f3bad77347b32bf71bc95`
-Linux x64 SHA-256: `f81b69f3cceb81c5028786ce56ea14585ffea1bf77baf87b300301c5655c0aac`
+Windows x64 SHA-256: `bf1fd0f8960db6d93df00b07467a81df1903fe61bfc19e4b4b35a79407e086b8`
+Linux x64 SHA-256: `a32e43f481e0de5163253c90a9404f500f11133e9aa7e6a196f6b146b546e46f`
