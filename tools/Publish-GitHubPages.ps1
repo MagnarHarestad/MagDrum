@@ -17,6 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not clone the public MagDrum website rep
 
 $landingPage = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'docs/index.html'))
 $landingPage = $landingPage.Replace('@LATEST_RELEASE@', $latestRelease)
+if ($landingPage.Contains('@LATEST_RELEASE@')) { throw 'The landing page contains an unresolved release marker.' }
 $landingPage = $landingPage.Replace(
     'https://github.com/MagnarHarestad/MagDrum/releases/latest',
     "https://github.com/MagnarHarestad/MagDrum/releases/tag/$latestRelease")
