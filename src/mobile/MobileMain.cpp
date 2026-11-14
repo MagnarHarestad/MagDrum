@@ -646,6 +646,7 @@ private:
         }
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
     };
+    magdrum::ui::LookAndFeel lookAndFeel;
     std::unique_ptr<Window> window;
 };
 }
