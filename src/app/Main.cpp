@@ -622,6 +622,42 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 void MainComponent::openPluginBrowser(){if(pluginWindow==nullptr)pluginWindow=std::make_unique<PluginWindow>(*this);pluginWindow->toFront(true);status.setText(juce::String(database.getPluginInstruments().size())+" plugin instruments indexed.",juce::dontSendNotification);}
+int runIsolatedVst3Discovery()
+{
+    const auto dataDirectory = getMagDrumDataDirectory();
+    if ((! dataDirectory.isDirectory()) && ! dataDirectory.createDirectory().wasOk())
+        return 2;
+
+    const auto inventoryFile = dataDirectory.getChildFile("vst3-plugins.xml");
+    juce::KnownPluginList knownPlugins;
+    if (inventoryFile.existsAsFile())
+    {
+        const auto xml = juce::XmlDocument::parse(inventoryFile);
+        if (xml == nullptr)
+            return 3;
+        knownPlugins.recreateFromXml(*xml);
+    }
+
+    juce::AudioPluginFormatManager formats;
+    juce::addDefaultFormatsToManager(formats);
+    juce::AudioPluginFormat* vst3 = nullptr;
+    for (int index = 0; index < formats.getNumFormats(); ++index)
+        if (auto* format = formats.getFormat(index); format != nullptr && format->getName() == "VST3")
+        { vst3 = format; break; }
+    if (vst3 == nullptr)
+        return 4;
+
+    juce::PluginDirectoryScanner scanner(knownPlugins, *vst3,
+        juce::FileSearchPath(vst3->getDefaultLocationsToSearch()), true,
+        dataDirectory.getChildFile("RecentlyCrashedPluginsList"));
+    juce::String name;
+    while (scanner.scanNextFile(true, name)) {}
+
+    if (auto xml = knownPlugins.createXml())
+        return xml->writeTo(inventoryFile) ? 0 : 5;
+    return 6;
+}
+
 class MagDrumApplication final : public juce::JUCEApplication
 {
 public:
@@ -635,6 +671,24 @@ public:
         juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         juce::StringArray arguments;
         arguments.addTokens(commandLine, true);
+        if (arguments.size() == 1 && arguments[0] == "--magdrum-vst3-discovery-worker")
+        {
+            if (! juce::Thread::launch([this]
+                {
+                    const auto exitCode = runIsolatedVst3Discovery();
+                    juce::MessageManager::callAsync([this, exitCode]
+                    {
+                        setApplicationReturnValue(exitCode);
+                        quit();
+                    });
+                }))
+            {
+                setApplicationReturnValue(7);
+                quit();
+            }
+            return;
+        }
+
         if (arguments.size() == 2 && arguments[0] == "--magdrum-plugin-scan-worker")
         {
             const auto request = juce::File(arguments[1].unquoted());

@@ -323,7 +323,7 @@ countries: de
 "Audio device" = "Audiogerät"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Wählen Sie ein Instrument mit gespeichertem Kit-Zustand. Entdecken Sie Plugins, wählen Sie Presets und speichern Sie Kits in der Instrumentenverwaltung."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Wählen Sie ein Instrument und ein gespeichertes Kit zum Scannen der MIDI-Noten."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "Keine VST3-Instrumente gefunden. Scannen Sie Plugin-Ordner und speichern Sie ein Kit in der Instrumentenverwaltung."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "Keine VST3-Instrumente gefunden. Scannen Sie hier die Plugin-Ordner und wählen Sie anschließend im Instrumentenmanager ein Preset aus und speichern Sie ein Kit."
 "Select a discovered VST3 instrument first." = "Wählen Sie zuerst ein entdecktes VST3-Instrument aus."
 "Choose a kit state saved in the instrument manager." = "Wählen Sie ein in der Instrumentenverwaltung gespeichertes Kit."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Geben Sie 1 bis 16 Anschlagstärken zwischen 1 und 127 ein."
@@ -337,6 +337,13 @@ countries: de
 "Plugin note scan complete." = "Plugin-Notenscan abgeschlossen."
 "Cancellation requested. The scanner will stop at its next safe point." = "Abbruch angefordert. Der Scanner stoppt beim nächsten sicheren Punkt."
 "Plugin note scan failed: " = "Plugin-Notenscan fehlgeschlagen: "
+
+"Scan plugin folders" = "VST3-Pluginordner durchsuchen"
+"Cancel instrument scan" = "Instrumentenscan abbrechen"
+"Scanning for VST3 instruments…" = "Suche nach VST3-Instrumenten…"
+"VST3 instrument scan complete." = "VST3-Instrumentensuche abgeschlossen."
+"VST3 instrument scan failed. Check the MagDrum helper." = "VST3-Instrumentensuche fehlgeschlagen. Überprüfen Sie den MagDrum-Helfer."
+"VST3 instrument scan cancelled." = "VST3-Instrumentensuche abgebrochen."
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -655,7 +662,7 @@ countries: fr
 "Audio device" = "Périphérique audio"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Choisissez un instrument dont le kit est enregistré. Utilisez le gestionnaire pour détecter les plug-ins, choisir des préréglages et enregistrer des kits."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Choisissez un instrument et un kit enregistré pour analyser ses notes MIDI."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "Aucun instrument VST3 détecté. Analysez les dossiers de plug-ins et enregistrez un kit dans le gestionnaire."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "Aucun instrument VST3 détecté. Analysez les dossiers de plug-ins ici, puis choisissez un préréglage et enregistrez un kit dans le gestionnaire d’instruments."
 "Select a discovered VST3 instrument first." = "Choisissez d’abord un instrument VST3 détecté."
 "Choose a kit state saved in the instrument manager." = "Choisissez un état de kit enregistré dans le gestionnaire d’instruments."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Saisissez 1 à 16 vélocités entre 1 et 127."
@@ -669,6 +676,13 @@ countries: fr
 "Plugin note scan complete." = "Analyse des notes du plug-in terminée."
 "Cancellation requested. The scanner will stop at its next safe point." = "Annulation demandée. Le scanner s’arrêtera au prochain point sûr."
 "Plugin note scan failed: " = "Échec de l’analyse des notes du plug-in : "
+
+"Scan plugin folders" = "Analyser les dossiers de plug-ins"
+"Cancel instrument scan" = "Annuler l’analyse des instruments"
+"Scanning for VST3 instruments…" = "Recherche d’instruments VST3…"
+"VST3 instrument scan complete." = "Recherche d’instruments VST3 terminée."
+"VST3 instrument scan failed. Check the MagDrum helper." = "La recherche d’instruments VST3 a échoué. Vérifiez l’outil MagDrum."
+"VST3 instrument scan cancelled." = "Recherche d’instruments VST3 annulée."
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -987,7 +1001,7 @@ countries: es
 "Audio device" = "Dispositivo de audio"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Elige un instrumento con un kit guardado. Usa el administrador para descubrir plugins, elegir presets y guardar kits."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Elige un instrumento y un kit guardado para analizar sus notas MIDI."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "No hay instrumentos VST3 detectados. Analiza las carpetas de plugins y guarda un kit en el administrador."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "No hay instrumentos VST3 detectados. Analiza aquí las carpetas de plugins y luego selecciona un preset y guarda un kit en el administrador de instrumentos."
 "Select a discovered VST3 instrument first." = "Primero selecciona un instrumento VST3 detectado."
 "Choose a kit state saved in the instrument manager." = "Elige un estado de kit guardado en el administrador de instrumentos."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Introduce de 1 a 16 niveles de velocidad entre 1 y 127."
@@ -1001,6 +1015,13 @@ countries: es
 "Plugin note scan complete." = "Análisis de notas del plugin completado."
 "Cancellation requested. The scanner will stop at its next safe point." = "Cancelación solicitada. El escáner se detendrá en el siguiente punto seguro."
 "Plugin note scan failed: " = "Error al analizar las notas del plugin: "
+
+"Scan plugin folders" = "Analizar carpetas de plugins"
+"Cancel instrument scan" = "Cancelar búsqueda de instrumentos"
+"Scanning for VST3 instruments…" = "Buscando instrumentos VST3…"
+"VST3 instrument scan complete." = "Búsqueda de instrumentos VST3 completada."
+"VST3 instrument scan failed. Check the MagDrum helper." = "Error al buscar instrumentos VST3. Comprueba el helper de MagDrum."
+"VST3 instrument scan cancelled." = "Búsqueda de instrumentos VST3 cancelada."
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -1319,7 +1340,7 @@ countries: se
 "Audio device" = "Ljudenhet"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Välj ett instrument med sparat kitläge. Använd instrumenthanteraren för att hitta pluginer, välja presets och spara kit."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Välj ett instrument och ett sparat kit för att skanna dess MIDI-noter."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "Inga VST3-instrument hittades. Skanna pluginmappar och spara ett kit i instrumenthanteraren."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "Inga VST3-instrument hittades. Sök igenom pluginmappar här och välj sedan en preset och spara ett kit i instrumenthanteraren."
 "Select a discovered VST3 instrument first." = "Välj ett upptäckt VST3-instrument först."
 "Choose a kit state saved in the instrument manager." = "Välj ett sparat kit i instrumenthanteraren."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Ange 1–16 velocitynivåer från 1 till 127."
@@ -1333,6 +1354,13 @@ countries: se
 "Plugin note scan complete." = "Skanning av pluginnoter klar."
 "Cancellation requested. The scanner will stop at its next safe point." = "Avbrytning begärd. Skannern stannar vid nästa säkra punkt."
 "Plugin note scan failed: " = "Skanning av pluginnoter misslyckades: "
+
+"Scan plugin folders" = "Sök igenom pluginmappar"
+"Cancel instrument scan" = "Avbryt instrumentsökning"
+"Scanning for VST3 instruments…" = "Söker efter VST3-instrument…"
+"VST3 instrument scan complete." = "Sökningen efter VST3-instrument är klar."
+"VST3 instrument scan failed. Check the MagDrum helper." = "Sökningen efter VST3-instrument misslyckades. Kontrollera MagDrums hjälpprogram."
+"VST3 instrument scan cancelled." = "Sökningen efter VST3-instrument avbröts."
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -1651,7 +1679,7 @@ countries: no
 "Audio device" = "Lydenhet"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Velg et instrument med lagret kittilstand. Bruk instrumentbehandlingen til å finne pluginer, velge forhåndsinnstillinger og lagre kit."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Velg et instrument og et lagret kit for å skanne MIDI-notene."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "Ingen VST3-instrumenter funnet. Skann pluginmapper og lagre et kit i instrumentbehandlingen."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "Fant ingen VST3-instrumenter. Skann pluginmapper her, og velg deretter en forhåndsinnstilling og lagre et kit i instrumentbehandleren."
 "Select a discovered VST3 instrument first." = "Velg først et oppdaget VST3-instrument."
 "Choose a kit state saved in the instrument manager." = "Velg en lagret kittilstand i instrumentbehandlingen."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Angi 1–16 velocitynivåer fra 1 til 127."
@@ -1665,6 +1693,13 @@ countries: no
 "Plugin note scan complete." = "Pluginskanning fullført."
 "Cancellation requested. The scanner will stop at its next safe point." = "Avbrytelse forespurt. Skanneren stopper ved neste trygge punkt."
 "Plugin note scan failed: " = "Pluginskanning mislyktes: "
+
+"Scan plugin folders" = "Skann pluginmapper"
+"Cancel instrument scan" = "Avbryt instrumentsøk"
+"Scanning for VST3 instruments…" = "Søker etter VST3-instrumenter…"
+"VST3 instrument scan complete." = "VST3-instrumentsøket er fullført."
+"VST3 instrument scan failed. Check the MagDrum helper." = "VST3-instrumentsøket mislyktes. Kontroller MagDrum-hjelperen."
+"VST3 instrument scan cancelled." = "VST3-instrumentsøket ble avbrutt."
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -1983,7 +2018,7 @@ countries: dk
 "Audio device" = "Lydenhed"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Vælg et instrument med en gemt kittilstand. Brug instrumenthåndteringen til at finde plugins, vælge forudindstillinger og gemme kits."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Vælg et instrument og et gemt kit for at scanne dets MIDI-noder."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "Ingen fundne VST3-instrumenter. Scan pluginmapper og gem et kit i instrumenthåndteringen."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "Ingen VST3-instrumenter fundet. Scan pluginmapper her, og vælg derefter en forudindstilling og gem et kit i instrumentadministrationen."
 "Select a discovered VST3 instrument first." = "Vælg først et fundet VST3-instrument."
 "Choose a kit state saved in the instrument manager." = "Vælg en kittilstand, der er gemt i instrumenthåndteringen."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Angiv 1–16 velocityniveauer fra 1 til 127."
@@ -1997,6 +2032,13 @@ countries: dk
 "Plugin note scan complete." = "Pluginscanning fuldført."
 "Cancellation requested. The scanner will stop at its next safe point." = "Annullering anmodet. Scanneren stopper ved næste sikre punkt."
 "Plugin note scan failed: " = "Pluginscanning mislykkedes: "
+
+"Scan plugin folders" = "Scan pluginmapper"
+"Cancel instrument scan" = "Annuller instrumentsøgning"
+"Scanning for VST3 instruments…" = "Søger efter VST3-instrumenter…"
+"VST3 instrument scan complete." = "VST3-instrumentsøgningen er fuldført."
+"VST3 instrument scan failed. Check the MagDrum helper." = "VST3-instrumentsøgningen mislykkedes. Kontrollér MagDrum-hjælpeprogrammet."
+"VST3 instrument scan cancelled." = "VST3-instrumentsøgningen blev annulleret."
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -2315,7 +2357,7 @@ countries: fi
 "Audio device" = "Äänilaite"
 "Select an instrument with a saved kit state. Use the instrument manager to discover plugins, select presets, and save kits." = "Valitse soitin, jonka kittitila on tallennettu. Etsi liitännät, valitse esiasetukset ja tallenna kitit soitinhallinnassa."
 "Choose an instrument and a saved kit state to scan its MIDI notes." = "Valitse soitin ja tallennettu kitti MIDI-nuottien skannausta varten."
-"No discovered VST3 instruments. Use the instrument manager to scan plugin folders and save a kit." = "VST3-soittimia ei löytynyt. Skannaa liitännäiskansiot ja tallenna kitti soitinhallinnassa."
+"No discovered VST3 instruments. Scan plugin folders here, then use the instrument manager to select presets and save a kit." = "VST3-soittimia ei löytynyt. Skannaa lisäosakansiot täällä ja valitse sitten esiasetus sekä tallenna rumpusetti soitinhallinnassa."
 "Select a discovered VST3 instrument first." = "Valitse ensin löydetty VST3-soitin."
 "Choose a kit state saved in the instrument manager." = "Valitse soitinhallintaan tallennettu kittitila."
 "Enter 1 to 16 velocity levels from 1 to 127." = "Anna 1–16 velocity-tasoa väliltä 1–127."
@@ -2329,6 +2371,13 @@ countries: fi
 "Plugin note scan complete." = "Liitännän nuottiskannaus valmis."
 "Cancellation requested. The scanner will stop at its next safe point." = "Peruutusta pyydetty. Skanneri pysähtyy seuraavassa turvallisessa kohdassa."
 "Plugin note scan failed: " = "Liitännän nuottiskannaus epäonnistui: "
+
+"Scan plugin folders" = "Skannaa lisäosakansiot"
+"Cancel instrument scan" = "Peruuta soitinhaku"
+"Scanning for VST3 instruments…" = "Etsitään VST3-soittimia…"
+"VST3 instrument scan complete." = "VST3-soitinhaku valmis."
+"VST3 instrument scan failed. Check the MagDrum helper." = "VST3-soitinhaku epäonnistui. Tarkista MagDrum-apuohjelma."
+"VST3 instrument scan cancelled." = "VST3-soitinhaku peruutettiin."
 )translations";
 
 Language selected = Language::english;

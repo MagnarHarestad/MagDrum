@@ -84,6 +84,8 @@ private:
     void refreshSourceKitFilters();
     void refreshPluginInventory();
     void refreshPluginKits();
+    void startPluginInventoryScan();
+    void finishPluginInventoryScan(int exitCode, bool cancelled);
     void startPluginNoteScan();
     void cancelPluginNoteScan();
     void updatePluginScanProgress(int completed, int total, int note, int velocity);
@@ -112,6 +114,9 @@ private:
     juce::ThreadPool pluginScanWorkers{1};
     std::atomic<bool> pluginScanCancellation{false};
     bool pluginScanRunning = false;
+    bool pluginInventoryScanRunning = false;
+    std::shared_ptr<std::atomic<bool>> pluginInventoryScanCancellation;
+    juce::ThreadPool pluginInventoryWorkers{1};
     juce::Array<juce::PluginDescription> discoveredPluginInstruments;
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextButton mapsTab{"MIDI MAPS"};
@@ -152,7 +157,7 @@ private:
     juce::Label mappingSummary;
     juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
-    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"};
+    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
     juce::Label pluginScanProgress, pluginScanInfo;
     std::unique_ptr<juce::FileChooser> chooser;
@@ -160,6 +165,7 @@ private:
     std::unique_ptr<juce::DocumentWindow> midiEventWindow;
 
     friend class VstPluginNoteScanJob;
+    friend class PluginInventoryScanJob;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessorEditor)
 };
