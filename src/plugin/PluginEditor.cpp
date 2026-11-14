@@ -2086,7 +2086,7 @@ void MagDrumAudioProcessorEditor::updateLayerSummary()
     if(layers.empty())text=magdrum::ui::localisedText("No sample loaded")+"\n"+magdrum::ui::localisedText("Load WAV");
     else for(size_t i=0;i<layers.size();++i){if(i>0)text+="\n";text+=magdrum::ui::localisedText("Velocity")+" "+juce::String(layers[i].minimumVelocity)+"–"+juce::String(layers[i].maximumVelocity)+"\n"+juce::File(layers[i].path).getFileName();}
     layerSummary.setText(text,juce::dontSendNotification);
-    sampleDetails.setText(magdrum::ui::localisedText(layers.empty()?"PAD SAMPLE\nNo sample loaded":"PAD SAMPLE")+(layers.empty()?juce::String():"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path),juce::dontSendNotification);
+    sampleDetails.setText(magdrum::ui::localisedText("PAD SAMPLE")+(layers.empty()?"\n"+magdrum::ui::localisedText("No sample loaded"):"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path),juce::dontSendNotification);
     waveform->setFile(layers.empty()?juce::File():juce::File(layers.front().path));
 }
 
