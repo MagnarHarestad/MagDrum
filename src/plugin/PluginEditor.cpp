@@ -23,6 +23,7 @@ constexpr std::array<int, 16> defaultPadNotes{49,57,53,51,50,47,45,43,37,39,42,4
 constexpr std::array<const char*, 16> padNames{"Crash 1","Crash 2","Bell","Ride","Tom 1","Tom 2","Tom 3","Tom 4","Side Stick","Clap","Closed HH","Open HH","Kick","Snare","Pedal HH","Cowbell"};
 constexpr std::array<int, 8> defaultLaneNotes{36,38,42,46,43,51,49,39};
 constexpr std::array<const char*, 8> laneNames{"KICK","SNARE","CLOSED HAT","OPEN HAT","TOM","RIDE","CRASH","CLAP"};
+constexpr std::array<const char*, 8> laneDisplayNames{"Kick","Snare","Closed hi-hat","Open hi-hat","Tom","Ride","Crash","Clap"};
 using I=DrumInstrument;using A=DrumArticulation;
 constexpr std::array<I,16> padInstruments{I::Crash,I::Crash,I::Ride,I::Ride,I::Tom,I::Tom,I::Tom,I::Tom,I::Rimshot,I::Clap,I::HiHat,I::HiHat,I::Kick,I::Snare,I::HiHat,I::Percussion};
 constexpr std::array<A,16> padArticulations{A::Default,A::Default,A::Bell,A::Bow,A::High,A::Mid,A::Low,A::Low,A::SideStick,A::Default,A::Closed,A::Open,A::Default,A::Default,A::Pedal,A::Default};
@@ -33,6 +34,17 @@ juce::String noteName(int note)
 {
     static constexpr const char* names[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
     return juce::String(names[note % 12]) + juce::String(note / 12 - 1);
+}
+juce::String localizedPadName(size_t index)
+{
+    const auto source = juce::String(padNames[index]);
+    if (source.startsWith("Crash ")) return magdrum::ui::localisedText("Crash") + source.fromFirstOccurrenceOf(" ", false, false);
+    if (source.startsWith("Tom ")) return magdrum::ui::localisedText("Tom") + source.fromFirstOccurrenceOf(" ", false, false);
+    if (source == "Side Stick") return magdrum::ui::localisedText("Side stick");
+    if (source == "Closed HH") return magdrum::ui::localisedText("Closed hi-hat");
+    if (source == "Open HH") return magdrum::ui::localisedText("Open hi-hat");
+    if (source == "Pedal HH") return magdrum::ui::localisedText("Pedal hi-hat");
+    return magdrum::ui::localisedText(padNames[index]);
 }
 juce::File bundledScannerApplication()
 {
@@ -154,9 +166,9 @@ public:
         g.setColour(Palette::Background.withAlpha(0.8f));g.fillRoundedRectangle(plot,5.0f);
         g.setColour(Palette::Border);g.drawRoundedRectangle(plot,5.0f,1.0f);
         for(int i=1;i<4;++i){const float x=plot.getX()+plot.getWidth()*i/4.0f;const float y=plot.getY()+plot.getHeight()*i/4.0f;g.setColour(Palette::Accent.withAlpha(0.10f));g.drawVerticalLine(static_cast<int>(x),plot.getY(),plot.getBottom());g.drawHorizontalLine(static_cast<int>(y),plot.getX(),plot.getRight());}
-        g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText("SAMPLE MAP  ·  brightness × duration",bounds.toNearestInt().removeFromTop(24).reduced(12,0),juce::Justification::centredLeft);
-        g.drawText("SHORTER",static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::left);
-        g.drawText("LONGER",static_cast<int>(plot.getRight()-80),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::right);
+        g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText(magdrum::ui::localisedText("SAMPLE MAP  ·  brightness × duration"),bounds.toNearestInt().removeFromTop(24).reduced(12,0),juce::Justification::centredLeft);
+        g.drawText(magdrum::ui::localisedText("SHORTER"),static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::left);
+        g.drawText(magdrum::ui::localisedText("LONGER"),static_cast<int>(plot.getRight()-80),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::right);
         for(int i=0;i<samples.size();++i)
         {
             const auto& sample=samples.getReference(i);
@@ -169,7 +181,7 @@ public:
             g.setColour(categoryColour(sample.category).withAlpha(selected?1.0f:0.78f));g.fillEllipse(x-radius,y-radius,radius*2,radius*2);
             if(selected){g.setColour(Palette::Text);g.drawEllipse(x-radius-2,y-radius-2,(radius+2)*2,(radius+2)*2,1.4f);}
         }
-        if(samples.isEmpty()){g.setColour(Palette::Muted);g.drawFittedText("Scan installed libraries or add a sample folder to populate the library.",plot.toNearestInt().reduced(22),juce::Justification::centred,3);}
+        if(samples.isEmpty()){g.setColour(Palette::Muted);g.drawFittedText(magdrum::ui::localisedText("Scan installed libraries or add a sample folder to populate the library."),plot.toNearestInt().reduced(22),juce::Justification::centred,3);}
     }
     void mouseDown(const juce::MouseEvent& event) override
     {
@@ -197,10 +209,10 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto area=getLocalBounds().toFloat().reduced(2.0f);g.setColour(Palette::Panel);g.fillRoundedRectangle(area,7.0f);g.setColour(Palette::Border.withAlpha(0.7f));g.drawRoundedRectangle(area,7.0f,1.0f);
-        g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText("SAMPLE WAVEFORM",getLocalBounds().reduced(12,7).removeFromTop(18),juce::Justification::centredLeft);
+        g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText(magdrum::ui::localisedText("SAMPLE WAVEFORM"),getLocalBounds().reduced(12,7).removeFromTop(18),juce::Justification::centredLeft);
         auto wave=getLocalBounds().reduced(12,28).toFloat();g.setColour(Palette::Accent.withAlpha(0.18f));g.drawHorizontalLine(static_cast<int>(wave.getCentreY()),wave.getX(),wave.getRight());
         if(thumbnail.getNumChannels()>0){g.setColour(Palette::Accent);thumbnail.drawChannels(g,wave.toNearestInt(),0.0,thumbnail.getTotalLength(),1.0f);}
-        else{g.setColour(Palette::Muted);g.drawFittedText(currentFile.existsAsFile()?"Reading waveform…":"No sample loaded",wave.toNearestInt(),juce::Justification::centred,2);}
+        else{g.setColour(Palette::Muted);g.drawFittedText(magdrum::ui::localisedText(currentFile.existsAsFile()?"Reading waveform…":"No sample loaded"),wave.toNearestInt(),juce::Justification::centred,2);}
     }
 private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override { repaint(); }
@@ -227,7 +239,7 @@ class MagDrumSampleComparisonWindow final : public juce::DocumentWindow
 {
 public:
     MagDrumSampleComparisonWindow(const juce::File& first,const juce::File& second)
-        :juce::DocumentWindow("Compare drum samples",Palette::Panel,juce::DocumentWindow::closeButton)
+        :juce::DocumentWindow(magdrum::ui::localisedText("Compare drum samples"),Palette::Panel,juce::DocumentWindow::closeButton)
     {setUsingNativeTitleBar(true);setContentOwned(new MagDrumSampleComparison(first,second),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}
     void closeButtonPressed() override {setVisible(false);}
 };
@@ -312,7 +324,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     scanDefaultsButton.setTooltip("Scan audio files in common Native Instruments, Spectrasonics and Steinberg library locations.");
     indexedList.setModel(this);indexedList.setRowHeight(43);indexedList.setMultipleSelectionEnabled(true);addAndMakeVisible(indexedList);
     sampleMap->onSelect=[this](int index){if(juce::isPositiveAndBelow(index,samples.size()))indexedList.selectRow(index);};addAndMakeVisible(*sampleMap);
-    for(size_t i=0;i<pads.size();++i){auto& pad=pads[i];pad.setButtonText(magdrum::ui::localisedText(padNames[i])+"\n"+noteName(mappedPadNotes[i]));pad.setColour(juce::TextButton::buttonColourId,Palette::Surface);pad.setColour(juce::TextButton::buttonOnColourId,categoryColour(padNames[i]));pad.setClickingTogglesState(false);pad.addListener(this);addAndMakeVisible(pad);}
+    for(size_t i=0;i<pads.size();++i){auto& pad=pads[i];pad.setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));pad.setColour(juce::TextButton::buttonColourId,Palette::Surface);pad.setColour(juce::TextButton::buttonOnColourId,categoryColour(padNames[i]));pad.setClickingTogglesState(false);pad.addListener(this);addAndMakeVisible(pad);}
     selectedPadTitle.setFont(juce::Font(juce::FontOptions(22.0f,juce::Font::bold)));selectedPadTitle.setColour(juce::Label::textColourId,Palette::Accent);addAndMakeVisible(selectedPadTitle);
     layerSummary.setColour(juce::Label::textColourId,Palette::Text);layerSummary.setJustificationType(juce::Justification::topLeft);layerSummary.setMinimumHorizontalScale(0.8f);addAndMakeVisible(layerSummary);
     sampleDetails.setColour(juce::Label::textColourId,Palette::Muted);sampleDetails.setJustificationType(juce::Justification::topLeft);sampleDetails.setMinimumHorizontalScale(0.8f);addAndMakeVisible(sampleDetails);
@@ -322,7 +334,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     for(auto& row:stepVelocities)row.fill(100);
     for(size_t row=0;row<laneLabels.size();++row)
     {
-        laneLabels[row].setText(magdrum::ui::localisedText(laneNames[row]),juce::dontSendNotification);laneLabels[row].setColour(juce::Label::textColourId,categoryColour(laneNames[row]));laneLabels[row].setFont(juce::Font(juce::FontOptions(12.0f,juce::Font::bold)));addAndMakeVisible(laneLabels[row]);
+        laneLabels[row].setText(magdrum::ui::localisedText(laneDisplayNames[row]),juce::dontSendNotification);laneLabels[row].setColour(juce::Label::textColourId,categoryColour(laneNames[row]));laneLabels[row].setFont(juce::Font(juce::FontOptions(12.0f,juce::Font::bold)));addAndMakeVisible(laneLabels[row]);
         for(size_t step=0;step<512;++step)
         {
             auto& cell=steps[row][step];cell.setClickingTogglesState(true);cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(stepVelocities[row][step])/127.0f));cell.setTooltip(juce::String(laneNames[row])+" · MIDI "+juce::String(mappedLaneNotes[row])+" · bar "+juce::String(static_cast<int>(step/static_cast<size_t>(stepsPerBar())+1))+" · step "+juce::String(static_cast<int>(step%static_cast<size_t>(stepsPerBar())+1))+" · velocity "+juce::String(stepVelocities[row][step])+" (right-click to edit)");
@@ -432,18 +444,34 @@ void MagDrumAudioProcessorEditor::applyLanguage()
 {
     libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));languageButton.setTooltip(magdrum::ui::localisedText("Language"));
     sampleSearch.setTextToShowWhenEmpty(magdrum::ui::localisedText("Search indexed samples"),Palette::Muted);
+    instrumentScannerButton.setTooltip(magdrum::ui::localisedText("Open MagDrum's isolated instrument browser to load VST instruments, choose kits and capture MIDI notes."));
+    scanDefaultsButton.setTooltip(magdrum::ui::localisedText("Scan audio files in common Native Instruments, Spectrasonics and Steinberg library locations."));
+    velocityRange.setTooltip(magdrum::ui::localisedText("Inclusive velocity range for this sample layer (1–127)."));
+    barSelect.setTooltip(magdrum::ui::localisedText("Select a bar in the current pattern."));
+    lengthSelect.setTooltip(magdrum::ui::localisedText("Pattern length in bars (1–16)."));
+    meterSelect.setTooltip(magdrum::ui::localisedText("Time signature. The sequencer keeps a sixteenth-note grid and supports up to 32 steps per bar."));
+    browseMidiButton.setTooltip(magdrum::ui::localisedText("Search the detected default libraries for drum-related MIDI files."));
+    editMidiEventsButton.setTooltip(magdrum::ui::localisedText("Edit individual hits, including articulation, off-grid beat position and duration."));
+    reviewMidiButton.setTooltip(magdrum::ui::localisedText("Compare the imported MIDI pattern with your current sequencer edits."));
+    tempoEditor.setTooltip(magdrum::ui::localisedText("Pattern preview and MIDI export tempo."));
+    metadataType.setTooltip(magdrum::ui::localisedText("Choose the MIDI metadata event to edit."));
+    metadataBeat.setTooltip(magdrum::ui::localisedText("Event position in quarter-note beats from the start of the MIDI pattern."));
+    metadataValue.setTooltip(magdrum::ui::localisedText("Tempo in BPM, or a time signature such as 4/4."));
+    metadataSummary.setTooltip(magdrum::ui::localisedText("Tempo and time-signature events stored with this sequencer pattern."));
+    profileName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Mapping profile name"),Palette::Muted);
+    mappingNote.setTextToShowWhenEmpty(magdrum::ui::localisedText("MIDI note 0–127"),Palette::Muted);
     const int selectedCategory=categoryFilter.getSelectedId(),selectedFeature=featureFilter.getSelectedId(),selectedSort=sortFilter.getSelectedId(),selectedConfidence=confidenceFilter.getSelectedId();
     const char* categories[]{"All sounds","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Percussion","Unknown"};categoryFilter.clear(juce::dontSendNotification);for(int i=0;i<12;++i)categoryFilter.addItem(magdrum::ui::localisedText(categories[i]),i+1);categoryFilter.setSelectedId(selectedCategory,juce::dontSendNotification);
     const char* features[]{"All sound features","Very short","Short","Medium","Long","Dark","Mid brightness","Bright"};featureFilter.clear(juce::dontSendNotification);for(int i=0;i<8;++i)featureFilter.addItem(magdrum::ui::localisedText(features[i]),i+1);featureFilter.setSelectedId(selectedFeature,juce::dontSendNotification);
     const char* sorts[]{"Name A–Z","Duration shortest","Duration longest","Brightest first","Darkest first"};sortFilter.clear(juce::dontSendNotification);for(int i=0;i<5;++i)sortFilter.addItem(magdrum::ui::localisedText(sorts[i]),i+1);sortFilter.setSelectedId(selectedSort,juce::dontSendNotification);
     confidenceFilter.clear(juce::dontSendNotification);confidenceFilter.addItem(magdrum::ui::localisedText("All confidence levels"),1);confidenceFilter.addItem(magdrum::ui::localisedText("Needs review"),2);confidenceFilter.setSelectedId(selectedConfidence,juce::dontSendNotification);
     scanButton.setButtonText(magdrum::ui::localisedText(scanning?"Cancel scan":"Add sample folder"));scanDefaultsButton.setButtonText(magdrum::ui::localisedText("Scan installed libraries"));instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));searchButton.setButtonText(magdrum::ui::localisedText("Search"));previewButton.setButtonText(magdrum::ui::localisedText("Preview"));assignButton.setButtonText(magdrum::ui::localisedText("Assign to pad"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load WAV"));playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying?"Stop":"Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(magdrum::ui::localisedText("Find drum MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
-    for(size_t i=0;i<pads.size();++i)pads[i].setButtonText(magdrum::ui::localisedText(padNames[i])+"\n"+noteName(mappedPadNotes[i]));
-    for(size_t row=0;row<laneLabels.size();++row)laneLabels[row].setText(magdrum::ui::localisedText(laneNames[row]),juce::dontSendNotification);
+    for(size_t i=0;i<pads.size();++i)pads[i].setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));
+    for(size_t row=0;row<laneLabels.size();++row)laneLabels[row].setText(magdrum::ui::localisedText(laneDisplayNames[row]),juce::dontSendNotification);
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));loadProfileButton.setButtonText(magdrum::ui::localisedText("Load profile"));saveProfileButton.setButtonText(magdrum::ui::localisedText("Save profile"));importCsvButton.setButtonText(magdrum::ui::localisedText("Import CSV"));exportCsvButton.setButtonText(magdrum::ui::localisedText("Export CSV"));setMappingButton.setButtonText(magdrum::ui::localisedText("Set mapping"));removeMappingButton.setButtonText(magdrum::ui::localisedText("Remove mapping"));
     const int selectedMetadata=metadataType.getSelectedId();metadataType.clear(juce::dontSendNotification);metadataType.addItem(magdrum::ui::localisedText("Tempo event"),1);metadataType.addItem(magdrum::ui::localisedText("Time signature"),2);metadataType.setSelectedId(selectedMetadata,juce::dontSendNotification);
     const int selectedInstrument=mappingInstrument.getSelectedId(),selectedArticulation=mappingArticulation.getSelectedId();const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};mappingInstrument.clear(juce::dontSendNotification);for(int i=0;i<9;++i)mappingInstrument.addItem(magdrum::ui::localisedText(instruments[i]),i+1);mappingInstrument.setSelectedId(selectedInstrument,juce::dontSendNotification);const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};mappingArticulation.clear(juce::dontSendNotification);for(int i=0;i<13;++i)mappingArticulation.addItem(magdrum::ui::localisedText(articulations[i]),i+1);mappingArticulation.setSelectedId(selectedArticulation,juce::dontSendNotification);
-    refreshSourceKitFilters();refreshSamples();repaint();
+    refreshSourceKitFilters();refreshSamples();sampleMap->repaint();waveform->repaint();repaint();
 }
 
 int MagDrumAudioProcessorEditor::timeSignatureNumerator() const
@@ -869,9 +897,9 @@ void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stat
 
 void MagDrumAudioProcessorEditor::showLibraryTools()
 {
-    juce::PopupMenu menu;menu.addItem(1,"Edit sample tags…");
-    juce::PopupMenu categories;const char* names[]{"Unknown","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};for(int i=0;i<12;++i)categories.addItem(100+i,names[i]);menu.addSubMenu("Set drum category",categories);
-    menu.addSeparator();menu.addItem(2,"Find similar samples");menu.addItem(3,"Find exact duplicates");menu.addItem(4,"Find near duplicates");menu.addItem(5,"Compare two selected waveforms");menu.addSeparator();menu.addItem(6,"Scan history");menu.addItem(7,"Export portable metadata…");menu.addItem(8,"Import portable metadata…");
+    juce::PopupMenu menu;menu.addItem(1,magdrum::ui::localisedText("Edit sample tags…"));
+    juce::PopupMenu categories;const char* names[]{"Unknown","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};for(int i=0;i<12;++i)categories.addItem(100+i,magdrum::ui::localisedText(names[i]));menu.addSubMenu(magdrum::ui::localisedText("Set drum category"),categories);
+    menu.addSeparator();menu.addItem(2,magdrum::ui::localisedText("Find similar samples"));menu.addItem(3,magdrum::ui::localisedText("Find exact duplicates"));menu.addItem(4,magdrum::ui::localisedText("Find near duplicates"));menu.addItem(5,magdrum::ui::localisedText("Compare two selected waveforms"));menu.addSeparator();menu.addItem(6,magdrum::ui::localisedText("Scan history"));menu.addItem(7,magdrum::ui::localisedText("Export portable metadata…"));menu.addItem(8,magdrum::ui::localisedText("Import portable metadata…"));
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&libraryToolsButton),[safe](int result){if(safe!=nullptr)safe->handleLibraryTool(result);});
 }
 
@@ -921,7 +949,7 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
 }
 
 void MagDrumAudioProcessorEditor::setPage(int value){page=juce::jlimit(0,3,value);resized();repaint();}
-void MagDrumAudioProcessorEditor::setNote(int note){selectedNote=juce::jlimit(0,127,note);const int index=static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin());const int safeIndex=juce::jlimit(0,static_cast<int>(padNames.size())-1,index);for(size_t i=0;i<pads.size();++i){pads[i].setButtonText(magdrum::ui::localisedText(padNames[i])+"\n"+noteName(mappedPadNotes[i]));pads[i].setToggleState(static_cast<int>(i)==index,juce::dontSendNotification);pads[i].setColour(juce::TextButton::buttonColourId,static_cast<int>(i)==index?categoryColour(padNames[i]).withAlpha(0.34f):Palette::Surface);}selectedPadTitle.setText(magdrum::ui::localisedText(padNames[static_cast<size_t>(safeIndex)])+"   ·   "+noteName(selectedNote)+"   ·   MIDI "+juce::String(selectedNote),juce::dontSendNotification);updateLayerSummary();const auto layers=processor.getSampleLayersForNote(selectedNote);sampleDetails.setText(layers.empty()?magdrum::ui::localisedText("Selected pad sound")+"\n"+magdrum::ui::localisedText("No sample loaded"):magdrum::ui::localisedText("PAD SAMPLE")+"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path,juce::dontSendNotification);}
+void MagDrumAudioProcessorEditor::setNote(int note){selectedNote=juce::jlimit(0,127,note);const int index=static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin());const int safeIndex=juce::jlimit(0,static_cast<int>(padNames.size())-1,index);for(size_t i=0;i<pads.size();++i){pads[i].setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));pads[i].setToggleState(static_cast<int>(i)==index,juce::dontSendNotification);pads[i].setColour(juce::TextButton::buttonColourId,static_cast<int>(i)==index?categoryColour(padNames[i]).withAlpha(0.34f):Palette::Surface);}selectedPadTitle.setText(localizedPadName(static_cast<size_t>(safeIndex))+"   ·   "+noteName(selectedNote)+"   ·   MIDI "+juce::String(selectedNote),juce::dontSendNotification);updateLayerSummary();const auto layers=processor.getSampleLayersForNote(selectedNote);sampleDetails.setText(layers.empty()?magdrum::ui::localisedText("Selected pad sound")+"\n"+magdrum::ui::localisedText("No sample loaded"):magdrum::ui::localisedText("PAD SAMPLE")+"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path,juce::dontSendNotification);}
 void MagDrumAudioProcessorEditor::updateDrumNotes()
 {
     const int previousNote=selectedNote;
