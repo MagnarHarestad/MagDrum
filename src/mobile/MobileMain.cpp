@@ -1,5 +1,6 @@
 #include <JuceHeader.h>
 #include "ui/MagDrumLookAndFeel.h"
+#include "ui/MagDrumLocalization.h"
 #include "core/MagDrumPaths.h"
 #include "core/MidiPatternIO.h"
 #include "core/ScopedFileAccess.h"
@@ -627,7 +628,7 @@ public:
     const juce::String getApplicationName() override { return "MagDrum"; }
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
     bool moreThanOneInstanceAllowed() override { return true; }
-    void initialise(const juce::String&) override { juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel); window = std::make_unique<Window>(); }
+    void initialise(const juce::String&) override { magdrum::ui::initialiseMagDrumLocalization(); juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel); window = std::make_unique<Window>(); }
     void shutdown() override { window.reset(); juce::LookAndFeel::setDefaultLookAndFeel(nullptr); }
     void systemRequestedQuit() override { quit(); }
 
