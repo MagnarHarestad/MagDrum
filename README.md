@@ -2,7 +2,7 @@
 
 MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Browse WAV sample libraries alongside sounds from drum instruments, audition them, and transfer drum patterns through semantic MIDI mappings.
 
-**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 is a standalone app; it does not require a DAW or commercial instruments. Test release v0.1.1-test.113 contains Windows x64 and ARM64 packages. The x64 app and VST3 build passed both CTest suites (2/2); ARM64 binaries were cross-compiled and architecture-checked but not run on ARM64 hardware. Release v0.1.1-test.111 contains the Linux x64 package. Its plugin test passed, but CTest reported the app integration test failed without output even though direct invocation passed. A native Linux host smoke test is still needed. JUCE omitted the optional Windows ARM64 VST3 `moduleinfo.json`; hosts can still load the module factory, although scanning may take longer.
+**MagDrum** is the product name. Formats are platform targets: VST3 on Windows, macOS and Linux; AU on macOS; AUv3 on iOS/iPadOS where supported. Phase 1 began as a standalone app and does not require a DAW or commercial instruments. Test release [v0.1.1-test.123](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.123) contains Windows x64 and Linux x64 packages; both platforms passed both Release CTest suites (2/2). Windows ARM64 binaries in v0.1.1-test.113 were cross-compiled and architecture-checked but not run on ARM64 hardware. A native Linux DAW smoke test is still needed. JUCE omitted the optional Windows ARM64 VST3 `moduleinfo.json`; hosts can query the module factory, although scanning may take longer. macOS and iOS packages require Apple hardware and SDKs and are not available yet.
 
 **Website:** [MagDrum landing page](https://magnarharestad.github.io/MagDrum-Website/). The public GitHub Pages site is maintained in the [MagDrum-Website repository](https://github.com/MagnarHarestad/MagDrum-Website); its page source is mirrored from [docs/index.html](docs/index.html).
 
@@ -10,7 +10,7 @@ MagDrum is a cross-platform drum sound library and MIDI mapping workspace. Brows
 
 ## Phase 1 foundation
 
-The Windows MagDrum VST3 has four editor views: a duration/brightness sample map, a DR-660-inspired 4×4 drum machine with waveform and velocity layers, a 1–16-bar sequencer with selectable time signatures, per-step velocity and MIDI import length detection, and MIDI mapping profiles. It scans common Native Instruments, Spectrasonics/STEAM and Steinberg/Cubase audio folders directly from the plug-in, and shares the standalone library database. See [Windows VST3 workflow](docs/windows-plugin.md).
+The Windows MagDrum VST3 has five editor views: a duration/brightness sample map, a DR-660-inspired 4×4 drum machine with waveform and velocity layers, a 1–16-bar sequencer with selectable time signatures, per-step velocity and MIDI import length detection, MIDI mapping profiles, and a plugin scanner workspace. It can scan common Native Instruments, Spectrasonics/STEAM and Steinberg/Cubase audio folders directly from the plug-in, and shares the standalone library database. See [Windows VST3 workflow](docs/windows-plugin.md).
 
 The VST3 and standalone app offer English, German, French, Spanish, Swedish, Norwegian, Danish and Finnish from the top-right ☰ menu under **Language**. English is the first-run default. The choice is saved in the shared per-user MagDrum settings folder and updates the library, drum machine, sequencer and MIDI-map views immediately.
 
@@ -44,4 +44,4 @@ See [roadmap](docs/roadmap.md) and [architecture](docs/architecture.md). No samp
 
 See the current [semantic MIDI model](docs/midi-mapping.md) for its behavior and known mapping limitations.
 
-For release packages, cross-platform status, platform-specific limits and Cubase installation guidance, see [installation](docs/installing.md), [local builds](docs/local-builds.md) and the [roadmap](docs/roadmap.md). The VST's native instrument browser remains unfinished. These are unsigned test builds; ARM64 is cross-built and not runtime-tested here; iOS/AUv3 has not been packaged.
+For release packages, cross-platform status, platform-specific limits and Cubase installation guidance, see [installation](docs/installing.md), [local builds](docs/local-builds.md) and the [roadmap](docs/roadmap.md). Plugin discovery, preset/program import and note scanning are available in the VST; opening a third-party instrument's own editor still uses a separate MagDrum window. These are unsigned test builds; Windows ARM64 is cross-built and not runtime-tested here; iOS/AUv3 has not been packaged.
