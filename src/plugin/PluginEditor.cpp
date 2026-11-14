@@ -405,7 +405,7 @@ MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){midiEventWindow.rese
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(Palette::Background);g.setColour(Palette::Accent);g.setFont(juce::Font(juce::FontOptions(30.0f,juce::Font::bold)));g.drawText("MagDrum",24,14,260,40,juce::Justification::centredLeft);
+    magdrum::ui::paintTexturedBackground(g,getLocalBounds(),0.42f);g.setColour(Palette::Accent);g.setFont(juce::Font(juce::FontOptions(30.0f,juce::Font::bold)));g.drawText("MagDrum",24,14,260,40,juce::Justification::centredLeft);
     g.setColour(Palette::Muted);g.setFont(13.0f);g.drawText("SAMPLE LIBRARY  /  DRUM MACHINE  /  STEP SEQUENCER  /  MIDI MAPS",26,51,850,22,juce::Justification::centredLeft);
     g.setColour(Palette::Border);g.drawHorizontalLine(83,24.0f,static_cast<float>(getWidth()-24));
 }

@@ -17,6 +17,7 @@ FetchContent_Declare(juce GIT_REPOSITORY https://github.com/juce-framework/JUCE.
 FetchContent_MakeAvailable(juce)
 FetchContent_Declare(sqlite URL https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip URL_HASH SHA3_256=92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30)
 FetchContent_MakeAvailable(sqlite)
+juce_add_binary_data(MagDrumUiAssets NAMESPACE MagDrumUiAssets SOURCES assets/ui/dark-charcoal-plaster.png)
 add_library(sqlite3 STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
 set_target_properties(sqlite3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(sqlite3 PUBLIC ${sqlite_SOURCE_DIR})
@@ -27,7 +28,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  target_sources(MagDrum PRIVATE src/app/Main.cpp src/ui/MagDrumLocalization.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp src/core/MagDrumPaths.cpp)
  target_include_directories(MagDrum PRIVATE src)
  target_compile_definitions(MagDrum PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_PLUGINHOST_VST3=1 JUCE_APPLICATION_NAME_STRING="MagDrum" JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
- target_link_libraries(MagDrum PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_devices juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+ target_link_libraries(MagDrum PRIVATE MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_devices juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 endif()
 
 set(MAGDRUM_APP_GROUP_ID "group.com.censordesign.magdrum" CACHE STRING "Apple app-group identifier shared by the iOS app and AUv3 extension")
@@ -53,7 +54,7 @@ juce_generate_juce_header(MagDrumPlugin)
 target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/ui/MagDrumLocalization.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp)
 target_include_directories(MagDrumPlugin PRIVATE src)
 target_compile_definitions(MagDrumPlugin PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(MagDrumPlugin PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+target_link_libraries(MagDrumPlugin PRIVATE MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  add_executable(MagDrumTests tests/SmokeTests.cpp src/core/SampleDatabase.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginScanProcess.cpp src/core/PluginPrograms.cpp src/core/PluginPresetFiles.cpp src/core/PatternAudioRenderer.cpp src/core/LoopingAudioSource.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp src/core/StructuredLogger.cpp)
  target_include_directories(MagDrumTests PRIVATE src)
@@ -65,7 +66,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  target_sources(MagDrumPluginTests PRIVATE tests/PluginSmokeTests.cpp src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/ui/MagDrumLocalization.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp src/core/PluginScanProcess.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp)
  target_include_directories(MagDrumPluginTests PRIVATE src)
  target_compile_definitions(MagDrumPluginTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_PLUGINHOST_VST3=1)
- target_link_libraries(MagDrumPluginTests PRIVATE sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+ target_link_libraries(MagDrumPluginTests PRIVATE MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
  add_test(NAME MagDrumPluginTests COMMAND MagDrumPluginTests)
 
  add_dependencies(MagDrumTests MagDrumPlugin_VST3 MagDrumPluginTests)
@@ -122,7 +123,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR MAGDRUM_BUILD_MOBILE_PREVIEW)
   target_compile_definitions(${MAGDRUM_MOBILE_TARGET} PRIVATE MAGDRUM_APP_GROUP_ID=\"${MAGDRUM_APP_GROUP_ID}\")
  endif()
  target_link_libraries(${MAGDRUM_MOBILE_TARGET} PRIVATE
-     sqlite3 juce::juce_audio_utils juce::juce_audio_formats
+     MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_formats
      juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography
      juce::juce_data_structures juce::juce_gui_extra
      juce::juce_recommended_config_flags

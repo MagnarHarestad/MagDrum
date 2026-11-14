@@ -233,7 +233,7 @@ public:
   ~MainComponent()override{stopTimer();knownPlugins.removeChangeListener(this);pluginScanCancellation.store(true);sampleScanCancellation.store(true);if(patternPreviewCancellation)patternPreviewCancellation->store(true);comparisonWindow.reset();pluginWindow.reset();midiPatternWindow.reset();stepSequencerWindow.reset();pluginEditorWindow.reset();metadataWorkers.removeAllJobs(true,-1);browseWorkers.removeAllJobs(true,-1);workers.removeAllJobs(true,-1);selectedPlugin.reset();if(audioEnabled)shutdownAudio();transport.setSource(nullptr);source.reset();if(patternPreviewFile.existsAsFile())patternPreviewFile.deleteFile();}
  void prepareToPlay(int n,double r)override{transport.prepareToPlay(n,r);} void getNextAudioBlock(const juce::AudioSourceChannelInfo&i)override{transport.getNextAudioBlock(i);} void releaseResources()override{transport.releaseResources();}
  void timerCallback()override{stopTimer();refresh(false);}
- void paint(juce::Graphics&g)override{g.fillAll(magdrum::ui::Palette::Background);g.setColour(magdrum::ui::Palette::Border);g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(20.0f),12.0f,1.0f);g.setColour(magdrum::ui::Palette::Accent);g.fillRoundedRectangle(22,22,5,44,2);}
+ void paint(juce::Graphics&g)override{magdrum::ui::paintTexturedBackground(g,getLocalBounds(),0.42f);g.setColour(magdrum::ui::Palette::Border);g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(20.0f),12.0f,1.0f);g.setColour(magdrum::ui::Palette::Accent);g.fillRoundedRectangle(22,22,5,44,2);}
  void openPluginBrowser();
  void resized()override
  {
