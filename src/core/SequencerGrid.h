@@ -12,6 +12,15 @@ inline constexpr int maximumStepsPerBar = 32;
 inline constexpr int maximumSteps = maximumBars * maximumStepsPerBar;
 inline constexpr double gridBeatTolerance = 1.0e-6;
 
+inline bool isPositionOnGridStep(double positionBeats, int step, int subdivisionsPerBeat = 4) noexcept
+{
+    if (!std::isfinite(positionBeats) || positionBeats < 0.0 || step < 0 || subdivisionsPerBeat < 1)
+        return false;
+
+    const double expectedBeat = static_cast<double>(step) / static_cast<double>(subdivisionsPerBeat);
+    return std::abs(positionBeats - expectedBeat) <= gridBeatTolerance;
+}
+
 struct MeterChange
 {
     double positionBeats = 0.0;

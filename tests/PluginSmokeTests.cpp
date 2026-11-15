@@ -99,25 +99,26 @@ int main(int argc, char** argv)
     struct LocalizationFixture
     {
         Language language;
-        std::array<const char*, 3> expected;
+        std::array<const char*, 4> expected;
     };
     const std::array<LocalizationFixture, 8> localizedTabs{{
-        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest"}},
-        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst"}},
-        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte"}},
-        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta"}},
-        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först"}},
-        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først"}},
-        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først"}},
-        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin"}}
+        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Off-grid hits in this step remain; use Edit hits to review them."}},
+        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“."}},
+        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes."}},
+        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes."}},
+        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag."}},
+        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag."}},
+        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag."}},
+        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja."}}
     }};
     for (const auto& [language, expected] : localizedTabs)
     {
         magdrum::ui::setLanguage(language, false);
-        const std::array<juce::String, 3> actual{
+        const std::array<juce::String, 4> actual{
             magdrum::ui::localisedText("DRUM MACHINE"),
             magdrum::ui::localisedText("Sample Library"),
-            magdrum::ui::localisedText("Duration shortest")
+            magdrum::ui::localisedText("Duration shortest"),
+            magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them.")
         };
         for (size_t item = 0; item < actual.size(); ++item)
         {

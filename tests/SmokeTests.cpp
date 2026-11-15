@@ -200,6 +200,13 @@ int runSmokeTests(int argc,char** argv)
         || magdrum::sequencer::stepsForBars(4,4,0) != 0
         || magdrum::sequencer::stepsForBars(4,4,17) != 0
         || magdrum::sequencer::maximumSteps != 512
+        || !magdrum::sequencer::isPositionOnGridStep(0.25, 1)
+        || !magdrum::sequencer::isPositionOnGridStep(0.25 + magdrum::sequencer::gridBeatTolerance, 1)
+        || magdrum::sequencer::isPositionOnGridStep(0.10, 0)
+        || magdrum::sequencer::isPositionOnGridStep(0.25 + 2.0 * magdrum::sequencer::gridBeatTolerance, 1)
+        || magdrum::sequencer::isPositionOnGridStep(-0.25, 0)
+        || magdrum::sequencer::isPositionOnGridStep(std::numeric_limits<double>::quiet_NaN(), 0)
+        || magdrum::sequencer::isPositionOnGridStep(0.25, 1, 0)
         || !variableMeter.valid || variableMeter.barCount != 3 || variableMeter.totalSteps != 52
         || variableMeter.bars[0].startStep != 0 || variableMeter.bars[0].stepCount != 12
         || variableMeter.bars[1].startStep != 12 || variableMeter.bars[1].stepCount != 20

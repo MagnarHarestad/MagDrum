@@ -57,7 +57,7 @@ private:
     MidiPattern currentSequencePattern() const;
     void reviewMidiChanges();
     void syncSequenceEventsFromGrid();
-    void syncSequenceEventForCell(int lane, int step);
+    bool syncSequenceEventForCell(int lane, int step);
     void syncSequencerGridFromEvents();
     void openMidiEventEditor();
     int timeSignatureNumerator() const;
