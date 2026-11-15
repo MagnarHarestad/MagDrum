@@ -11,6 +11,13 @@
 
 namespace
 {
+class TestAudioPlayHead final : public juce::AudioPlayHead
+{
+public:
+    juce::Optional<PositionInfo> getPosition() const override { return position; }
+    PositionInfo position;
+};
+
 bool writeFixture(const juce::File& file, float amplitude = 0.25f)
 {
     constexpr double sampleRate = 48000.0;
@@ -250,6 +257,45 @@ int main(int argc, char** argv)
         std::cerr << "Queued UI trigger render check failed: peak=" << queuedPeak << '\n';
         return 33;
     }
+
+    MagDrumAudioProcessor hostSyncedSequencer;
+    if (!hostSyncedSequencer.loadSampleForNote(36, sample)) return 37;
+    hostSyncedSequencer.prepareToPlay(48000.0, 128);
+    const std::vector<DrumEvent> hostEvents{{DrumInstrument::Kick, DrumArticulation::Default, 100, 0.001, 0.1}};
+    if (hostSyncedSequencer.setSequencerPattern(hostEvents, generalMidi, 4.0) != 0) return 37;
+    TestAudioPlayHead hostPlayHead;
+    hostPlayHead.position.setIsPlaying(true);
+    hostPlayHead.position.setPpqPosition(0.0);
+    hostPlayHead.position.setBpm(120.0);
+    hostSyncedSequencer.setPlayHead(&hostPlayHead);
+    hostSyncedSequencer.setSequencerPlaybackEnabled(true);
+    juce::AudioBuffer<float> hostAudio(2, 128);
+    juce::MidiBuffer hostMidi;
+    hostSyncedSequencer.processBlock(hostAudio, hostMidi);
+    double preHitPeak = 0.0;
+    double postHitPeak = 0.0;
+    for (int channel = 0; channel < hostAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < hostAudio.getNumSamples(); ++sampleIndex)
+        {
+            const double magnitude = std::abs(static_cast<double>(hostAudio.getSample(channel, sampleIndex)));
+            if (sampleIndex < 24)
+                preHitPeak = juce::jmax(preHitPeak, magnitude);
+            else
+                postHitPeak = juce::jmax(postHitPeak, magnitude);
+        }
+    if (!hostSyncedSequencer.isSequencerHostSynchronized() || preHitPeak > 1.0e-7 || postHitPeak <= 0.05)
+    {
+        std::cerr << "Host-synced sequencer render check failed: synchronized="
+                  << hostSyncedSequencer.isSequencerHostSynchronized()
+                  << ", pre-hit peak=" << preHitPeak << ", post-hit peak=" << postHitPeak << '\n';
+        return 37;
+    }
+
+    hostPlayHead.position.setIsPlaying(false);
+    juce::AudioBuffer<float> stoppedHostAudio(2, 128);
+    juce::MidiBuffer stoppedHostMidi;
+    hostSyncedSequencer.processBlock(stoppedHostAudio, stoppedHostMidi);
+    if (hostSyncedSequencer.isSequencerHostSynchronized()) return 38;
 
     MagDrumAudioProcessor controlStateSource;
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
