@@ -92,7 +92,7 @@ private:
 };
 
 bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& pluginTestsExecutable,
-    const juce::File& sampleFile, const juce::File& root)
+    const juce::File& scannerExecutable, const juce::File& sampleFile, const juce::File& root)
 {
     juce::AudioPluginFormatManager formatManager;
     juce::addHeadlessDefaultFormatsToManager(formatManager);
@@ -149,7 +149,7 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
     if (!requestFile.replaceWithText(juce::JSON::toString(juce::var(request), true))) return false;
 
     juce::StringArray workerCommand;
-    workerCommand.add(pluginTestsExecutable.getFullPathName());
+    workerCommand.add(scannerExecutable.getFullPathName());
     workerCommand.add("--magdrum-plugin-scan-worker");
     workerCommand.add(requestFile.getFullPathName());
     const auto execution = PluginScanProcess::monitorWorker(workerCommand, progressFile, resultFile,
@@ -319,7 +319,7 @@ int runSmokeTests(int argc,char** argv)
     if(!writer->writeFromFloatArrays(channels,1,4096))return 4;
     writer.reset();
 
-    if (argc == 3 && !runBuiltVst3WorkerFixture(juce::File(argv[1]), juce::File(argv[2]), waveFile, root))
+    if (argc == 4 && !runBuiltVst3WorkerFixture(juce::File(argv[1]), juce::File(argv[2]), juce::File(argv[3]), waveFile, root))
         return 188;
 
     WavScanner scanner;
