@@ -1,6 +1,6 @@
 # MagDrum local test packages
 
-Public release [v0.1.1-test.137](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.137) contains Windows x64, Windows ARM64 and Linux x64. Windows x64 and Linux Release CTest suites passed (2/2 each). Windows ARM64 app, VST3 and helper were cross-compiled; all three PE headers identify ARM64. ARM64 runtime testing remains outstanding.
+Public release [v0.1.1-test.137](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.137) contains Windows x64, Windows ARM64 and Linux x64. Windows x64 and Linux Release CTest suites passed (2/2 each). Windows ARM64 app, VST3 and helper were cross-compiled; all three PE headers identify ARM64. ARM64 runtime testing remains outstanding. Ardour 8.4's VST3 scanner recognized MagDrum from the Linux x64 package in Ubuntu 24.04 WSL2; interactive DAW session, MIDI/audio processing and physical Linux audio-device testing remain outstanding.
 
 - Windows x64 SHA-256: `3066cf488d58624f2081434fb35b6617d1b30149a8885b1f0629b842ae118ffb`
 - Windows ARM64 SHA-256: `93d1564abd569da9a669b1ab167def2e1c067006061480002a47ea7b3d9db353`
