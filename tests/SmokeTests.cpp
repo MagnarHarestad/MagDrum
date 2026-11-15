@@ -641,6 +641,17 @@ int runSmokeTests(int argc,char** argv)
     if(gm.toMidi(unsupported,false).note)return 21;
     auto fallback=gm.toMidi(unsupported,true);
     if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
+    MidiPattern fallbackExportPattern;fallbackExportPattern.events.push_back(unsupported);
+    const auto strictMidi=root.getChildFile("strict-articulation-export.mid");
+    const auto fallbackMidi=root.getChildFile("fallback-articulation-export.mid");
+    std::vector<DrumEvent> omitted;std::vector<MidiFallbackUse> usedFallbacks;
+    if(!MidiPatternIO{}.write(strictMidi,fallbackExportPattern,gm,false,&omitted,&usedFallbacks)
+        ||omitted.size()!=1||!usedFallbacks.empty())return 245;
+    omitted.clear();usedFallbacks.clear();
+    if(!MidiPatternIO{}.write(fallbackMidi,fallbackExportPattern,gm,true,&omitted,&usedFallbacks)
+        ||!omitted.empty()||usedFallbacks.size()!=1||usedFallbacks.front().midiNote!=42
+        ||usedFallbacks.front().requestedEvent.articulation!=DrumArticulation::Edge
+        ||usedFallbacks.front().mappedArticulation!=DrumArticulation::Closed)return 246;
     if(!db.saveMappingProfile("GM test",gm))return 26;
     if(!db.getMappingProfileNames().contains("GM test"))return 189;
     auto storedProfile=db.loadMappingProfile("GM test");
