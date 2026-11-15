@@ -91,6 +91,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         '',
         'The Windows installer refuses to replace MagDrum while a Cubase process is running, including a hidden process without a visible window.',
         'The sample-sort label and library scan separators use ASCII punctuation to avoid code-page glyph corruption. Localization catalogs are decoded as UTF-8; a Windows smoke test checks drum-machine, library and sort labels in all eight languages, including French accents.',
+        'Sequencer Play follows host PPQ and BPM during DAW playback, schedules exact MIDI mappings in the audio callback, and reports hits that have no exact mapping. When the host is stopped, the plugin tempo preview remains available.',
         'The installed-library scan includes Cubase 15 Media and VST Sound locations alongside detected Native Instruments and Spectrasonics locations.'
     )
 }

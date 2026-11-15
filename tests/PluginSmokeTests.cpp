@@ -99,26 +99,29 @@ int main(int argc, char** argv)
     struct LocalizationFixture
     {
         Language language;
-        std::array<const char*, 4> expected;
+        std::array<const char*, 7> expected;
     };
     const std::array<LocalizationFixture, 8> localizedTabs{{
-        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Off-grid hits in this step remain; use Edit hits to review them."}},
-        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“."}},
-        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes."}},
-        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes."}},
-        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag."}},
-        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag."}},
-        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag."}},
-        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja."}}
+        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Off-grid hits in this step remain; use Edit hits to review them.", "While the host transport is playing, the sequencer follows its tempo and position.", "Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.", "No MIDI mapping"}},
+        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“.", "Während der Host-Transport läuft, folgt der Sequenzer dessen Tempo und Position.", "Der Sequenzer überspringt {count} Schläge ohne exakte MIDI-Zuordnung. Überprüfe MIDI-Zuordnungen.", "Keine MIDI-Zuordnung"}},
+        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes.", "Pendant la lecture du transport hôte, le séquenceur suit son tempo et sa position.", "Le séquenceur ignore {count} frappes sans correspondance MIDI exacte. Vérifiez les correspondances MIDI.", "Aucune correspondance MIDI"}},
+        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes.", "Mientras el transporte del anfitrión está en marcha, el secuenciador sigue su tempo y posición.", "El secuenciador omite {count} golpes sin una asignación MIDI exacta. Revisa los mapas MIDI.", "Sin asignación MIDI"}},
+        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag.", "När värdens transport spelar följer sequencern dess tempo och position.", "Sequencern hoppar över {count} slag utan exakt MIDI-mappning. Granska MIDI-mappningarna.", "Ingen MIDI-mappning"}},
+        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag.", "Når vertens transport spiller, følger sequenceren tempoet og posisjonen.", "Sequenceren hopper over {count} slag uten nøyaktig MIDI-tilordning. Se gjennom MIDI-kartene.", "Ingen MIDI-tilordning"}},
+        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag.", "Når værtens transport afspiller, følger sequenceren dens tempo og position.", "Sequenceren springer {count} slag over uden en præcis MIDI-tilknytning. Gennemgå MIDI-kortene.", "Ingen MIDI-tilknytning"}},
+        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja.", "Kun isännän kuljetus toistaa, sekvensseri seuraa sen tempoa ja sijaintia.", "Sekvensseri ohittaa {count} iskua, joilla ei ole tarkkaa MIDI-määritystä. Tarkista MIDI-kartat.", "Ei MIDI-määritystä"}}
     }};
     for (const auto& [language, expected] : localizedTabs)
     {
         magdrum::ui::setLanguage(language, false);
-        const std::array<juce::String, 4> actual{
+        const std::array<juce::String, 7> actual{
             magdrum::ui::localisedText("DRUM MACHINE"),
             magdrum::ui::localisedText("Sample Library"),
             magdrum::ui::localisedText("Duration shortest"),
-            magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them.")
+            magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),
+            magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."),
+            magdrum::ui::localisedText("Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps."),
+            magdrum::ui::localisedText("No MIDI mapping")
         };
         for (size_t item = 0; item < actual.size(); ++item)
         {
@@ -181,6 +184,31 @@ int main(int argc, char** argv)
 
     MagDrumAudioProcessor processor;
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
+    const auto generalMidi = MidiMappingProfile::generalMidi();
+    const std::vector<DrumEvent> unmappedSequence{{DrumInstrument::Percussion,DrumArticulation::Edge,100,0.0,0.1}};
+    if (processor.setSequencerPattern(unmappedSequence,generalMidi,4.0)!=1
+        || processor.getSequencerUnmappedEventCount()!=1) return 34;
+    juce::XmlElement sequencerState("PLUGIN_EDITOR_STATE");
+    sequencerState.setAttribute("eventModel",1);
+    sequencerState.setAttribute("profileCsv",juce::String::fromUTF8(generalMidi.toCsv().c_str()));
+    sequencerState.setAttribute("meter","4/4");
+    sequencerState.setAttribute("bars",1);
+    auto* sequencerEvent=sequencerState.createNewChildElement("EVENT");
+    sequencerEvent->setAttribute("instrument",static_cast<int>(DrumInstrument::Kick));
+    sequencerEvent->setAttribute("articulation",static_cast<int>(DrumArticulation::Default));
+    sequencerEvent->setAttribute("velocity",100);
+    sequencerEvent->setAttribute("beat",0.0);
+    sequencerEvent->setAttribute("duration",0.1);
+    processor.setPluginEditorState(sequencerState);
+    if (processor.getSequencerUnmappedEventCount()!=0) return 35;
+    auto* missingMappedEvent=sequencerState.createNewChildElement("EVENT");
+    missingMappedEvent->setAttribute("instrument",static_cast<int>(DrumInstrument::Percussion));
+    missingMappedEvent->setAttribute("articulation",static_cast<int>(DrumArticulation::Edge));
+    missingMappedEvent->setAttribute("velocity",100);
+    missingMappedEvent->setAttribute("beat",0.5);
+    missingMappedEvent->setAttribute("duration",0.1);
+    processor.setPluginEditorState(sequencerState);
+    if (processor.getSequencerUnmappedEventCount()!=1) return 36;
     if (processor.loadSampleForNote(-1, sample) || processor.loadSampleForNote(128, sample)
         || processor.loadSampleForNote(37, root.getChildFile("missing.wav"))) return 9;
     if (processor.getSamplePathForNote(37).isNotEmpty()) return 10;

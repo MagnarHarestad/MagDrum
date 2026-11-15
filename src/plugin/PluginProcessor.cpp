@@ -1,8 +1,21 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "../core/SequencerGrid.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
+
+namespace
+{
+constexpr std::array<DrumInstrument, 8> sequencerLaneInstruments{
+    DrumInstrument::Kick, DrumInstrument::Snare, DrumInstrument::HiHat, DrumInstrument::HiHat,
+    DrumInstrument::Tom, DrumInstrument::Ride, DrumInstrument::Crash, DrumInstrument::Clap};
+constexpr std::array<DrumArticulation, 8> sequencerLaneArticulations{
+    DrumArticulation::Default, DrumArticulation::Default, DrumArticulation::Closed, DrumArticulation::Open,
+    DrumArticulation::Low, DrumArticulation::Bow, DrumArticulation::Default, DrumArticulation::Default};
+
+}
 
 MagDrumAudioProcessor::MagDrumAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
@@ -159,6 +172,57 @@ void MagDrumAudioProcessor::triggerNote(int note, int velocity)
         pendingTriggerFifo.finishedWrite(writeCount);
 }
 
+int MagDrumAudioProcessor::setSequencerPattern(const std::vector<DrumEvent>& events,
+                                                const MidiMappingProfile& mapping,
+                                                double patternLengthBeats)
+{
+    std::vector<magdrum::sequencer::PlaybackEvent> prepared;
+    int unmappedCount = 0;
+    if (std::isfinite(patternLengthBeats) && patternLengthBeats > 0.0)
+    {
+        prepared.reserve(events.size());
+        for (const auto& event : events)
+        {
+            if (!std::isfinite(event.positionBeats) || event.positionBeats < 0.0
+                || event.positionBeats >= patternLengthBeats)
+                continue;
+            const auto mapped = mapping.toMidi(event, false);
+            if (!mapped.note)
+            {
+                ++unmappedCount;
+                continue;
+            }
+            prepared.push_back({event.positionBeats, static_cast<int>(*mapped.note), event.velocity});
+        }
+        std::stable_sort(prepared.begin(), prepared.end(), [](const auto& left, const auto& right)
+        {
+            return left.positionBeats < right.positionBeats;
+        });
+    }
+
+    const juce::ScopedLock lock(sequencerPatternLock);
+    sequencerPlaybackEvents.swap(prepared);
+    sequencerPatternLengthBeats = std::isfinite(patternLengthBeats) && patternLengthBeats > 0.0
+        ? patternLengthBeats : 0.0;
+    sequencerUnmappedEventCount.store(unmappedCount, std::memory_order_release);
+    return unmappedCount;
+}
+
+void MagDrumAudioProcessor::setSequencerPlaybackEnabled(bool enabled) noexcept
+{
+    sequencerPlaybackEnabled.store(enabled, std::memory_order_release);
+}
+
+bool MagDrumAudioProcessor::isSequencerHostSynchronized() const noexcept
+{
+    return sequencerHostSynchronized.load(std::memory_order_acquire);
+}
+
+int MagDrumAudioProcessor::getSequencerUnmappedEventCount() const noexcept
+{
+    return sequencerUnmappedEventCount.load(std::memory_order_acquire);
+}
+
 MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(int note) const
 {
     if (note < 0 || note > 127)
@@ -243,8 +307,38 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+    bool hostIsPlaying = false;
+    juce::Optional<double> hostPpq;
+    juce::Optional<double> hostTempo;
+    if (auto* hostPlayHead = getPlayHead())
+    {
+        if (const auto position = hostPlayHead->getPosition())
+        {
+            hostIsPlaying = position->getIsPlaying();
+            hostPpq = position->getPpqPosition();
+            hostTempo = position->getBpm();
+        }
+    }
+    const bool hostHasSequencerTime = hostIsPlaying && hostPpq.hasValue() && hostTempo.hasValue()
+        && std::isfinite(*hostPpq) && std::isfinite(*hostTempo) && *hostTempo > 0.0;
+    const bool hostSynced = sequencerPlaybackEnabled.load(std::memory_order_acquire) && hostHasSequencerTime;
+    sequencerHostSynchronized.store(hostSynced, std::memory_order_release);
     if (!sampleLock.tryEnter()) { midi.clear(); return; }
     struct CallbackUnlock { juce::CriticalSection& lock; ~CallbackUnlock() { lock.exit(); } } unlock{sampleLock};
+
+    const bool hasSequencerPatternLock = hostSynced && sequencerPatternLock.tryEnter();
+    struct SequencerPatternUnlock
+    {
+        juce::CriticalSection& lock;
+        bool isLocked;
+        ~SequencerPatternUnlock() { if (isLocked) lock.exit(); }
+    } sequencerUnlock{sequencerPatternLock, hasSequencerPatternLock};
+    const bool scheduleHostSequencer = hasSequencerPatternLock
+        && sequencerPatternLengthBeats > 0.0 && !sequencerPlaybackEvents.empty();
+    std::optional<magdrum::sequencer::HostPlaybackCursor> sequencerCursor;
+    if (scheduleHostSequencer)
+        sequencerCursor.emplace(sequencerPlaybackEvents, sequencerPatternLengthBeats,
+                                *hostPpq, *hostTempo, outputSampleRate);
 
     int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     pendingTriggerFifo.prepareToRead(pendingTriggerCapacity, start1, size1, start2, size2);
@@ -265,6 +359,8 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
+        if (sequencerCursor)
+            sequencerCursor->triggerAtSample([this](const auto& event) { startNoteVoice(event.midiNote, event.velocity); });
         while (midiIterator != midiEnd && (*midiIterator).samplePosition <= i)
         {
             const auto message = (*midiIterator).getMessage();
@@ -423,8 +519,68 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
 void MagDrumAudioProcessor::setPluginEditorState(const juce::XmlElement& value)
 {
     if (!value.hasTagName("PLUGIN_EDITOR_STATE")) return;
-    const juce::ScopedLock lock(editorStateLock);
-    editorState = std::make_unique<juce::XmlElement>(value);
+    {
+        const juce::ScopedLock lock(editorStateLock);
+        editorState = std::make_unique<juce::XmlElement>(value);
+    }
+
+    auto mapping = MidiMappingProfile::generalMidi();
+    const auto profileCsv = value.getStringAttribute("profileCsv");
+    if (profileCsv.isNotEmpty())
+        if (const auto parsed = MidiMappingProfile::fromCsv(profileCsv.toStdString()))
+            mapping = *parsed;
+
+    const bool hasSemanticEvents = value.getIntAttribute("eventModel", 0) == 1;
+    std::vector<DrumEvent> events;
+    std::vector<magdrum::sequencer::MeterChange> meterChanges;
+    for (auto* child = value.getFirstChildElement(); child != nullptr; child = child->getNextElement())
+    {
+        if (child->hasTagName("EVENT") && hasSemanticEvents)
+        {
+            const int instrument = child->getIntAttribute("instrument", -1);
+            const int articulation = child->getIntAttribute("articulation", -1);
+            const int velocity = child->getIntAttribute("velocity", 0);
+            const double beat = child->getDoubleAttribute("beat", -1.0);
+            const double duration = child->getDoubleAttribute("duration", 0.0);
+            if (juce::isPositiveAndBelow(instrument, 9) && juce::isPositiveAndBelow(articulation, 13)
+                && velocity >= 1 && velocity <= 127 && std::isfinite(beat) && beat >= 0.0
+                && std::isfinite(duration) && duration > 0.0)
+                events.push_back({static_cast<DrumInstrument>(instrument), static_cast<DrumArticulation>(articulation),
+                                  static_cast<std::uint8_t>(velocity), beat, duration});
+        }
+        else if (child->hasTagName("STEP") && !hasSemanticEvents)
+        {
+            const int lane = child->getIntAttribute("lane", -1);
+            const int step = child->getIntAttribute("step", -1);
+            const int velocity = juce::jlimit(1, 127, child->getIntAttribute("velocity", 100));
+            if (juce::isPositiveAndBelow(lane, static_cast<int>(sequencerLaneInstruments.size()))
+                && juce::isPositiveAndBelow(step, magdrum::sequencer::maximumSteps))
+                events.push_back({sequencerLaneInstruments[static_cast<size_t>(lane)],
+                                  sequencerLaneArticulations[static_cast<size_t>(lane)],
+                                  static_cast<std::uint8_t>(velocity), step * 0.25, 0.12});
+        }
+        else if (child->hasTagName("META") && child->getStringAttribute("kind") == "meter")
+        {
+            const double beat = child->getDoubleAttribute("beat", -1.0);
+            const int numerator = child->getIntAttribute("numerator", 0);
+            const int denominator = child->getIntAttribute("denominator", 0);
+            if (std::isfinite(beat) && beat >= 0.0
+                && magdrum::sequencer::stepsPerBar(numerator, denominator) > 0)
+                meterChanges.push_back({beat, numerator, denominator});
+        }
+    }
+
+    const auto meterText = value.getStringAttribute("meter", "4/4");
+    const int slash = meterText.indexOfChar('/');
+    const int numerator = slash > 0 ? meterText.substring(0, slash).getIntValue() : 4;
+    const int denominator = slash > 0 ? meterText.substring(slash + 1).getIntValue() : 4;
+    const int bars = juce::jlimit(1, magdrum::sequencer::maximumBars,
+                                  value.getIntAttribute("bars", magdrum::sequencer::maximumBars));
+    auto barMap = magdrum::sequencer::buildBarMap(numerator, denominator, bars, meterChanges);
+    double patternLengthBeats = barMap.valid ? barMap.lengthBeats : 0.0;
+    if (patternLengthBeats <= 0.0 && magdrum::sequencer::stepsPerBar(numerator, denominator) > 0)
+        patternLengthBeats = static_cast<double>(numerator) * 4.0 * bars / static_cast<double>(denominator);
+    setSequencerPattern(events, mapping, patternLengthBeats);
 }
 
 std::unique_ptr<juce::XmlElement> MagDrumAudioProcessor::getPluginEditorState() const

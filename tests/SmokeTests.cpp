@@ -5,6 +5,7 @@
 #include "core/MidiMapping.h"
 #include "core/MidiPatternIO.h"
 #include "core/SequencerGrid.h"
+#include "core/SequencerPlayback.h"
 #include "core/PluginNoteScanner.h"
 #include "core/DeviceRealtimeRenderer.h"
 #include "core/PluginScanProcess.h"
@@ -219,6 +220,26 @@ int runSmokeTests(int argc,char** argv)
         || !distantMeter.valid || distantMeter.lengthBeats != 4.0
         || nonFiniteMeter.valid || infiniteMeter.valid)
         return 230;
+    const std::vector<magdrum::sequencer::PlaybackEvent> playbackEvents{{0.0,36,100},{0.25,38,90},{0.5,42,80}};
+    std::vector<std::pair<int,int>> scheduledHits;
+    magdrum::sequencer::HostPlaybackCursor firstPlaybackBlock(playbackEvents,1.0,0.0,120.0,40.0);
+    for(int sample=0;sample<6;++sample)firstPlaybackBlock.triggerAtSample([&](const auto& event){scheduledHits.emplace_back(sample,event.midiNote);});
+    if(!firstPlaybackBlock.isValid()||scheduledHits!=std::vector<std::pair<int,int>>{{0,36},{5,38}})return 243;
+    scheduledHits.clear();
+    magdrum::sequencer::HostPlaybackCursor secondPlaybackBlock(playbackEvents,1.0,0.3,120.0,40.0);
+    for(int sample=0;sample<6;++sample)secondPlaybackBlock.triggerAtSample([&](const auto& event){scheduledHits.emplace_back(sample,event.midiNote);});
+    if(scheduledHits!=std::vector<std::pair<int,int>>{{4,42}})return 244;
+    scheduledHits.clear();
+    const std::vector<magdrum::sequencer::PlaybackEvent> loopEvents{{0.0,36,100},{0.25,38,90}};
+    magdrum::sequencer::HostPlaybackCursor loopPlayback(loopEvents,0.5,0.4,120.0,40.0);
+    for(int sample=0;sample<8;++sample)loopPlayback.triggerAtSample([&](const auto& event){scheduledHits.emplace_back(sample,event.midiNote);});
+    if(scheduledHits!=std::vector<std::pair<int,int>>{{2,36},{7,38}})return 245;
+    scheduledHits.clear();
+    magdrum::sequencer::HostPlaybackCursor prerollPlayback(loopEvents,0.5,-0.1,120.0,40.0);
+    for(int sample=0;sample<4;++sample)prerollPlayback.triggerAtSample([&](const auto& event){scheduledHits.emplace_back(sample,event.midiNote);});
+    if(scheduledHits!=std::vector<std::pair<int,int>>{{2,36}})return 246;
+    magdrum::sequencer::HostPlaybackCursor invalidPlayback(playbackEvents,0.0,0.0,120.0,40.0);
+    if(invalidPlayback.isValid())return 247;
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::_Exit(1);
     if(argc==3&&std::strcmp(argv[1],"--magdrum-test-partial-crash-fixture")==0){const auto log=juce::File(argv[2]);log.replaceWithText(R"({"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"})"+juce::String("\n"));std::_Exit(1);}
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;

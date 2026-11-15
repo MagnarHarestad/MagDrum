@@ -27,7 +27,6 @@ using magdrum::ui::Palette;
 // Pad array order is row-major to match the Boss DR-660: kick/snare/pedal HH/cowbell on the bottom row.
 constexpr std::array<int, 16> defaultPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
 constexpr std::array<const char*, 16> padNames{"Crash 1","Crash 2","Bell","Ride","Tom 1","Tom 2","Tom 3","Tom 4","Side Stick","Clap","Closed HH","Open HH","Kick","Snare","Pedal HH","Cowbell"};
-constexpr std::array<int, 8> defaultLaneNotes{36,38,42,46,43,51,49,39};
 constexpr std::array<const char*, 8> laneNames{"KICK","SNARE","CLOSED HAT","OPEN HAT","TOM","RIDE","CRASH","CLAP"};
 constexpr std::array<const char*, 8> laneDisplayNames{"Kick","Snare","Closed hi-hat","Open hi-hat","Tom","Ride","Crash","Clap"};
 using I=DrumInstrument;using A=DrumArticulation;
@@ -917,7 +916,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         savePluginEditorState();
     };
     addAndMakeVisible(meterSelect);
-    playSequenceButton.setButtonText(magdrum::ui::localisedText("Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));playSequenceButton.addListener(this);clearSequenceButton.addListener(this);exportSequenceButton.addListener(this);addAndMakeVisible(playSequenceButton);addAndMakeVisible(clearSequenceButton);addAndMakeVisible(exportSequenceButton);
+    playSequenceButton.setButtonText(magdrum::ui::localisedText("Play"));playSequenceButton.setTooltip(magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));playSequenceButton.addListener(this);clearSequenceButton.addListener(this);exportSequenceButton.addListener(this);addAndMakeVisible(playSequenceButton);addAndMakeVisible(clearSequenceButton);addAndMakeVisible(exportSequenceButton);
     importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(magdrum::ui::localisedText("Find drum MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));importMidiButton.addListener(this);browseMidiButton.addListener(this);editMidiEventsButton.addListener(this);reviewMidiButton.addListener(this);addAndMakeVisible(importMidiButton);addAndMakeVisible(browseMidiButton);addAndMakeVisible(editMidiEventsButton);addAndMakeVisible(reviewMidiButton);reviewMidiButton.setEnabled(false);browseMidiButton.setTooltip(magdrum::ui::localisedText("Search the detected default libraries for drum-related MIDI files."));editMidiEventsButton.setTooltip(magdrum::ui::localisedText("Edit individual hits, including articulation, off-grid beat position and duration."));reviewMidiButton.setTooltip(magdrum::ui::localisedText("Compare the imported MIDI pattern with your current sequencer edits."));
     tempoEditor.setText(magdrum::ui::localisedText("120"));tempoEditor.setInputRestrictions(3,"0123456789");tempoEditor.setTooltip(magdrum::ui::localisedText("Pattern preview and MIDI export tempo."));addAndMakeVisible(tempoEditor);
     metadataType.addItem(magdrum::ui::localisedText("Tempo event"),1);metadataType.addItem(magdrum::ui::localisedText("Time signature"),2);metadataType.setSelectedId(1,juce::dontSendNotification);metadataType.setTooltip(magdrum::ui::localisedText("Choose the MIDI metadata event to edit."));
@@ -962,7 +961,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     if(dataDirectory!=juce::File()&&(dataDirectory.createDirectory().wasOk()||dataDirectory.isDirectory())){databaseFile=dataDirectory.getChildFile("samples.sqlite3");databaseReady=database.open(databaseFile);}
     if(!databaseReady)status.setText(magdrum::ui::localisedText("Sample index unavailable. Load WAVs directly or scan a folder in the MagDrum app."),juce::dontSendNotification);
     else{refreshSourceKitFilters();refreshSamples();for(const auto& name:database.getMappingProfileNames())if(name!="General MIDI")profileSelect.addItem(name,profileSelect.getNumItems()+1);if(const auto stored=database.loadMappingProfile("General MIDI"))mappingProfile=*stored;}
-    refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();
+    refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
 MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);scanWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
@@ -1114,7 +1113,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     gainLabel.setText(magdrum::ui::localisedText("PAD GAIN"),juce::dontSendNotification);
     panLabel.setText(magdrum::ui::localisedText("PAD PAN"),juce::dontSendNotification);
     tuneLabel.setText(magdrum::ui::localisedText("PAD TUNE"),juce::dontSendNotification);
-    playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
+    playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));playSequenceButton.setTooltip(magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
     importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));
     loadProfileButton.setButtonText(magdrum::ui::localisedText("Load profile"));saveProfileButton.setButtonText(magdrum::ui::localisedText("Save profile"));importCsvButton.setButtonText(magdrum::ui::localisedText("Import CSV"));exportCsvButton.setButtonText(magdrum::ui::localisedText("Export CSV"));setMappingButton.setButtonText(magdrum::ui::localisedText("Set mapping"));removeMappingButton.setButtonText(magdrum::ui::localisedText("Remove mapping"));
@@ -1387,7 +1386,8 @@ void MagDrumAudioProcessorEditor::refreshStepTooltips()
                 if(static_cast<int>(step)>=span.startStep&&static_cast<int>(step)<span.startStep+span.stepCount)
                 {barNumber=bar+1;localStep=static_cast<int>(step)-span.startStep+1;break;}
             }
-            const auto tooltip=magdrum::ui::localisedText(laneDisplayNames[lane])+" · MIDI "+juce::String(mappedLaneNotes[lane])+" · "+magdrum::ui::localisedText("bar")+" "+juce::String(barNumber)+" · "+magdrum::ui::localisedText("step")+" "+juce::String(localStep)+" · "+magdrum::ui::localisedText("Velocity")+" "+juce::String(stepVelocities[lane][step])+" ("+magdrum::ui::localisedText("Right-click to edit")+")";
+            const auto midiNoteText=mappedLaneNotes[lane]>=0?"MIDI "+juce::String(mappedLaneNotes[lane]):magdrum::ui::localisedText("No MIDI mapping");
+            const auto tooltip=magdrum::ui::localisedText(laneDisplayNames[lane])+" · "+midiNoteText+" · "+magdrum::ui::localisedText("bar")+" "+juce::String(barNumber)+" · "+magdrum::ui::localisedText("step")+" "+juce::String(localStep)+" · "+magdrum::ui::localisedText("Velocity")+" "+juce::String(stepVelocities[lane][step])+" ("+magdrum::ui::localisedText("Right-click to edit")+")";
             steps[lane][step].setTooltip(tooltip);
         }
 }
@@ -2190,7 +2190,13 @@ void MagDrumAudioProcessorEditor::setNote(int note)
 void MagDrumAudioProcessorEditor::updateDrumNotes()
 {
     const int previousNote=selectedNote;
-    mappedPadNotes=defaultPadNotes;mappedLaneNotes=defaultLaneNotes;
+    mappedPadNotes=defaultPadNotes;
+    for(size_t lane=0;lane<mappedLaneNotes.size();++lane)
+    {
+        const DrumEvent laneEvent{laneInstruments[lane],laneArticulations[lane],100,0.0,0.1};
+        const auto mapped=mappingProfile.toMidi(laneEvent,false);
+        mappedLaneNotes[lane]=mapped.note?static_cast<int>(*mapped.note):-1;
+    }
     const bool noteStillPresent=std::find(mappedPadNotes.begin(),mappedPadNotes.end(),previousNote)!=mappedPadNotes.end();
     setNote(noteStillPresent?previousNote:36);
 }
@@ -2339,7 +2345,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&setMappingButton||button==&removeMappingButton){const int instrument=mappingInstrument.getSelectedId()-1,articulation=mappingArticulation.getSelectedId()-1,note=mappingNote.getText().getIntValue();if(instrument<0||articulation<0||(button==&setMappingButton&&(note<0||note>127))){status.setText(magdrum::ui::localisedText("Choose a drum, articulation and MIDI note from 0 to 127."),juce::dontSendNotification);return;}const bool changed=button==&setMappingButton?mappingProfile.setMapping({static_cast<DrumInstrument>(instrument),static_cast<DrumArticulation>(articulation),static_cast<std::uint8_t>(note)}):mappingProfile.removeMapping(static_cast<DrumInstrument>(instrument),static_cast<DrumArticulation>(articulation));if(changed){database.saveMappingProfile(profileName.getText().trim().isEmpty()?"General MIDI":profileName.getText().trim(),mappingProfile);updateDrumNotes();refreshMappingSummary();savePluginEditorState();status.setText(magdrum::ui::localisedText("MIDI mapping updated."),juce::dontSendNotification);}else status.setText(magdrum::ui::localisedText("No matching mapping was changed."),juce::dontSendNotification);return;}
     if(button==&importCsvButton){chooseMappingCsv(false);return;}if(button==&exportCsvButton){chooseMappingCsv(true);return;}if(button==&importMidiButton){importMidiPattern();return;}if(button==&browseMidiButton){browseDefaultMidiPatterns();return;}if(button==&editMidiEventsButton){openMidiEventEditor();return;}if(button==&reviewMidiButton){reviewMidiChanges();return;}
     if(button==&setMetadataButton){editSequenceMetadata(false);return;}if(button==&removeMetadataButton){editSequenceMetadata(true);return;}
-    if(button==&playSequenceButton){if(sequencerPlaying){sequencerPlaying=false;stopTimer();playSequenceButton.setButtonText(magdrum::ui::localisedText("Play"));}else{const int bpm=sequenceTempoAtBeat(0.0);if(bpm<20||bpm>300){status.setText(magdrum::ui::localisedText("Tempo must be between 20 and 300 BPM."),juce::dontSendNotification);return;}savePluginEditorState();sequenceTempo=bpm;sequenceStep=0;sequencerPlaying=true;playSequenceButton.setButtonText(magdrum::ui::localisedText("Stop"));startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*4.0))));}return;}
+    if(button==&playSequenceButton){if(sequencerPlaying){sequencerPlaying=false;processor.setSequencerPlaybackEnabled(false);stopTimer();playSequenceButton.setButtonText(magdrum::ui::localisedText("Play"));}else{const int bpm=sequenceTempoAtBeat(0.0);if(bpm<20||bpm>300){status.setText(magdrum::ui::localisedText("Tempo must be between 20 and 300 BPM."),juce::dontSendNotification);return;}savePluginEditorState();sequenceTempo=bpm;sequenceStep=0;sequencerPlaying=true;processor.setSequencerPlaybackEnabled(true);playSequenceButton.setButtonText(magdrum::ui::localisedText("Stop"));const int unmapped=processor.getSequencerUnmappedEventCount();if(unmapped>0)status.setText(magdrum::ui::localisedText("Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.").replace("{count}",juce::String(unmapped)),juce::dontSendNotification);startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*4.0))));}return;}
     if(button==&clearSequenceButton){for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step){steps[lane][step].setToggleState(false,juce::dontSendNotification);stepVelocities[lane][step]=100;steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}syncSequenceEventsFromGrid();savePluginEditorState();status.setText(magdrum::ui::localisedText("Pattern cleared."),juce::dontSendNotification);return;}
     if(button==&exportSequenceButton)
     {
@@ -2362,5 +2368,13 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 
 void MagDrumAudioProcessorEditor::timerCallback()
 {
-    if(!sequencerPlaying)return;const int step=sequenceStep;for(int row=0;row<8;++row)if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState())processor.triggerNote(mappedLaneNotes[static_cast<size_t>(row)],stepVelocities[static_cast<size_t>(row)][static_cast<size_t>(step)]);sequenceStep=(sequenceStep+1)%patternStepCount();sequenceTempo=sequenceTempoAtBeat(sequenceStep*0.25);startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*4.0))));
+    if(!sequencerPlaying||processor.isSequencerHostSynchronized())return;
+    const int step=sequenceStep;
+    for(const auto& event:sequenceEvents)
+        if(juce::roundToInt(event.positionBeats*4.0)==step)
+            if(const auto mapped=mappingProfile.toMidi(event,false);mapped.note)
+                processor.triggerNote(*mapped.note,event.velocity);
+    sequenceStep=(sequenceStep+1)%patternStepCount();
+    sequenceTempo=sequenceTempoAtBeat(sequenceStep*0.25);
+    startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*4.0))));
 }

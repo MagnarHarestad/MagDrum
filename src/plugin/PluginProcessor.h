@@ -1,6 +1,10 @@
 #pragma once
 #include <JuceHeader.h>
+#include "../core/DrumEvent.h"
+#include "../core/MidiMapping.h"
+#include "../core/SequencerPlayback.h"
 #include <array>
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -48,6 +52,11 @@ public:
     // UI-thread pad/sequencer triggers are queued for the next audio block.
     // The queue is bounded so this call never blocks the host's audio thread.
     void triggerNote(int midiNote, int velocity = 100);
+    int setSequencerPattern(const std::vector<DrumEvent>& events, const MidiMappingProfile& mapping,
+                            double patternLengthBeats);
+    void setSequencerPlaybackEnabled(bool enabled) noexcept;
+    bool isSequencerHostSynchronized() const noexcept;
+    int getSequencerUnmappedEventCount() const noexcept;
     NoteParameters getNoteParameters(int midiNote) const;
     void setNoteParameters(int midiNote, NoteParameters);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
@@ -96,6 +105,12 @@ private:
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
     juce::CriticalSection editorStateLock;
+    juce::CriticalSection sequencerPatternLock;
+    std::vector<magdrum::sequencer::PlaybackEvent> sequencerPlaybackEvents;
+    double sequencerPatternLengthBeats = 0.0;
+    std::atomic<bool> sequencerPlaybackEnabled{false};
+    std::atomic<bool> sequencerHostSynchronized{false};
+    std::atomic<int> sequencerUnmappedEventCount{0};
     std::unique_ptr<juce::XmlElement> editorState = std::make_unique<juce::XmlElement>("PLUGIN_EDITOR_STATE");
     std::array<Voice, maxVoices> voices{};
     int nextVoice = 0;
