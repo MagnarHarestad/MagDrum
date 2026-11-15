@@ -49,8 +49,8 @@ private:
     void setPage(int);
     void setNote(int);
     void updateDrumNotes();
-    int stepsPerBar() const;
     int patternStepCount() const;
+    magdrum::sequencer::BarMap currentBarMap() const;
     int sequenceTempoAtBeat(double beat) const;
     void refreshSequenceMetadata();
     bool editSequenceMetadata(bool remove);
