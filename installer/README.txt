@@ -7,7 +7,7 @@ PowerShell. By default the script installs to the standard per-user VST3 folder:
 If a system-wide MagDrum VST3 already exists, a per-user installation prints a
 warning because Cubase may find both copies. To replace the system-wide copy,
 open PowerShell as administrator and run Install-MagDrum.ps1 -AllUsers. The
-script asks before replacing the existing copy and preserves previous bundles
+script asks before replacing the existing copy. Pass -Force only when that replacement is authorized; it always preserves previous bundles
 outside the VST3 scan folder: under %LOCALAPPDATA%\MagDrum\VST3-backups for a
 per-user install or %ProgramData%\MagDrum\VST3-backups for an all-users install.
 

@@ -1,10 +1,19 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
-    [switch] $AllUsers
+    [switch] $AllUsers,
+    [switch] $Force
 )
 
 $ErrorActionPreference = 'Stop'
-$cubaseProcesses = @(Get-Process -Name 'Cubase15', 'Cubase' -ErrorAction SilentlyContinue)
+$cubaseProcesses = @(Get-Process -Name 'Cubase15', 'Cubase' -ErrorAction SilentlyContinue | Where-Object {
+    try {
+        $_.Refresh()
+        -not $_.HasExited
+    }
+    catch {
+        $false
+    }
+})
 if ($cubaseProcesses.Count -gt 0) {
     $running = ($cubaseProcesses | ForEach-Object { "PID $($_.Id) $($_.ProcessName)" }) -join ', '
     throw "Close Cubase completely before installing MagDrum. Detected running process(es): $running. A Cubase process may have no visible window."
@@ -35,7 +44,7 @@ else {
 }
 $backup = Join-Path $backupParent "MagDrum.vst3.backup-$([DateTime]::Now.ToString('yyyyMMdd-HHmmss'))-$([guid]::NewGuid().ToString('N'))"
 if (-not $PSCmdlet.ShouldProcess($destination, 'Install MagDrum VST3')) { return }
-if ((Test-Path -LiteralPath $destination) -and -not $PSCmdlet.ShouldContinue("A MagDrum VST3 already exists at $destination. Keep a backup and replace it?", 'Existing plug-in')) { return }
+if ((Test-Path -LiteralPath $destination) -and -not $Force -and -not $PSCmdlet.ShouldContinue("A MagDrum VST3 already exists at $destination. Keep a backup and replace it?", 'Existing plug-in')) { return }
 New-Item -ItemType Directory -Force $parent | Out-Null
 New-Item -ItemType Directory -Force $backupParent | Out-Null
 try {
