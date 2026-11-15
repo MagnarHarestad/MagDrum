@@ -6,11 +6,22 @@ namespace magdrum::library
 {
 std::vector<juce::File> findDefaultLibraryFolders()
 {
-    const auto commonDocuments = juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory);
-    const auto commonData = juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory);
-    const auto userDocuments = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
-    const auto userMusic = juce::File::getSpecialLocation(juce::File::userMusicDirectory);
-    const auto programFiles = juce::File::getSpecialLocation(juce::File::globalApplicationsDirectory);
+    return findDefaultLibraryFolders({
+        juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory),
+        juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory),
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory),
+        juce::File::getSpecialLocation(juce::File::globalApplicationsDirectory)
+    });
+}
+
+std::vector<juce::File> findDefaultLibraryFolders(const DefaultLibraryRoots& roots)
+{
+    const auto& commonDocuments = roots.commonDocuments;
+    const auto& commonData = roots.commonData;
+    const auto& userDocuments = roots.userDocuments;
+    const auto& userMusic = roots.userMusic;
+    const auto& programFiles = roots.programFiles;
 
     const std::vector<juce::File> candidates{
         commonDocuments.getChildFile("Native Instruments"),
@@ -23,7 +34,8 @@ std::vector<juce::File> findDefaultLibraryFolders()
         userDocuments.getChildFile("Steinberg"),
         userMusic.getChildFile("Native Instruments"),
         userMusic.getChildFile("Steinberg"),
-        programFiles.getChildFile("Steinberg/Cubase 15/VST Sound")
+        programFiles.getChildFile("Steinberg/Cubase 15/VST Sound"),
+        programFiles.getChildFile("Steinberg/Cubase 15/Media")
     };
 
     std::vector<juce::File> found;

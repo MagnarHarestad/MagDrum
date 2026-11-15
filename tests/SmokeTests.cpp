@@ -234,6 +234,20 @@ int runSmokeTests(int argc,char** argv)
     if(magdrum::library::findDrumMidiPatternFiles({midiRoot},1).size()!=1||!magdrum::library::findDrumMidiPatternFiles({midiRoot},200,500000,[]{return true;}).empty())return 204;
     const auto defaultFolders=magdrum::library::findDefaultLibraryFolders();
     for(size_t i=0;i<defaultFolders.size();++i){if(!defaultFolders[i].isDirectory())return 205;for(size_t j=i+1;j<defaultFolders.size();++j)if(defaultFolders[i].getFullPathName().compareIgnoreCase(defaultFolders[j].getFullPathName())==0)return 206;}
+    const auto defaultLibraryFixture=root.getChildFile("default-library-roots");
+    magdrum::library::DefaultLibraryRoots fixtureRoots{defaultLibraryFixture.getChildFile("CommonDocuments"),defaultLibraryFixture.getChildFile("CommonData"),defaultLibraryFixture.getChildFile("UserDocuments"),defaultLibraryFixture.getChildFile("UserMusic"),defaultLibraryFixture.getChildFile("ProgramFiles")};
+    const std::vector<juce::File> expectedLibraryFolders{
+        fixtureRoots.commonDocuments.getChildFile("Native Instruments"),fixtureRoots.commonDocuments.getChildFile("Steinberg"),fixtureRoots.commonDocuments.getChildFile("VST Sound"),
+        fixtureRoots.commonData.getChildFile("Native Instruments"),fixtureRoots.commonData.getChildFile("Steinberg/Content"),fixtureRoots.commonData.getChildFile("Spectrasonics/STEAM"),
+        fixtureRoots.userDocuments.getChildFile("Native Instruments"),fixtureRoots.userDocuments.getChildFile("Steinberg"),fixtureRoots.userMusic.getChildFile("Native Instruments"),fixtureRoots.userMusic.getChildFile("Steinberg"),
+        fixtureRoots.programFiles.getChildFile("Steinberg/Cubase 15/VST Sound"),fixtureRoots.programFiles.getChildFile("Steinberg/Cubase 15/Media")
+    };
+    for(const auto& folder:expectedLibraryFolders)if(!folder.createDirectory().wasOk())return 243;
+    const auto fixtureLibraryFolders=magdrum::library::findDefaultLibraryFolders(fixtureRoots);
+    if(fixtureLibraryFolders.size()!=expectedLibraryFolders.size()||std::any_of(expectedLibraryFolders.begin(),expectedLibraryFolders.end(),[&](const juce::File& expected){return std::none_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.getFullPathName().compareIgnoreCase(expected.getFullPathName())==0;});}))return 244;
+    fixtureRoots.userMusic=fixtureRoots.commonDocuments;
+    const auto deduplicatedLibraryFolders=magdrum::library::findDefaultLibraryFolders(fixtureRoots);
+    if(deduplicatedLibraryFolders.size()!=expectedLibraryFolders.size()-2)return 245;
     midiFixture.deleteRecursively();
     juce::StringArray crashCommand;crashCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());crashCommand.add("--magdrum-test-crash-fixture");
     const auto crashExecution=PluginScanProcess::monitorWorker(crashCommand,root.getChildFile("crash-progress.json"),root.getChildFile("crash-result.json"),root.getChildFile("crash-cancel"));
