@@ -1,9 +1,9 @@
 # MagDrum local test packages
 
-Release [v0.1.1-test.136](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.136) contains Windows x64, Windows ARM64, and Linux x64 packages. The sequencer grid follows MIDI time-signature changes placed on sixteenth-note boundaries, including partial bars, and rejects non-finite event positions before sorting. Windows x64 and Linux Release CTest suites passed (2/2 each). Windows ARM64 app, VST3 and helper binaries were cross-compiled; all three PE headers identify ARM64. Runtime testing on ARM64 Windows remains outstanding.
+Local package set `v0.1.1-test.137` contains Windows x64, Windows ARM64 and Linux x64. Windows x64 and Linux Release CTest suites passed (2/2 each). Windows ARM64 app, VST3 and helper were cross-compiled; all three PE headers identify ARM64. ARM64 runtime testing remains outstanding.
 
-- Windows x64 SHA-256: `33a536870fa96467863e727e68c57bd67f0938103940013759f3e77eb262633e`
-- Windows ARM64 SHA-256: `0902e43c1eecf99df9e23edb2b254214fa31482fd87716db1b13353c67b1c2d5`
-- Linux x64 SHA-256: `7afa579d3dd7fdc888a6cfb5b42fd80ad6115229a3187b7cd87867097ccfaf1a`
+- Windows x64 SHA-256: `3066cf488d58624f2081434fb35b6617d1b30149a8885b1f0629b842ae118ffb`
+- Windows ARM64 SHA-256: `93d1564abd569da9a669b1ab167def2e1c067006061480002a47ea7b3d9db353`
+- Linux x64 SHA-256: `1453eab32eb71c489b5d2590d35fb94281db138ec66fa5908e1d88ebe644153e`
 
-MagDrum v0.1.1-test.135 is installed in `C:\\Program Files\\Common Files\\VST3\\MagDrum.vst3`. The .136 Windows x64 package has identical application/plugin contents; its additional Windows ARM64 package is cross-compiled and is not runtime-verified. Version .134 is backed up under `%ProgramData%\\MagDrum\\VST3-backups`, outside Cubase's VST3 scan folder. Windows confirmed that the background Cubase15 process has no MagDrum module loaded and only one MagDrum bundle remains in the system VST3 folder. Restart Cubase and choose **Studio > VST Plug-in Manager > Rescan All** to test the installed x64 build.
+Install the Windows VST3 with the bundled `Install-MagDrum.ps1 -AllUsers` script. It installs into `C:\Program Files\Common Files\VST3\MagDrum.vst3` and moves the previous bundle to `%ProgramData%\MagDrum\VST3-backups`. Restart Cubase and rescan its VST3 plug-ins to use the new build.

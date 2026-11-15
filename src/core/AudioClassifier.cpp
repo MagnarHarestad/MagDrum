@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <utility>
 
@@ -186,7 +187,74 @@ double featureDistance(const ScannedSample& left, const ScannedSample& right)
         weightedSquares += weights[index] * (a[index] - b[index]) * (a[index] - b[index]);
         totalWeight += weights[index];
     }
-    return std::sqrt(weightedSquares / totalWeight);
+    const auto scalarDistance = std::sqrt(weightedSquares / totalWeight);
+
+    const auto fingerprintDistance = [](const ScannedSample& first, const ScannedSample& second)
+    {
+        constexpr size_t segmentCount = 4;
+        constexpr size_t bandCount = 16;
+        constexpr size_t encodedLength = segmentCount * bandCount * 2;
+        if (first.acousticFingerprintVersion != 1 || second.acousticFingerprintVersion != 1
+            || first.acousticFingerprint.length() != static_cast<int>(encodedLength)
+            || second.acousticFingerprint.length() != static_cast<int>(encodedLength))
+            return -1.0;
+
+        const auto firstText = first.acousticFingerprint.toStdString();
+        const auto secondText = second.acousticFingerprint.toStdString();
+        const auto decodeNibble = [](char character) -> int
+        {
+            if (character >= '0' && character <= '9') return static_cast<int>(character - '0');
+            if (character >= 'a' && character <= 'f') return static_cast<int>(character - 'a' + 10);
+            if (character >= 'A' && character <= 'F') return static_cast<int>(character - 'A' + 10);
+            return -1;
+        };
+        std::array<std::uint8_t, segmentCount * bandCount> leftBands{};
+        std::array<std::uint8_t, segmentCount * bandCount> rightBands{};
+        for (size_t index = 0; index < leftBands.size(); ++index)
+        {
+            const auto leftHigh = decodeNibble(firstText[index * 2]);
+            const auto leftLow = decodeNibble(firstText[index * 2 + 1]);
+            const auto rightHigh = decodeNibble(secondText[index * 2]);
+            const auto rightLow = decodeNibble(secondText[index * 2 + 1]);
+            if (leftHigh < 0 || leftLow < 0 || rightHigh < 0 || rightLow < 0)
+                return -1.0;
+            leftBands[index] = static_cast<std::uint8_t>((leftHigh << 4) | leftLow);
+            rightBands[index] = static_cast<std::uint8_t>((rightHigh << 4) | rightLow);
+        }
+
+        double segmentDivergence = 0.0;
+        int validSegments = 0;
+        for (size_t segment = 0; segment < segmentCount; ++segment)
+        {
+            double leftTotal = 0.0;
+            double rightTotal = 0.0;
+            for (size_t band = 0; band < bandCount; ++band)
+            {
+                leftTotal += leftBands[segment * bandCount + band];
+                rightTotal += rightBands[segment * bandCount + band];
+            }
+            if (leftTotal <= 0.0 || rightTotal <= 0.0)
+                continue;
+
+            double divergence = 0.0;
+            for (size_t band = 0; band < bandCount; ++band)
+            {
+                const auto leftProbability = leftBands[segment * bandCount + band] / leftTotal;
+                const auto rightProbability = rightBands[segment * bandCount + band] / rightTotal;
+                const auto midpoint = (leftProbability + rightProbability) * 0.5;
+                if (leftProbability > 0.0)
+                    divergence += 0.5 * leftProbability * std::log2(leftProbability / midpoint);
+                if (rightProbability > 0.0)
+                    divergence += 0.5 * rightProbability * std::log2(rightProbability / midpoint);
+            }
+            segmentDivergence += juce::jlimit(0.0, 1.0, divergence);
+            ++validSegments;
+        }
+        return validSegments > 0 ? std::sqrt(segmentDivergence / validSegments) : -1.0;
+    };
+
+    const auto spectrumDistance = fingerprintDistance(left, right);
+    return spectrumDistance >= 0.0 ? scalarDistance * 0.9 + spectrumDistance * 0.1 : scalarDistance;
 }
 }
 

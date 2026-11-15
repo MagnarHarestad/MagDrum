@@ -265,6 +265,44 @@ bool evaluatePerceptualCandidates(const std::vector<LabeledSample>& samples)
     std::cout << "Folder-category agreement is a weak label proxy; it does not verify human-perceived similarity.\n";
     return true;
 }
+
+void evaluateManualExampleModel(const std::vector<LabeledSample>& samples, bool leaveOneKitOut)
+{
+    Score score;
+    std::set<std::string> kits;
+    for (const auto& sample : samples)
+        kits.insert(sample.sample.file.getParentDirectory().getParentDirectory().getFileName().toStdString());
+
+    for (const auto& query : samples)
+    {
+        std::vector<ScannedSample> examples;
+        for (const auto& candidate : samples)
+        {
+            if (candidate.sample.file == query.sample.file) continue;
+            if (leaveOneKitOut
+                && candidate.sample.file.getParentDirectory().getParentDirectory()
+                       == query.sample.file.getParentDirectory().getParentDirectory())
+                continue;
+            auto example = candidate.sample;
+            example.category = candidate.label;
+            examples.push_back(std::move(example));
+        }
+
+        auto anonymousQuery = query.sample;
+        anonymousQuery.file = juce::File("anonymous-audio.wav");
+        const auto prediction = ManualExampleDrumClassificationModel(std::move(examples)).classify(anonymousQuery);
+        score.add(query.label, prediction);
+    }
+
+    const auto title = leaveOneKitOut ? "Manually labeled examples (leave one kit out)"
+                                      : "Manually labeled examples (leave one sample out)";
+    score.print(title);
+    if (leaveOneKitOut)
+    {
+        std::cout << "Kits evaluated: " << kits.size()
+                  << "  Training excludes every other sample from the held-out kit.\n";
+    }
+}
 }
 
 int main(int argc, char** argv)
@@ -314,6 +352,12 @@ int main(int argc, char** argv)
               << "Metrics are for this dataset only. Confidence values are not calibrated.\n";
     withFilenameCues.print("Filename and audio features");
     withoutFilenameCues.print("Audio features only (filename hidden)");
+    evaluateManualExampleModel(labeledSamples, false);
+    std::set<std::string> labeledKits;
+    for (const auto& sample : labeledSamples)
+        labeledKits.insert(sample.sample.file.getParentDirectory().getParentDirectory().getFileName().toStdString());
+    if (labeledKits.size() > 1)
+        evaluateManualExampleModel(labeledSamples, true);
     if (!evaluatePerceptualCandidates(labeledSamples)) return 1;
     return scanStats.filesAnalyzed > 0 && withFilenameCues.samples > 0 ? 0 : 1;
 }

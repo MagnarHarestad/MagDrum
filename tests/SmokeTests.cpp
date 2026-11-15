@@ -528,6 +528,12 @@ int runSmokeTests(int argc,char** argv)
     auto learnedQuery=manualExample;learnedQuery.category="Unknown";learnedQuery.file=juce::File("unlabeled-audio.wav");
     const auto learnedPrediction=manualExampleClassifier.classify(learnedQuery);
     if(learnedPrediction.category!="Ride"||learnedPrediction.confidence<0.55||learnedPrediction.confidence>=0.75||!learnedPrediction.tags.contains("User-trained suggestion"))return 218;
+    auto kickFingerprint=std::string(128,'0'),snareFingerprint=std::string(128,'0');for(int segment=0;segment<4;++segment){kickFingerprint[static_cast<size_t>(segment*32)]='f';kickFingerprint[static_cast<size_t>(segment*32+1)]='f';snareFingerprint[static_cast<size_t>(segment*32+30)]='f';snareFingerprint[static_cast<size_t>(segment*32+31)]='f';}
+    auto fingerprintExamples=manualExamples;for(auto& example:fingerprintExamples)example.acousticFingerprintVersion=1;
+    fingerprintExamples[0].file=juce::File("kick-a.wav");fingerprintExamples[0].category="Kick";fingerprintExamples[0].acousticFingerprint=juce::String::fromUTF8(kickFingerprint.c_str());fingerprintExamples[1].file=juce::File("kick-b.wav");fingerprintExamples[1].category="Kick";fingerprintExamples[1].acousticFingerprint=juce::String::fromUTF8(kickFingerprint.c_str());fingerprintExamples[2].file=juce::File("snare-a.wav");fingerprintExamples[2].category="Snare";fingerprintExamples[2].acousticFingerprint=juce::String::fromUTF8(snareFingerprint.c_str());fingerprintExamples.push_back(fingerprintExamples[2]);fingerprintExamples.back().file=juce::File("snare-b.wav");
+    auto fingerprintQuery=manualExample;fingerprintQuery.file=juce::File("anonymous-audio.wav");fingerprintQuery.acousticFingerprintVersion=1;fingerprintQuery.acousticFingerprint=juce::String::fromUTF8(kickFingerprint.c_str());
+    const auto fingerprintPrediction=AudioClassifier(std::make_shared<ManualExampleDrumClassificationModel>(fingerprintExamples)).classify(fingerprintQuery);
+    if(fingerprintPrediction.category!="Kick"||!fingerprintPrediction.tags.contains("User-trained suggestion")||fingerprintPrediction.confidence>=0.75)return 229;
     learnedQuery.file=juce::File("Kick_01.wav");if(manualExampleClassifier.classify(learnedQuery).category!="Kick")return 219;
     auto disagreeingExamples=manualExamples;disagreeingExamples[1].category="Crash";disagreeingExamples[2].category="Tom";
     learnedQuery.file=juce::File("unlabeled-audio.wav");
