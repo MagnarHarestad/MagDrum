@@ -13,6 +13,8 @@
 
 **Localization verification update:** Windows plugin smoke coverage now checks representative drum-machine, sample-library and sorting labels in all eight language choices, including correct UTF-8 French accents. Full screen-by-screen language review remains pending.
 
+`Build-Windows.ps1` now runs a localization source audit before building. It checks that all 540 translatable string literals passed to `localisedText` appear in each of the seven non-English catalogs; the audit passes on the current source tree.
+
 The product is not complete until each supported platform has a reproducible build and install package, library/MIDI behavior has been reviewed against broader real-world collections, candidate similarity has been evaluated on labeled examples, and the advanced planned workflows are implemented. AUv3/iOS and model-assisted analysis need Apple/mobile and model evaluation work respectively; they are not represented by the desktop CI results. MagDrum's original code is licensed under AGPLv3. A target-by-target audit of JUCE modules, SDKs and required third-party notices remains before stable multi-platform distribution; see [licensing status](licensing.md). The public landing page is deployed at https://magnarharestad.github.io/MagDrum-Website/ from a separate public repository containing only the page and stylesheet; the application source repository is public. Releases synchronize the public landing page to the latest published test version.
 
 Desktop VST3 scanning is not an iOS requirement.
