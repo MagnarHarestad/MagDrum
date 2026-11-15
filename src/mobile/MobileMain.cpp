@@ -36,7 +36,7 @@ public:
         }
 
         title.setText("MagDrum", juce::dontSendNotification);
-        title.setFont(juce::Font(30.0f, juce::Font::bold));
+        title.setFont(juce::Font(juce::FontOptions(30.0f, juce::Font::bold)));
         addAndMakeVisible(title);
         languageButton.setButtonText("☰");
         languageButton.onClick = [this] { magdrum::ui::showApplicationMenu(languageButton, [this] { applyLanguage(); }); };
