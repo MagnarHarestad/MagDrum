@@ -45,6 +45,7 @@ $generator = switch ($vsMajorVersion) {
 $latestDirectory = Join-Path $repoRoot 'latest-publish'
 
 & (Join-Path $repoRoot 'tools/Validate-Localization.ps1')
+& (Join-Path $repoRoot 'tools/Test-WindowsInstallerGuard.ps1')
 
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmakePath = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
