@@ -110,7 +110,8 @@ if ($includedNames -contains 'MagDrum-Linux-x64.tar.gz') {
     $noteLines += @(
         '',
         'The Linux archive includes Install-MagDrum-Linux.sh for a per-user app and VST3 install. It places previous plug-in bundles under XDG_DATA_HOME (or ~/.local/share), outside VST3 scan paths.',
-        'Linux x64 was built and tested in WSL Ubuntu 24.04. CTest loads the byte-identical release VST3 through JUCE, scans MIDI notes 0-127 and confirms audible note 36. Ardour 8.4 also recognizes the package; interactive Ardour session and physical Linux audio-device tests remain pending.'
+        'Linux x64 was built and tested in WSL Ubuntu 24.04. CTest loads the byte-identical release VST3 through JUCE, scans MIDI notes 0-127 and confirms audible note 36. Ardour 8.4 also recognizes the package; interactive Ardour session and physical Linux audio-device tests remain pending.',
+        'The Linux VST3 bundles MagDrumScanner under Contents/Resources for isolated instrument discovery and note scans. The helper executable is included and dependency-checked; native DAW/plugin runtime validation remains pending.'
     )
 }
 $notesPath = Join-Path $env:TEMP ("MagDrum-$Tag-release-notes.txt")

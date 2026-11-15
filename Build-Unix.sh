@@ -88,6 +88,13 @@ if [[ "$host_os" == "Darwin" ]]; then
   ditto "$app" "$stage/MagDrum.app"
   ditto "$vst" "$stage/MagDrum.vst3"
   ditto "$au" "$stage/MagDrum.component"
+  scanner="$app/Contents/MacOS/MagDrum"
+  [[ -x "$scanner" ]] || { echo "The MagDrum scanner executable was not found in the app bundle." >&2; exit 1; }
+  for bundle in "$stage/MagDrum.vst3" "$stage/MagDrum.component"; do
+    mkdir -p "$bundle/Contents/Resources"
+    cp "$scanner" "$bundle/Contents/Resources/MagDrumScanner"
+    chmod 755 "$bundle/Contents/Resources/MagDrumScanner"
+  done
   cp "$repo_root/installer/README-macOS.txt" "$stage/README.txt"
   archive="$repo_root/latest-publish/MagDrum-$platform.zip"
   mkdir -p "$(dirname "$archive")"
@@ -99,6 +106,11 @@ else
   [[ -f "$app" && -x "$app" && -n "$vst" ]] || { echo "Expected Linux app and VST3 bundle were not both produced." >&2; exit 1; }
   cp "$app" "$stage/MagDrum"
   cp -a "$vst" "$stage/MagDrum.vst3"
+  scanner_resources="$stage/MagDrum.vst3/Contents/Resources"
+  mkdir -p "$scanner_resources"
+  cp "$app" "$scanner_resources/MagDrumScanner"
+  chmod 755 "$scanner_resources/MagDrumScanner"
+  test -x "$scanner_resources/MagDrumScanner"
   cp "$repo_root/installer/Install-MagDrum-Linux.sh" "$stage/Install-MagDrum-Linux.sh"
   chmod 755 "$stage/Install-MagDrum-Linux.sh"
   cp "$repo_root/installer/README-Linux.txt" "$stage/README.txt"

@@ -20,6 +20,9 @@
 #endif
 #include <windows.h>
 #endif
+#if JUCE_MAC || JUCE_LINUX
+#include <dlfcn.h>
+#endif
 
 namespace
 {
@@ -109,6 +112,14 @@ juce::File bundledScannerApplication()
         return {};
     return juce::File(juce::String(modulePath.data(), static_cast<int>(length)))
         .getParentDirectory().getChildFile("MagDrum.exe");
+#elif JUCE_MAC || JUCE_LINUX
+    static int moduleAnchor = 0;
+    Dl_info moduleInfo{};
+    if (dladdr(&moduleAnchor, &moduleInfo) == 0 || moduleInfo.dli_fname == nullptr)
+        return {};
+    const auto moduleFile = juce::File(juce::String::fromUTF8(moduleInfo.dli_fname));
+    const auto bundleContents = moduleFile.getParentDirectory().getParentDirectory();
+    return bundleContents.getChildFile("Resources").getChildFile("MagDrumScanner");
 #else
     return {};
 #endif
@@ -1847,7 +1858,7 @@ void MagDrumAudioProcessorEditor::startPluginNoteScan()
     }
     if (! bundledScannerApplication().existsAsFile())
     {
-        status.setText(magdrum::ui::localisedText("The isolated plugin scanner is currently available in the Windows package."), juce::dontSendNotification);
+        status.setText(magdrum::ui::localisedText("The bundled MagDrum instrument scanner was not found beside this VST3. Reinstall the latest package."), juce::dontSendNotification);
         return;
     }
 
