@@ -649,6 +649,19 @@ countries: de
 "The group is no longer marked as confirmed." = "Die Gruppe ist nicht mehr als bestätigt markiert."
 "The exact audible take indices are saved as a user-confirmed group." = "Die genauen hörbaren Take-Indizes wurden als benutzerbestätigte Gruppe gespeichert."
 "This candidate no longer has at least two indexed, audible takes." = "Dieser Kandidat hat nicht mehr mindestens zwei indexierte, hörbare Takes."
+"Metadata export failed: {error}" = "Metadatenexport fehlgeschlagen: {error}"
+"Could not write the metadata archive." = "Metadatenarchiv konnte nicht geschrieben werden."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} Sample-Identitäten abgeglichen, {unavailable} nicht verfügbar, {tags} Tags hinzugefügt, {profiles} Profile hinzugefügt."
+"Metadata import report" = "Metadatenimportbericht"
+"Manual-category conflicts preserved: {count}" = "Konflikte bei manuellen Kategorien beibehalten: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Konflikte bei Zuordnungsprofilen beibehalten: {count}"
+"Sample identities not found on this device: {count}" = "Auf diesem Gerät nicht gefundene Sample-Identitäten: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Konfliktierende lokale Werte wurden nicht überschrieben. Es wurden keine Audiodateien oder Plugin-Zustände importiert."
+"Preview cancelled." = "Vorschau abgebrochen."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Keine passenden Drum-Samples indexiert. Füge zuerst einen Sample-Ordner hinzu und scanne ihn."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Einige Drum-Spuren haben kein indexiertes Sample; diese Schläge bleiben stumm."
+"Playing sequencer preview" = "Sequencer-Vorschau wird wiedergegeben"
+"looping" = "in Schleife"
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1294,6 +1307,19 @@ countries: fr
 "The group is no longer marked as confirmed." = "Le groupe n’est plus marqué comme confirmé."
 "The exact audible take indices are saved as a user-confirmed group." = "Les indices exacts des prises audibles sont enregistrés dans un groupe confirmé par l’utilisateur."
 "This candidate no longer has at least two indexed, audible takes." = "Ce candidat n’a plus au moins deux prises audibles indexées."
+"Metadata export failed: {error}" = "Échec export métadonnées : {error}"
+"Could not write the metadata archive." = "Impossible d’écrire l’archive de métadonnées."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} identités d’échantillons trouvées, {unavailable} indisponibles, {tags} étiquettes ajoutées, {profiles} profils ajoutés."
+"Metadata import report" = "Rapport d’importation des métadonnées"
+"Manual-category conflicts preserved: {count}" = "Conflits de catégories manuelles conservés : {count}"
+"Mapping-profile conflicts preserved: {count}" = "Conflits de profils de correspondance conservés : {count}"
+"Sample identities not found on this device: {count}" = "Identités d’échantillons introuvables sur cet appareil : {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Les valeurs locales en conflit n’ont pas été remplacées. Aucun fichier audio ni état de plug-in n’a été importé."
+"Preview cancelled." = "Aperçu annulé."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Aucun échantillon de batterie correspondant n’est indexé. Ajoutez et analysez d’abord un dossier d’échantillons."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Certaines pistes de batterie n’ont pas d’échantillon indexé ; ces frappes resteront silencieuses."
+"Playing sequencer preview" = "Lecture de l’aperçu du séquenceur"
+"looping" = "en boucle"
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -1939,6 +1965,19 @@ countries: es
 "The group is no longer marked as confirmed." = "El grupo ya no aparece como confirmado."
 "The exact audible take indices are saved as a user-confirmed group." = "Los índices exactos de las tomas audibles se guardaron como grupo confirmado por el usuario."
 "This candidate no longer has at least two indexed, audible takes." = "Este candidato ya no tiene al menos dos tomas audibles indexadas."
+"Metadata export failed: {error}" = "Error al exportar metadatos: {error}"
+"Could not write the metadata archive." = "No se pudo escribir el archivo de metadatos."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} identidades de muestras coincidentes, {unavailable} no disponibles, {tags} etiquetas añadidas, {profiles} perfiles añadidos."
+"Metadata import report" = "Informe de importación de metadatos"
+"Manual-category conflicts preserved: {count}" = "Conflictos de categorías manuales conservados: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Conflictos de perfiles de asignación conservados: {count}"
+"Sample identities not found on this device: {count}" = "Identidades de muestras no encontradas en este dispositivo: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "No se sobrescribieron los valores locales en conflicto. No se importaron archivos de audio ni estados de plugins."
+"Preview cancelled." = "Vista previa cancelada."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "No hay muestras de batería coincidentes en el índice. Añade y analiza primero una carpeta de muestras."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Algunas pistas de batería no tienen muestras indexadas y esos golpes serán silenciosos."
+"Playing sequencer preview" = "Reproduciendo la vista previa del secuenciador"
+"looping" = "en bucle"
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -2584,6 +2623,19 @@ countries: se
 "The group is no longer marked as confirmed." = "Gruppen är inte längre markerad som bekräftad."
 "The exact audible take indices are saved as a user-confirmed group." = "De exakta hörbara tagningarnas index har sparats som en användarbekräftad grupp."
 "This candidate no longer has at least two indexed, audible takes." = "Kandidaten har inte längre minst två indexerade, hörbara tagningar."
+"Metadata export failed: {error}" = "Metadataexporten misslyckades: {error}"
+"Could not write the metadata archive." = "Det gick inte att skriva metadataarkivet."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} sampleidentiteter matchade, {unavailable} saknas, {tags} taggar tillagda, {profiles} profiler tillagda."
+"Metadata import report" = "Rapport om metadataimport"
+"Manual-category conflicts preserved: {count}" = "Konflikter i manuella kategorier behållna: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Konflikter i mappningsprofiler behållna: {count}"
+"Sample identities not found on this device: {count}" = "Sampleidentiteter som saknas på enheten: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Motstridiga lokala värden skrevs inte över. Inga ljudfiler eller pluginlägen importerades."
+"Preview cancelled." = "Förhandsvisningen avbröts."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Inga matchande trumsamplingar finns i indexet. Lägg till och skanna en samplemapp först."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Några trumspår saknar indexerad sampling, så de slagen blir tysta."
+"Playing sequencer preview" = "Spelar upp sequencerförhandsvisning"
+"looping" = "loopar"
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -3229,6 +3281,19 @@ countries: no
 "The group is no longer marked as confirmed." = "Gruppen er ikke lenger markert som bekreftet."
 "The exact audible take indices are saved as a user-confirmed group." = "De nøyaktige indeksene til de hørbare opptakene er lagret som en brukerbekreftet gruppe."
 "This candidate no longer has at least two indexed, audible takes." = "Denne kandidaten har ikke lenger minst to indekserte, hørbare opptak."
+"Metadata export failed: {error}" = "Eksport av metadata mislyktes: {error}"
+"Could not write the metadata archive." = "Kunne ikke skrive metadataarkivet."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} sampleidentiteter samsvarte, {unavailable} utilgjengelige, {tags} tagger lagt til, {profiles} profiler lagt til."
+"Metadata import report" = "Rapport for metadataimport"
+"Manual-category conflicts preserved: {count}" = "Konflikter for manuelle kategorier bevart: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Konflikter for tilordningsprofiler bevart: {count}"
+"Sample identities not found on this device: {count}" = "Sampleidentiteter som ikke ble funnet på denne enheten: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Lokale verdier i konflikt ble ikke overskrevet. Ingen lydfiler eller programtilstander ble importert."
+"Preview cancelled." = "Forhåndsvisningen ble avbrutt."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Ingen samsvarende trommesamples er indeksert. Legg til og skann en samplemappe først."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Noen trommespor mangler indekserte samples, så disse slagene blir stille."
+"Playing sequencer preview" = "Spiller av sekvenserforhåndsvisning"
+"looping" = "i løkke"
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -3874,6 +3939,19 @@ countries: dk
 "The group is no longer marked as confirmed." = "Gruppen er ikke længere markeret som bekræftet."
 "The exact audible take indices are saved as a user-confirmed group." = "De præcise indeks for de hørbare optagelser er gemt som en brugerbekræftet gruppe."
 "This candidate no longer has at least two indexed, audible takes." = "Denne kandidat har ikke længere mindst to indekserede, hørbare optagelser."
+"Metadata export failed: {error}" = "Eksport af metadata mislykkedes: {error}"
+"Could not write the metadata archive." = "Metadataarkivet kunne ikke skrives."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} sampleidentiteter matchet, {unavailable} utilgængelige, {tags} tags tilføjet, {profiles} profiler tilføjet."
+"Metadata import report" = "Rapport om metadataimport"
+"Manual-category conflicts preserved: {count}" = "Konflikter for manuelle kategorier bevaret: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Konflikter for mappingprofiler bevaret: {count}"
+"Sample identities not found on this device: {count}" = "Sampleidentiteter, der ikke blev fundet på denne enhed: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Lokale værdier i konflikt blev ikke overskrevet. Ingen lydfiler eller plugintilstande blev importeret."
+"Preview cancelled." = "Forhåndsvisning annulleret."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Ingen matchende trommesamples er indekseret. Tilføj og scan først en samplemappe."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Nogle trommespor mangler indekserede samples, så disse slag er lydløse."
+"Playing sequencer preview" = "Afspiller sequencerforhåndsvisning"
+"looping" = "i loop"
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -4519,6 +4597,19 @@ countries: fi
 "The group is no longer marked as confirmed." = "Ryhmää ei enää merkitä vahvistetuksi."
 "The exact audible take indices are saved as a user-confirmed group." = "Kuultujen otosten tarkat indeksit tallennettiin käyttäjän vahvistamana ryhmänä."
 "This candidate no longer has at least two indexed, audible takes." = "Tällä ehdokkaalla ei ole enää vähintään kahta indeksoitua, kuultavaa otosta."
+"Metadata export failed: {error}" = "Metatietojen vienti epäonnistui: {error}"
+"Could not write the metadata archive." = "Metatietoarkiston kirjoittaminen epäonnistui."
+"Metadata merged: {matched} sample identities matched, {unavailable} unavailable, {tags} tags added, {profiles} profiles added." = "{matched} näyteidentiteettiä täsmäsi, {unavailable} ei käytettävissä, {tags} tunnistetta lisätty, {profiles} profiilia lisätty."
+"Metadata import report" = "Metatietojen tuontiraportti"
+"Manual-category conflicts preserved: {count}" = "Manuaalisten luokkien ristiriidat säilytettiin: {count}"
+"Mapping-profile conflicts preserved: {count}" = "Määritysprofiilien ristiriidat säilytettiin: {count}"
+"Sample identities not found on this device: {count}" = "Tällä laitteella löytämättömiä näyteidentiteettejä: {count}"
+"Conflicting local values were not overwritten. No audio files or plugin states were imported." = "Paikallisia ristiriitaisia arvoja ei korvattu. Äänitiedostoja tai liitännäistiloja ei tuotu."
+"Preview cancelled." = "Esikatselu peruutettiin."
+"No matching drum samples are indexed. Add and scan a sample folder first." = "Vastaavia rumpunäytteitä ei ole indeksissä. Lisää ja skannaa ensin näytekansio."
+"Some drum lanes have no indexed sample, so those hits are silent." = "Joillakin rumpuraidoilla ei ole indeksoitua näytettä, joten nämä iskut ovat hiljaisia."
+"Playing sequencer preview" = "Toistetaan sekvensserin esikatselua"
+"looping" = "silmukassa"
 )translations";
 
 Language selected = Language::english;
