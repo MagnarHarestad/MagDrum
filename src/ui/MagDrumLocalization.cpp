@@ -4637,7 +4637,9 @@ const char* catalog(Language language)
 void applyMappings()
 {
     const auto* translations = catalog(selected);
-    juce::LocalisedStrings::setCurrentMappings(translations != nullptr ? new juce::LocalisedStrings(translations, true) : nullptr);
+    juce::LocalisedStrings::setCurrentMappings(translations != nullptr
+        ? new juce::LocalisedStrings(juce::String::fromUTF8(translations), true)
+        : nullptr);
 }
 }
 
@@ -4654,11 +4656,16 @@ juce::ChangeBroadcaster& languageChangeBroadcaster()
     return broadcaster;
 }
 
-void setLanguage(Language language)
+void setLanguage(Language language, bool persistPreference)
 {
     if (selected == language) return;
     selected = language;
     applyMappings();
+    if (!persistPreference)
+    {
+        languageChangeBroadcaster().sendSynchronousChangeMessage();
+        return;
+    }
     const auto directory = getMagDrumDataDirectory();
     if (directory != juce::File() && (directory.createDirectory().wasOk() || directory.isDirectory()))
         directory.getChildFile("language.txt").replaceWithText(languageName(language));

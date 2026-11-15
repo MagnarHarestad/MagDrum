@@ -1,6 +1,7 @@
 #include "plugin/PluginProcessor.h"
 #include "core/PluginScanProcess.h"
 #include "core/ScopedFileAccess.h"
+#include "ui/MagDrumLocalization.h"
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -93,6 +94,43 @@ int main(int argc, char** argv)
     const auto root = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumPluginSmokeTest");
     root.deleteRecursively();
     if (!root.createDirectory().wasOk()) return 1;
+
+    using magdrum::ui::Language;
+    struct LocalizationFixture
+    {
+        Language language;
+        std::array<const char*, 3> expected;
+    };
+    const std::array<LocalizationFixture, 8> localizedTabs{{
+        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest"}},
+        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst"}},
+        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte"}},
+        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta"}},
+        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först"}},
+        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først"}},
+        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først"}},
+        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin"}}
+    }};
+    for (const auto& [language, expected] : localizedTabs)
+    {
+        magdrum::ui::setLanguage(language, false);
+        const std::array<juce::String, 3> actual{
+            magdrum::ui::localisedText("DRUM MACHINE"),
+            magdrum::ui::localisedText("Sample Library"),
+            magdrum::ui::localisedText("Duration shortest")
+        };
+        for (size_t item = 0; item < actual.size(); ++item)
+        {
+            if (actual[item] != expected[item])
+            {
+                std::cerr << "Localization mismatch for " << magdrum::ui::languageName(language)
+                          << " item " << item << ": expected '" << expected[item]
+                          << "', got '" << actual[item] << "'.\n";
+                return 31;
+            }
+        }
+    }
+    magdrum::ui::setLanguage(Language::english, false);
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;

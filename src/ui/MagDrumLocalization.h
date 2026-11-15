@@ -11,7 +11,7 @@ enum class Language { english, german, french, spanish, swedish, norwegian, dani
 void initialiseMagDrumLocalization();
 Language currentLanguage();
 juce::ChangeBroadcaster& languageChangeBroadcaster();
-void setLanguage(Language language);
+void setLanguage(Language language, bool persistPreference = true);
 juce::String languageName(Language language);
 void showApplicationMenu(juce::Component& target, std::function<void()> onChanged = {});
 
