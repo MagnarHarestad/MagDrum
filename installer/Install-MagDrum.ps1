@@ -4,6 +4,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$cubaseProcesses = @(Get-Process -Name 'Cubase15', 'Cubase' -ErrorAction SilentlyContinue)
+if ($cubaseProcesses.Count -gt 0) {
+    $running = ($cubaseProcesses | ForEach-Object { "PID $($_.Id) $($_.ProcessName)" }) -join ', '
+    throw "Close Cubase completely before installing MagDrum. Detected running process(es): $running. A Cubase process may have no visible window."
+}
 $source = Join-Path $PSScriptRoot 'MagDrum.vst3'
 if (-not (Test-Path $source)) { throw 'MagDrum.vst3 was not found beside this installer.' }
 $pluginPrincipal = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()

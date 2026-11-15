@@ -86,6 +86,10 @@ $noteLines = @(
 if ($missingNames.Count -gt 0) {
     $noteLines += @('', 'Not included in this release:', ($missingNames | ForEach-Object { "- $_" }))
 }
+if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -contains 'MagDrum-Windows-ARM64.zip') {
+    $noteLines += @('', 'The Windows installer refuses to replace MagDrum while a Cubase process is running, including a hidden process without a visible window.')
+}
+
 if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
     $noteLines += @(
         '',
@@ -96,7 +100,7 @@ if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
 if ($includedNames -contains 'MagDrum-Linux-x64.tar.gz') {
     $noteLines += @(
         '',
-        'Linux x64 was built in WSL Ubuntu 24.04. Both CTest suites pass, the app and VST3 are x86-64, and linked dependencies resolve in WSL. A native Linux host smoke test remains pending.'
+        'Linux x64 was built and tested in WSL Ubuntu 24.04. CTest loads the byte-identical release VST3 through JUCE, scans MIDI notes 0-127 and confirms audible note 36. Ardour 8.4 also recognizes the package; interactive Ardour session and physical Linux audio-device tests remain pending.'
     )
 }
 $notesPath = Join-Path $env:TEMP ("MagDrum-$Tag-release-notes.txt")
