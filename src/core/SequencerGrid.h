@@ -59,6 +59,10 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
         return result;
 
     auto ordered = changes;
+    for (const auto& change : ordered)
+        if (!std::isfinite(change.positionBeats) || change.positionBeats < 0.0)
+            return result;
+
     std::stable_sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right)
     {
         return left.positionBeats < right.positionBeats;
@@ -67,8 +71,6 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
     effectiveChanges.reserve(ordered.size());
     for (const auto& change : ordered)
     {
-        if (!std::isfinite(change.positionBeats) || change.positionBeats < 0.0)
-            return result;
         if (!effectiveChanges.empty()
             && std::abs(effectiveChanges.back().positionBeats - change.positionBeats) <= gridBeatTolerance)
             effectiveChanges.back() = change;
@@ -87,7 +89,7 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
     double beat = 0.0;
     for (int bar = 0; bar < bars; ++bar)
     {
-    while (nextChange < effectiveChanges.size()
+        while (nextChange < effectiveChanges.size()
                && effectiveChanges[nextChange].positionBeats <= beat + gridBeatTolerance)
         {
             if (!isGridCompatible(effectiveChanges[nextChange]))
