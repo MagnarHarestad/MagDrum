@@ -370,6 +370,34 @@ private:
     juce::File rootFolder,dbPath;std::shared_ptr<std::atomic<bool>>cancelFlag;Completion onComplete;Progress onProgress;
 };
 
+class PluginMetadataFolderSyncJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(PortableMetadataSyncResult)>;
+    PluginMetadataFolderSyncJob(juce::File databaseFile, juce::File folder, Completion completion)
+        : ThreadPoolJob("MagDrum metadata folder sync"), dbPath(std::move(databaseFile)),
+          syncFolder(std::move(folder)), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        SampleDatabase database;
+        PortableMetadataSyncResult result;
+        if (!database.open(dbPath))
+            result.error = "Could not open the shared MagDrum sample database.";
+        else
+            result = database.syncPortableMetadataFolder(syncFolder);
+        juce::MessageManager::callAsync([completion = std::move(onComplete), result = std::move(result)]() mutable
+        {
+            if (completion) completion(std::move(result));
+        });
+        return jobHasFinished;
+    }
+
+private:
+    juce::File dbPath, syncFolder;
+    Completion onComplete;
+};
+
 class VstPluginNoteScanJob final : public juce::ThreadPoolJob
 {
 public:
@@ -993,7 +1021,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);scanWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2150,7 +2178,7 @@ void MagDrumAudioProcessorEditor::showLibraryTools()
 {
     juce::PopupMenu menu;menu.addItem(1,magdrum::ui::localisedText("Edit sample tags…"));
     juce::PopupMenu categories;const char* names[]{"Unknown","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};for(int i=0;i<12;++i)categories.addItem(100+i,magdrum::ui::localisedText(names[i]));menu.addSubMenu(magdrum::ui::localisedText("Set drum category"),categories);
-    menu.addSeparator();menu.addItem(2,magdrum::ui::localisedText("Find similar samples"));menu.addItem(3,magdrum::ui::localisedText("Find exact duplicates"));menu.addItem(4,magdrum::ui::localisedText("Find near duplicates"));menu.addItem(5,magdrum::ui::localisedText("Compare two selected waveforms"));menu.addSeparator();menu.addItem(6,magdrum::ui::localisedText("Scan history"));menu.addItem(7,magdrum::ui::localisedText("Export portable metadata…"));menu.addItem(8,magdrum::ui::localisedText("Import portable metadata…"));
+    menu.addSeparator();menu.addItem(2,magdrum::ui::localisedText("Find similar samples"));menu.addItem(3,magdrum::ui::localisedText("Find exact duplicates"));menu.addItem(4,magdrum::ui::localisedText("Find near duplicates"));menu.addItem(5,magdrum::ui::localisedText("Compare two selected waveforms"));menu.addSeparator();menu.addItem(6,magdrum::ui::localisedText("Scan history"));menu.addItem(7,magdrum::ui::localisedText("Export portable metadata…"));menu.addItem(8,magdrum::ui::localisedText("Import portable metadata…"));menu.addItem(9,magdrum::ui::localisedText("Sync metadata"));
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&libraryToolsButton),[safe](int result){if(safe!=nullptr)safe->handleLibraryTool(result);});
 }
 
@@ -2196,6 +2224,49 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
     {
         const bool exporting=action==7;chooser=std::make_unique<juce::FileChooser>(magdrum::ui::localisedText(exporting?"Export MagDrum metadata":"Import MagDrum metadata"),juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MagDrum-Metadata.json"),"*.json");juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
         chooser->launchAsync(exporting?(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles):(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles),[safe,exporting](const juce::FileChooser& fc){if(safe==nullptr)return;auto target=fc.getResult();if(target==juce::File())return;if(exporting){const auto json=juce::JSON::toString(safe->database.exportPortableMetadata(),true);if(target.getFileExtension().isEmpty())target=target.withFileExtension(".json");const bool saved=target.replaceWithText(json);safe->status.setText(magdrum::ui::localisedText(saved?"Portable metadata exported.":"Could not write metadata archive."),juce::dontSendNotification);}else{const auto archive=juce::JSON::parse(target.loadFileAsString());if(archive.isVoid()){safe->status.setText(magdrum::ui::localisedText("The metadata archive is not valid JSON."),juce::dontSendNotification);return;}const auto merged=safe->database.mergePortableMetadata(archive);safe->refreshSamples();auto message=magdrum::ui::localisedText(merged.ok?"Metadata imported: {tags} tags added, {profiles} mapping profiles added.":"Metadata import failed: {error}");message=message.replace("{tags}",juce::String(merged.tagsAdded)).replace("{profiles}",juce::String(merged.profilesAdded)).replace("{error}",merged.error);safe->status.setText(message,juce::dontSendNotification);}});return;
+    }
+    if(action==9)
+    {
+        if(!databaseReady||databaseFile==juce::File()){status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),juce::dontSendNotification);return;}
+        if(metadataSyncRunning){status.setText(magdrum::ui::localisedText("Sync metadata"),juce::dontSendNotification);return;}
+        chooser=std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Choose a folder for metadata sync"),juce::File::getSpecialLocation(juce::File::userDocumentsDirectory));
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectDirectories,[safe](const juce::FileChooser& fc)
+        {
+            if(safe==nullptr)return;
+            const auto folder=fc.getResult();if(folder==juce::File())return;
+            if(safe->metadataSyncRunning)return;
+            safe->metadataSyncRunning=true;safe->status.setText(magdrum::ui::localisedText("Sync metadata"),juce::dontSendNotification);
+            safe->metadataSyncWorkers.addJob(new PluginMetadataFolderSyncJob(safe->databaseFile,folder,[safe](PortableMetadataSyncResult result)
+            {
+                if(safe!=nullptr)safe->finishMetadataFolderSync(result);
+            }),true);
+        });
+        return;
+    }
+}
+
+void MagDrumAudioProcessorEditor::finishMetadataFolderSync(const PortableMetadataSyncResult& result)
+{
+    metadataSyncRunning=false;
+    if(!result.ok)
+    {
+        const auto error=result.metadataMerged?magdrum::ui::localisedText("Metadata merged, but the device snapshot could not be saved. Check folder permissions and sync again."):magdrum::ui::localisedText("Metadata folder sync failed. Check the folder and try again.");
+        status.setText(error,juce::dontSendNotification);
+        return;
+    }
+    refreshSamples();
+    auto message=magdrum::ui::localisedText("Metadata sync saved. Merged {devices} other device(s); {matched} sample matches, {unavailable} unavailable, {tags} new tags, {profiles} new profiles.");
+    message=message.replace("{devices}",juce::String(result.archivesMerged)).replace("{matched}",juce::String(result.samplesMatched)).replace("{unavailable}",juce::String(result.samplesUnavailable)).replace("{tags}",juce::String(result.tagsAdded)).replace("{profiles}",juce::String(result.profilesAdded));
+    status.setText(message,juce::dontSendNotification);
+    if(result.categoryConflicts>0||result.profileConflicts>0||result.samplesUnavailable>0)
+    {
+        juce::String report;
+        if(result.categoryConflicts>0)report+=magdrum::ui::localisedText("Manual-category conflicts preserved: {count}").replace("{count}",juce::String(result.categoryConflicts))+"\n";
+        if(result.profileConflicts>0)report+=magdrum::ui::localisedText("Mapping-profile conflicts preserved: {count}").replace("{count}",juce::String(result.profileConflicts))+"\n";
+        if(result.samplesUnavailable>0)report+=magdrum::ui::localisedText("Sample identities not found on this device: {count}").replace("{count}",juce::String(result.samplesUnavailable))+"\n";
+        report+=magdrum::ui::localisedText("Conflicting local values were not overwritten. No audio files or plugin states were imported.");
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Metadata import report"),report,magdrum::ui::localisedText("Close"));
     }
 }
 

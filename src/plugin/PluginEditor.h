@@ -101,6 +101,7 @@ private:
     void finishPluginNoteScan(int saved, int sounding, int silent, int failures, bool cancelled, const juce::String& error, const juce::String& summary);
     void showLibraryTools();
     void handleLibraryTool(int);
+    void finishMetadataFolderSync(const PortableMetadataSyncResult&);
     void applyLanguage();
     juce::File selectedSample() const;
 
@@ -120,6 +121,8 @@ private:
     std::int64_t defaultLibraryErrorCount = 0;
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
+    juce::ThreadPool metadataSyncWorkers{1};
+    bool metadataSyncRunning = false;
     juce::ThreadPool pluginScanWorkers{1};
     std::atomic<bool> pluginScanCancellation{false};
     bool pluginScanRunning = false;

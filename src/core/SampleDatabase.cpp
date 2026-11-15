@@ -268,6 +268,10 @@ bool SampleDatabase::open(const juce::File& file)
             return false;
         }
     }
+    if (sqlite3_exec(connection,
+                     "CREATE TABLE IF NOT EXISTS metadata_sync_state(key TEXT PRIMARY KEY,value TEXT NOT NULL); UPDATE schema_info SET version=max(version,18) WHERE singleton=1",
+                     nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
     sqlite3_stmt* roots = nullptr;
     if (sqlite3_prepare_v2(connection, "SELECT root_path FROM sample_scan_history GROUP BY root_path ORDER BY length(root_path)", -1, &roots, nullptr) == SQLITE_OK)
     {
@@ -1463,7 +1467,8 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
         incomingProfiles.emplace_back(nameValue.toString().trim(), *profile);
     }
 
-    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+    const bool ownsTransaction = sqlite3_get_autocommit(connection) != 0;
+    if (ownsTransaction && sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
     { result.error = "Could not start the metadata import transaction."; return result; }
     bool ok = true;
     sqlite3_stmt* findSamples = nullptr;
@@ -1488,7 +1493,7 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
     {
         for (auto* statement : {findSamples, updateCategory, insertTag, findProfile, insertProfile, insertMapping})
             if (statement != nullptr) sqlite3_finalize(statement);
-        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        if (ownsTransaction) sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
         result.error = "Could not prepare the metadata import transaction.";
         return result;
     }
@@ -1568,9 +1573,162 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
 
     for (auto* statement : {findSamples, updateCategory, insertTag, findProfile, insertProfile, insertMapping})
         if (statement != nullptr) sqlite3_finalize(statement);
-    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    const int transactionResult = ownsTransaction
+        ? sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr)
+        : SQLITE_OK;
     result.ok = ok && transactionResult == SQLITE_OK;
     if (!result.ok) result.error = "Metadata import failed; no changes were committed.";
+    return result;
+}
+
+PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce::File& folder)
+{
+    PortableMetadataSyncResult result;
+    if (connection == nullptr || !folder.isDirectory())
+    {
+        result.error = "Choose an existing synchronized folder.";
+        return result;
+    }
+
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        result.error = "Could not read this device's metadata sync identity.";
+        return result;
+    }
+    sqlite3_stmt* deviceQuery = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT value FROM metadata_sync_state WHERE key='device_id'", -1, &deviceQuery, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(deviceQuery) == SQLITE_ROW)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(deviceQuery, 0));
+            if (value != nullptr) result.deviceId = juce::String::fromUTF8(value);
+        }
+        sqlite3_finalize(deviceQuery);
+    }
+    if (result.deviceId.isEmpty())
+    {
+        result.deviceId = juce::Uuid().toString().removeCharacters("{}").replace("-", "");
+        sqlite3_stmt* deviceInsert = nullptr;
+        if (sqlite3_prepare_v2(connection, "INSERT INTO metadata_sync_state(key,value) VALUES('device_id',?)", -1, &deviceInsert, nullptr) != SQLITE_OK)
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            result.error = "Could not save this device's metadata sync identity.";
+            return result;
+        }
+        sqlite3_bind_text(deviceInsert, 1, result.deviceId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        const bool saved = sqlite3_step(deviceInsert) == SQLITE_DONE;
+        sqlite3_finalize(deviceInsert);
+        if (!saved)
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            result.error = "Could not save this device's metadata sync identity.";
+            return result;
+        }
+    }
+    if (sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not save this device's metadata sync identity.";
+        return result;
+    }
+
+    auto archives = folder.findChildFiles(juce::File::findFiles, false, "MagDrum-sync-*.json");
+    if (archives.size() > 128)
+    {
+        result.error = "The synchronized folder contains more than 128 MagDrum device archives.";
+        return result;
+    }
+
+    std::int64_t totalArchiveBytes = 0;
+    std::vector<juce::var> incomingArchives;
+    for (const auto& archiveFile : archives)
+    {
+        const auto archiveBytes = archiveFile.getSize();
+        if (archiveBytes < 0 || archiveBytes > 128LL * 1024 * 1024
+            || totalArchiveBytes > 256LL * 1024 * 1024 - archiveBytes)
+        {
+            result.error = "The synchronized metadata archives exceed the per-file or 256 MB total safety limit.";
+            return result;
+        }
+        totalArchiveBytes += archiveBytes;
+
+        const auto archive = juce::JSON::parse(archiveFile.loadFileAsString());
+        if (!archive.isObject()
+            || archive.getProperty("format", {}).toString() != "com.magdrum.library-metadata"
+            || !archive.getProperty("device_id", {}).isString()
+            || static_cast<int>(archive.getProperty("version", {})) != 1)
+        {
+            result.error = "A synchronized device archive is invalid or incomplete.";
+            return result;
+        }
+
+        if (archive.getProperty("device_id", {}).toString() == result.deviceId)
+            continue;
+        incomingArchives.push_back(archive);
+    }
+
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        result.error = "Could not start the metadata sync transaction.";
+        return result;
+    }
+    for (const auto& archive : incomingArchives)
+    {
+        const auto merged = mergePortableMetadata(archive);
+        if (!merged.ok)
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            result.archivesMerged = 0;
+            result.samplesMatched = 0;
+            result.samplesUnavailable = 0;
+            result.tagsAdded = 0;
+            result.categoryConflicts = 0;
+            result.profilesAdded = 0;
+            result.profileConflicts = 0;
+            result.error = merged.error;
+            return result;
+        }
+
+        ++result.archivesMerged;
+        result.samplesMatched += merged.samplesMatched;
+        result.samplesUnavailable += merged.samplesUnavailable;
+        result.tagsAdded += merged.tagsAdded;
+        result.categoryConflicts += merged.categoryConflicts;
+        result.profilesAdded += merged.profilesAdded;
+        result.profileConflicts += merged.profileConflicts;
+    }
+
+    auto snapshot = exportPortableMetadata();
+    if (!snapshot.isObject())
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not create this device's metadata snapshot.";
+        return result;
+    }
+    snapshot.getDynamicObject()->setProperty("device_id", result.deviceId);
+    snapshot.getDynamicObject()->setProperty("created_utc", juce::Time::getCurrentTime().toISO8601(true));
+    const auto ownArchive = folder.getChildFile("MagDrum-sync-" + result.deviceId + ".json");
+    juce::TemporaryFile stagedSnapshot(ownArchive);
+    if (!stagedSnapshot.getFile().replaceWithText(juce::JSON::toString(snapshot, true)))
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not write this device's metadata snapshot to the synchronized folder.";
+        return result;
+    }
+    if (sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not commit the metadata sync transaction.";
+        return result;
+    }
+    result.metadataMerged = true;
+    if (!stagedSnapshot.overwriteTargetFileWithTemporary())
+    {
+        result.error = "Metadata was merged, but the new device snapshot could not replace its previous file. Sync again after checking folder permissions.";
+        return result;
+    }
+
+    result.ok = true;
     return result;
 }
 

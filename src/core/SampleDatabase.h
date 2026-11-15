@@ -116,6 +116,13 @@ struct PortableMetadataMergeResult
     juce::String error;
 };
 
+struct PortableMetadataSyncResult : PortableMetadataMergeResult
+{
+    bool metadataMerged = false;
+    int archivesMerged = 0;
+    juce::String deviceId;
+};
+
 class SampleDatabase
 {
 public:
@@ -181,6 +188,7 @@ public:
     juce::StringArray getMappingProfileNames() const;
     juce::var exportPortableMetadata() const;
     PortableMetadataMergeResult mergePortableMetadata(const juce::var& archive);
+    PortableMetadataSyncResult syncPortableMetadataFolder(const juce::File& folder);
     juce::Array<juce::File> getAllPaths() const;
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;
