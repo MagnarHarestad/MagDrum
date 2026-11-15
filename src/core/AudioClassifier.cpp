@@ -8,6 +8,48 @@
 
 namespace
 {
+juce::String drumCategoryForFolder(juce::String folderName)
+{
+    constexpr char separators[] = "-_.,;()[]{}+";
+    folderName = folderName.toLowerCase();
+    for (const auto* separator = separators; *separator != '\0'; ++separator)
+        folderName = folderName.replaceCharacter(*separator, ' ');
+    folderName = folderName.trim();
+    while (folderName.contains("  ")) folderName = folderName.replace("  ", " ");
+
+    static const std::array<std::pair<const char*, const char*>, 47> aliases{{
+        {"kick", "Kick"}, {"kicks", "Kick"}, {"bass drum", "Kick"}, {"bass drums", "Kick"},
+        {"bassdrum", "Kick"}, {"bassdrums", "Kick"}, {"bd", "Kick"},
+        {"snare", "Snare"}, {"snares", "Snare"}, {"snr", "Snare"}, {"sd", "Snare"},
+        {"closed hat", "Closed hi-hat"}, {"closed hats", "Closed hi-hat"},
+        {"closed hihat", "Closed hi-hat"}, {"closed hihats", "Closed hi-hat"},
+        {"closed hi hat", "Closed hi-hat"}, {"closed hi hats", "Closed hi-hat"},
+        {"chh", "Closed hi-hat"}, {"hhc", "Closed hi-hat"},
+        {"open hat", "Open hi-hat"}, {"open hats", "Open hi-hat"},
+        {"open hihat", "Open hi-hat"}, {"open hihats", "Open hi-hat"},
+        {"open hi hat", "Open hi-hat"}, {"open hi hats", "Open hi-hat"},
+        {"ohh", "Open hi-hat"}, {"hho", "Open hi-hat"},
+        {"pedal hat", "Pedal hi-hat"}, {"pedal hats", "Pedal hi-hat"},
+        {"pedal hihat", "Pedal hi-hat"}, {"pedal hihats", "Pedal hi-hat"},
+        {"pedal hi hat", "Pedal hi-hat"}, {"pedal hi hats", "Pedal hi-hat"},
+        {"foot hat", "Pedal hi-hat"}, {"foot hats", "Pedal hi-hat"},
+        {"phh", "Pedal hi-hat"}, {"hhp", "Pedal hi-hat"},
+        {"clap", "Clap"}, {"claps", "Clap"}, {"handclap", "Clap"}, {"handclaps", "Clap"},
+        {"tom", "Tom"}, {"toms", "Tom"}, {"floor tom", "Tom"}, {"rack tom", "Tom"},
+        {"ride", "Ride"}, {"rides", "Ride"}
+    }};
+    for (const auto& [alias, category] : aliases)
+        if (folderName == alias) return category;
+
+    if (folderName == "rimshot" || folderName == "rimshots" || folderName == "side stick" || folderName == "side sticks") return "Rimshot";
+    if (folderName == "crash" || folderName == "crashes" || folderName == "crash cymbal" || folderName == "crash cymbals") return "Crash";
+    if (folderName == "percussion" || folderName == "percussions" || folderName == "perc" || folderName == "percs"
+        || folderName == "conga" || folderName == "congas" || folderName == "bongo" || folderName == "bongos"
+        || folderName == "cowbell" || folderName == "shaker" || folderName == "tambourine") return "Percussion";
+    if (folderName == "ride cymbal" || folderName == "ride cymbals") return "Ride";
+    return {};
+}
+
 class HeuristicDrumClassificationModel final : public DrumClassificationModel
 {
 public:
@@ -106,13 +148,30 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"crash", "crash cymbal"})) namedCategories.add("Crash");
     if (has({"percussion", "conga", "bongo", "cowbell", "shaker", "tambourine"})) namedCategories.add("Percussion");
 
+    bool categoryFromFolder = false;
+    auto folder = sample.file.getParentDirectory();
+    for (int depth = 0; depth < 5 && folder.getFileName().isNotEmpty(); ++depth)
+    {
+        const auto folderCategory = drumCategoryForFolder(folder.getFileName());
+        if (folderCategory.isNotEmpty())
+        {
+            if (!namedCategories.contains(folderCategory)) namedCategories.add(folderCategory);
+            categoryFromFolder = true;
+            break;
+        }
+        const auto parent = folder.getParentDirectory();
+        if (parent == folder) break;
+        folder = parent;
+    }
+
     if (namedCategories.contains("Rimshot") && namedCategories.contains("Snare"))
         namedCategories.removeString("Snare");
 
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        out.confidence = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"}) ? 0.92 : 0.82;
+        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"});
+        out.confidence = categoryFromFolder ? (filenameCategoryCue ? 0.97 : 0.84) : (filenameCategoryCue ? 0.92 : 0.82);
         return out;
     }
     if (namedCategories.size() > 1)

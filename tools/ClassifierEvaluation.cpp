@@ -392,8 +392,11 @@ int main(int argc, char** argv)
             return true;
         }
 
-        withFilenameCues.add(expected.toStdString(), classifier.classify(sample));
-        auto anonymousSample = sample;
+        // Keep category-folder labels out of both classification inputs.
+        auto filenameOnlySample = sample;
+        filenameOnlySample.file = juce::File(sample.file.getFileName());
+        withFilenameCues.add(expected.toStdString(), classifier.classify(filenameOnlySample));
+        auto anonymousSample = filenameOnlySample;
         anonymousSample.file = juce::File("anonymous-audio.wav");
         withoutFilenameCues.add(expected.toStdString(), classifier.classify(anonymousSample));
         labeledSamples.push_back({ sample, expected.toStdString() });

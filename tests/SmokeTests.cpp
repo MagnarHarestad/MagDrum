@@ -578,6 +578,9 @@ int runSmokeTests(int argc,char** argv)
     for(const auto& [filename,category] : drumAliases){filenameOnly.file=juce::File(filename);if(AudioClassifier{}.classify(filenameOnly).category!=category)return 197;}
     filenameOnly.file=juce::File("pride.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 142;
     filenameOnly.file=juce::File("sidekick.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 143;
+    auto folderNamedSample=kickLike;folderNamedSample.file=juce::File("Library/KitA/Kicks/Layer 01/sample.wav");const auto folderKickPrediction=AudioClassifier{}.classify(folderNamedSample);if(folderKickPrediction.category!="Kick"||std::abs(folderKickPrediction.confidence-0.84)>1.0e-9)return 252;
+    folderNamedSample.file=juce::File("percussion/loop 01.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Percussion")return 253;
+    folderNamedSample.file=juce::File("Snare/Kick.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Unknown")return 254;
     ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");
     if(AudioClassifier{}.classify(ambiguousName).category!="Unknown")return 65;
     const AudioClassifier modelClassifier(std::make_shared<FixtureClassificationModel>());
