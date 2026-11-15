@@ -4,11 +4,14 @@
 #include "core/WavScanner.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -171,10 +174,62 @@ juce::String labelForSample(const juce::File& file, const juce::File& root)
 
 void printUsage()
 {
-    std::cout << "Usage: MagDrumClassifierEvaluation <labeled-root>\n"
+    std::cout << "Usage: MagDrumClassifierEvaluation <labeled-root> [--feature-summary]\n"
                  "Place samples under category folders such as kicks/, snares/, claps/,\n"
                  "hi-hats/, open-hats/, toms/, rides/, crashes/ or percs/. Unrecognized\n"
-                 "folders are skipped. Reports are local only; audio files are not copied.\n";
+                 "folders are skipped. --feature-summary prints per-category median and\n"
+                 "interquartile ranges to help diagnose acoustic feature overlap. Reports\n"
+                 "are local only; audio files are not copied.\n";
+}
+
+double quantile(std::vector<double> values, double fraction)
+{
+    if (values.empty()) return 0.0;
+    std::sort(values.begin(), values.end());
+    const auto position = fraction * static_cast<double>(values.size() - 1);
+    const auto lower = static_cast<std::size_t>(position);
+    const auto upper = std::min(values.size() - 1, lower + 1);
+    const auto blend = position - static_cast<double>(lower);
+    return values[lower] * (1.0 - blend) + values[upper] * blend;
+}
+
+void printFeatureSummary(const std::vector<LabeledSample>& samples)
+{
+    std::map<std::string, std::vector<const ScannedSample*>> byCategory;
+    for (const auto& labeled : samples)
+        byCategory[labeled.label].push_back(&labeled.sample);
+
+    const auto range = [](const std::vector<const ScannedSample*>& group, auto select)
+    {
+        std::vector<double> values;
+        values.reserve(group.size());
+        for (const auto* sample : group)
+        {
+            const auto value = select(*sample);
+            if (std::isfinite(value)) values.push_back(value);
+        }
+        if (values.empty()) return std::string("n/a");
+        std::ostringstream output;
+        output << std::fixed << std::setprecision(2)
+               << quantile(values, 0.50) << " [" << quantile(values, 0.25)
+               << "–" << quantile(values, 0.75) << ']';
+        return output.str();
+    };
+
+    std::cout << "\nAcoustic feature summary (median [25th–75th percentile])\n"
+                 "Values are dataset diagnostics, not classification thresholds.\n"
+                 "Class | Duration (s) | Centroid (Hz) | Flatness | Transient/RMS | Attacks | Pitch (Hz) | Pitch confidence\n";
+    for (const auto& [category, group] : byCategory)
+    {
+        std::cout << category << " | "
+                  << range(group, [](const auto& s) { return s.durationSeconds; }) << " | "
+                  << range(group, [](const auto& s) { return s.spectralCentroidHz; }) << " | "
+                  << range(group, [](const auto& s) { return s.spectralFlatness; }) << " | "
+                  << range(group, [](const auto& s) { return s.transientStrength / juce::jmax(s.rms, 0.00001); }) << " | "
+                  << range(group, [](const auto& s) { return static_cast<double>(s.transientCount); }) << " | "
+                  << range(group, [](const auto& s) { return s.pitchConfidence >= 0.35 ? s.fundamentalHz : std::numeric_limits<double>::quiet_NaN(); }) << " | "
+                  << range(group, [](const auto& s) { return s.pitchConfidence; }) << '\n';
+    }
 }
 
 bool evaluatePerceptualCandidates(const std::vector<LabeledSample>& samples)
@@ -307,7 +362,8 @@ void evaluateManualExampleModel(const std::vector<LabeledSample>& samples, bool 
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    const bool showFeatureSummary = argc == 3 && std::string(argv[2]) == "--feature-summary";
+    if (argc < 2 || argc > 3 || (argc == 3 && !showFeatureSummary))
     {
         printUsage();
         return 2;
@@ -352,6 +408,7 @@ int main(int argc, char** argv)
               << "Metrics are for this dataset only. Confidence values are not calibrated.\n";
     withFilenameCues.print("Filename and audio features");
     withoutFilenameCues.print("Audio features only (filename hidden)");
+    if (showFeatureSummary) printFeatureSummary(labeledSamples);
     evaluateManualExampleModel(labeledSamples, false);
     std::set<std::string> labeledKits;
     for (const auto& sample : labeledSamples)
