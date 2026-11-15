@@ -77,6 +77,15 @@ double renderPeakInRange(MagDrumAudioProcessor& processor, int note, int velocit
 }
 }
 
+class MagDrumAudioProcessorTestAccess
+{
+public:
+    static juce::CriticalSection& sampleLock(MagDrumAudioProcessor& processor)
+    {
+        return processor.sampleLock;
+    }
+};
+
 int main(int argc, char** argv)
 {
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-plugin-scan-worker") == 0)
@@ -97,6 +106,22 @@ int main(int argc, char** argv)
         juce::AudioProcessor::copyXmlToBinary(hostedState, state);
         return !state.isEmpty() && juce::File(argv[3]).replaceWithData(state.getData(), state.getSize()) ? 0 : 203;
     }
+
+    magdrum::plugin::DeferredNoteTriggers deferredTriggers;
+    if (!deferredTriggers.push(36, 96) || !deferredTriggers.push(38, 110)
+        || deferredTriggers.size() != 2) return 204;
+    std::array<magdrum::plugin::DeferredNoteTrigger, 2> drainedTriggers{};
+    size_t drainedCount = 0;
+    deferredTriggers.drain([&](const auto& trigger)
+    {
+        drainedTriggers[drainedCount++] = trigger;
+    });
+    if (drainedCount != 2 || drainedTriggers[0].midiNote != 36 || drainedTriggers[0].velocity != 96
+        || drainedTriggers[1].midiNote != 38 || drainedTriggers[1].velocity != 110
+        || deferredTriggers.size() != 0) return 205;
+    for (size_t index = 0; index < magdrum::plugin::DeferredNoteTriggers::capacity; ++index)
+        if (!deferredTriggers.push(36, 100)) return 206;
+    if (deferredTriggers.push(40, 100) || deferredTriggers.getOverflowCount() != 1) return 207;
 
     const auto root = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumPluginSmokeTest");
     root.deleteRecursively();
@@ -150,6 +175,45 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+
+    MagDrumAudioProcessor contendedSampleUpdate;
+    if (!contendedSampleUpdate.loadSampleForNote(36, sample)) return 208;
+    contendedSampleUpdate.prepareToPlay(48000.0, 128);
+    auto& sampleLock = MagDrumAudioProcessorTestAccess::sampleLock(contendedSampleUpdate);
+    std::atomic<bool> sampleLockHeld{false}, releaseSampleLock{false};
+    std::thread sampleUpdate([&]
+    {
+        sampleLock.enter();
+        sampleLockHeld.store(true, std::memory_order_release);
+        while (!releaseSampleLock.load(std::memory_order_acquire))
+            std::this_thread::yield();
+        sampleLock.exit();
+    });
+    while (!sampleLockHeld.load(std::memory_order_acquire))
+        std::this_thread::yield();
+
+    juce::AudioBuffer<float> contendedAudio(2, 128);
+    juce::MidiBuffer contendedMidi;
+    contendedMidi.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0);
+    contendedSampleUpdate.processBlock(contendedAudio, contendedMidi);
+    double contendedPeak = 0.0;
+    for (int channel = 0; channel < contendedAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < contendedAudio.getNumSamples(); ++sampleIndex)
+            contendedPeak = juce::jmax(contendedPeak,
+                std::abs(static_cast<double>(contendedAudio.getSample(channel, sampleIndex))));
+    releaseSampleLock.store(true, std::memory_order_release);
+    sampleUpdate.join();
+    if (!contendedMidi.isEmpty() || contendedPeak != 0.0) return 209;
+
+    juce::AudioBuffer<float> deferredAudio(2, 128);
+    juce::MidiBuffer noDeferredMidi;
+    contendedSampleUpdate.processBlock(deferredAudio, noDeferredMidi);
+    double deferredPeak = 0.0;
+    for (int channel = 0; channel < deferredAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < deferredAudio.getNumSamples(); ++sampleIndex)
+            deferredPeak = juce::jmax(deferredPeak,
+                std::abs(static_cast<double>(deferredAudio.getSample(channel, sampleIndex))));
+    if (deferredPeak < 0.05) return 210;
 
     juce::AudioFormatManager fixtureFormats;
     fixtureFormats.registerBasicFormats();

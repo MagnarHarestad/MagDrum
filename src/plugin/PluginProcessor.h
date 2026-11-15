@@ -3,10 +3,13 @@
 #include "../core/DrumEvent.h"
 #include "../core/MidiMapping.h"
 #include "../core/SequencerPlayback.h"
+#include "DeferredNoteTriggers.h"
 #include <array>
 #include <atomic>
 #include <memory>
 #include <vector>
+
+class MagDrumAudioProcessorTestAccess;
 
 class MagDrumAudioProcessor final : public juce::AudioProcessor
 {
@@ -65,6 +68,8 @@ public:
     std::unique_ptr<juce::XmlElement> getPluginEditorState() const;
 
 private:
+    friend class MagDrumAudioProcessorTestAccess;
+
     struct SampleData
     {
         juce::AudioBuffer<float> audio;
@@ -93,6 +98,7 @@ private:
     };
     juce::AbstractFifo pendingTriggerFifo{pendingTriggerCapacity};
     std::array<PendingNoteTrigger, pendingTriggerCapacity> pendingTriggers{};
+    magdrum::plugin::DeferredNoteTriggers deferredNoteTriggers;
     double outputSampleRate = 44100.0;
     juce::AudioFormatManager formats;
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};

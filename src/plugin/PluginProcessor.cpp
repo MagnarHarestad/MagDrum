@@ -67,6 +67,7 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
     sample->audio.setSize(channels, sampleCount);
     if (!reader->read(sample->audio.getArrayOfWritePointers(), channels, 0, sampleCount)) return false;
 
+    std::unique_ptr<SampleData> retiredSample;
     {
         const juce::ScopedLock sampleGuard(sampleLock);
         const juce::ScopedLock stateGuard(stateLock);
@@ -102,6 +103,7 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
             for (auto& voice : voices)
                 if (voice.sample == oldPointer)
                     voice = {};
+        retiredSample = std::move(oldSample);
         oldSample = std::move(sample);
         sampleSlots[static_cast<size_t>(note)][static_cast<size_t>(targetLayer)].store(oldSample.get(), std::memory_order_release);
         samplePaths[static_cast<size_t>(note)][static_cast<size_t>(targetLayer)] = file.getFullPathName();
@@ -114,6 +116,7 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     if (note < 0 || note > 127)
         return false;
     bool removedAny = false;
+    std::array<std::unique_ptr<SampleData>, maxVelocityLayers> retiredSamples;
     const juce::ScopedLock sampleGuard(sampleLock);
     const juce::ScopedLock stateGuard(stateLock);
     for (int layer = 0; layer < maxVelocityLayers; ++layer)
@@ -128,7 +131,7 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
                     voice = {};
         }
         sampleSlots[static_cast<size_t>(note)][static_cast<size_t>(layer)].store(nullptr, std::memory_order_release);
-        owned.reset();
+        retiredSamples[static_cast<size_t>(layer)] = std::move(owned);
     }
     for (auto& path : samplePaths[static_cast<size_t>(note)])
         path.clear();
@@ -146,10 +149,12 @@ bool MagDrumAudioProcessor::previewSample(const juce::File& file)
     sample->sampleRate = reader->sampleRate;
     sample->audio.setSize(static_cast<int>(juce::jmin(2u, reader->numChannels)), static_cast<int>(reader->lengthInSamples));
     if (!reader->read(sample->audio.getArrayOfWritePointers(), sample->audio.getNumChannels(), 0, sample->audio.getNumSamples())) return false;
+    std::unique_ptr<SampleData> retiredPreview;
     const juce::ScopedLock lock(sampleLock);
     const auto* old = previewData.get();
     if (old != nullptr)
         for (auto& voice : voices) if (voice.sample == old) voice = {};
+    retiredPreview = std::move(previewData);
     previewData = std::move(sample);
     auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
     voice = {previewData.get(), 0.0, 0.85f, 1.0f, 1.0f, 1.0, true};
@@ -323,7 +328,48 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         && std::isfinite(*hostPpq) && std::isfinite(*hostTempo) && *hostTempo > 0.0;
     const bool hostSynced = sequencerPlaybackEnabled.load(std::memory_order_acquire) && hostHasSequencerTime;
     sequencerHostSynchronized.store(hostSynced, std::memory_order_release);
-    if (!sampleLock.tryEnter()) { midi.clear(); return; }
+    if (!sampleLock.tryEnter())
+    {
+        bool sequencerLockHeld = hostSynced && sequencerPatternLock.tryEnter();
+        std::optional<magdrum::sequencer::HostPlaybackCursor> deferredSequencerCursor;
+        if (sequencerLockHeld && sequencerPatternLengthBeats > 0.0 && !sequencerPlaybackEvents.empty())
+            deferredSequencerCursor.emplace(sequencerPlaybackEvents, sequencerPatternLengthBeats,
+                                            *hostPpq, *hostTempo, outputSampleRate);
+        else if (sequencerLockHeld)
+        {
+            sequencerPatternLock.exit();
+            sequencerLockHeld = false;
+        }
+
+        auto midiIterator = midi.cbegin();
+        const auto midiEnd = midi.cend();
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            if (deferredSequencerCursor)
+                deferredSequencerCursor->triggerAtSample([this](const auto& event)
+                {
+                    deferredNoteTriggers.push(event.midiNote, event.velocity);
+                });
+
+            while (midiIterator != midiEnd && (*midiIterator).samplePosition <= sample)
+            {
+                const auto message = (*midiIterator).getMessage();
+                if (message.isNoteOn())
+                {
+                    const int note = message.getNoteNumber();
+                    const int velocity = juce::jlimit(1, 127,
+                        static_cast<int>(std::lround(message.getFloatVelocity() * 127.0f)));
+                    if (juce::isPositiveAndBelow(note, 128))
+                        deferredNoteTriggers.push(note, velocity);
+                }
+                ++midiIterator;
+            }
+        }
+        if (sequencerLockHeld)
+            sequencerPatternLock.exit();
+        midi.clear();
+        return;
+    }
     struct CallbackUnlock { juce::CriticalSection& lock; ~CallbackUnlock() { lock.exit(); } } unlock{sampleLock};
 
     const bool hasSequencerPatternLock = hostSynced && sequencerPatternLock.tryEnter();
@@ -339,6 +385,11 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     if (scheduleHostSequencer)
         sequencerCursor.emplace(sequencerPlaybackEvents, sequencerPatternLengthBeats,
                                 *hostPpq, *hostTempo, outputSampleRate);
+
+    deferredNoteTriggers.drain([this](const auto& trigger)
+    {
+        startNoteVoice(trigger.midiNote, trigger.velocity);
+    });
 
     int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     pendingTriggerFifo.prepareToRead(pendingTriggerCapacity, start1, size1, start2, size2);
