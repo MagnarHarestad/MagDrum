@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MagDrum VERSION 0.1.1 LANGUAGES C CXX)
+project(MagDrum VERSION 0.1.2 LANGUAGES C CXX)
 if(POLICY CMP0135)
  cmake_policy(SET CMP0135 NEW)
 endif()
