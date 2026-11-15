@@ -1,6 +1,3 @@
 # MagDrum local test packages
 
 Release [v0.1.1-test.133](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.133) contains Windows x64 and Linux x64 packages with standalone metadata and sequencer status messages translated in all seven non-English catalogs. Both Release CTest suites passed on each platform (2/2). Windows x64 SHA-256: 4ecd5696a75d381b9c572b55ed8f00c9d48b2c9a263bd0773365df0ef9397c04. Linux x64 SHA-256: 280d9a80d1f318be107f1b9c9f031a151f97bacecf8aa5425481b6df2c6c5bb9. Windows release v0.1.1-test.131 remains installed in the standard system VST3 folder; the previous bundle is preserved outside Cubase scan paths. Cubase still has a background process, so rescan/manual validation remain pending.
-
-Windows x64 SHA-256: `747e9de6b6fcf101b75148f0151141bff5129c46a10396f3daaa1f98464a710a`
-Linux x64 SHA-256: `fd0784e02e08675154edee8371b1b78b0e7bdd59d30e3b5770dfe1c60f76d0a5`
