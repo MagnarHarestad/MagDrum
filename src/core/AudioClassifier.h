@@ -29,6 +29,7 @@ public:
     std::size_t trainingExampleCount() const { return examples.size(); }
 private:
     std::vector<ScannedSample> examples;
+    double acousticFingerprintWeight = 0.1;
 };
 
 // Conservative deterministic baseline. Scores are heuristic, never guarantees.

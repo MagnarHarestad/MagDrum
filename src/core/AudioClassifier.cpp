@@ -175,7 +175,7 @@ std::array<double, 7> normalizedFeatures(const ScannedSample& sample)
     };
 }
 
-double featureDistance(const ScannedSample& left, const ScannedSample& right)
+double featureDistance(const ScannedSample& left, const ScannedSample& right, double acousticWeight)
 {
     const auto a = normalizedFeatures(left);
     const auto b = normalizedFeatures(right);
@@ -254,56 +254,40 @@ double featureDistance(const ScannedSample& left, const ScannedSample& right)
     };
 
     const auto spectrumDistance = fingerprintDistance(left, right);
-    return spectrumDistance >= 0.0 ? scalarDistance * 0.9 + spectrumDistance * 0.1 : scalarDistance;
-}
+    const auto boundedAcousticWeight = juce::jlimit(0.0, 1.0, acousticWeight);
+    return spectrumDistance >= 0.0
+        ? scalarDistance * (1.0 - boundedAcousticWeight) + spectrumDistance * boundedAcousticWeight
+        : scalarDistance;
 }
 
-AudioClassifier::AudioClassifier() : classificationModel(std::make_shared<HeuristicDrumClassificationModel>())
+const juce::StringArray& supportedExampleCategories()
 {
+    static const juce::StringArray categories{
+        "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat", "Clap",
+        "Tom", "Rimshot", "Ride", "Crash", "Percussion"
+    };
+    return categories;
 }
 
-AudioClassifier::AudioClassifier(std::shared_ptr<const DrumClassificationModel> model)
-    : classificationModel(model != nullptr ? std::move(model) : std::make_shared<HeuristicDrumClassificationModel>())
-{
-}
-
-DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
-{
-    if (classificationModel == nullptr) return {};
-    auto result = classificationModel->classify(sample);
-    const juce::StringArray supported{"Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat",
-                                      "Clap", "Tom", "Rimshot", "Ride", "Crash", "Percussion", "Unknown"};
-    if (!supported.contains(result.category) || !std::isfinite(result.confidence)
-        || result.confidence < 0.0 || result.confidence > 1.0)
-        return {};
-    return result;
-}
-
-ManualExampleDrumClassificationModel::ManualExampleDrumClassificationModel(std::vector<ScannedSample> trainingSamples)
-    : examples(std::move(trainingSamples))
-{
-}
-
-DrumClassification ManualExampleDrumClassificationModel::classify(const ScannedSample& sample) const
+DrumClassification classifyWithExamples(const ScannedSample& sample,
+                                        const std::vector<ScannedSample>& examples,
+                                        double acousticWeight,
+                                        const ScannedSample* excluded = nullptr)
 {
     const auto baseline = HeuristicDrumClassificationModel{}.classify(sample);
     if (baseline.confidence >= 0.75 || sample.durationSeconds <= 0.0 || sample.rms <= 0.00001
         || sample.peak <= 0.0001 || examples.empty())
         return baseline;
 
-    static const juce::StringArray supportedCategories{
-        "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat", "Clap",
-        "Tom", "Rimshot", "Ride", "Crash", "Percussion"
-    };
     struct Neighbour { double distance; const ScannedSample* sample; };
     std::vector<Neighbour> neighbours;
     neighbours.reserve(examples.size());
     for (const auto& example : examples)
     {
-        if (!supportedCategories.contains(example.category) || example.durationSeconds <= 0.0
-            || example.rms <= 0.00001 || example.peak <= 0.0001)
+        if (&example == excluded || !supportedExampleCategories().contains(example.category)
+            || example.durationSeconds <= 0.0 || example.rms <= 0.00001 || example.peak <= 0.0001)
             continue;
-        const auto distance = featureDistance(sample, example);
+        const auto distance = featureDistance(sample, example, acousticWeight);
         if (distance <= 0.28)
             neighbours.push_back({distance, &example});
     }
@@ -347,4 +331,115 @@ DrumClassification ManualExampleDrumClassificationModel::classify(const ScannedS
     if (!result.tags.contains("User-trained suggestion"))
         result.tags.add("User-trained suggestion");
     return result;
+}
+
+double selectAcousticWeight(const std::vector<ScannedSample>& examples)
+{
+    std::map<juce::String, std::vector<std::size_t>> examplesByCategory;
+    for (std::size_t index = 0; index < examples.size(); ++index)
+    {
+        const auto& sample = examples[index];
+        if (supportedExampleCategories().contains(sample.category) && sample.durationSeconds > 0.0
+            && sample.rms > 0.00001 && sample.peak > 0.0001)
+            examplesByCategory[sample.category].push_back(index);
+    }
+
+    std::vector<std::size_t> validationIndices;
+    for (const auto& [category, indices] : examplesByCategory)
+    {
+        juce::ignoreUnused(category);
+        const auto selectedCount = juce::jmin<std::size_t>(8, indices.size());
+        for (std::size_t selected = 0; selected < selectedCount; ++selected)
+        {
+            const auto position = selectedCount == 1 ? 0 : selected * (indices.size() - 1) / (selectedCount - 1);
+            validationIndices.push_back(indices[position]);
+        }
+    }
+    if (validationIndices.size() < 8)
+        return 0.1;
+
+    constexpr std::array<double, 3> candidates{0.1, 0.25, 0.5};
+    double bestWeight = candidates.front();
+    double bestMacroF1 = -1.0;
+    for (const auto weight : candidates)
+    {
+        std::map<juce::String, std::map<juce::String, int>> confusion;
+        for (const auto index : validationIndices)
+        {
+            auto anonymousQuery = examples[index];
+            anonymousQuery.file = juce::File("anonymous-audio.wav");
+            const auto prediction = classifyWithExamples(anonymousQuery, examples, weight, &examples[index]);
+            ++confusion[examples[index].category][prediction.category];
+        }
+
+        double f1Total = 0.0;
+        int classCount = 0;
+        for (const auto& [actual, predictions] : confusion)
+        {
+            int truePositive = 0;
+            int falsePositive = 0;
+            int falseNegative = 0;
+            for (const auto& [expected, outcomes] : confusion)
+            {
+                const auto found = outcomes.find(actual);
+                const auto predictedAsActual = found != outcomes.end() ? found->second : 0;
+                if (expected == actual)
+                    truePositive = predictedAsActual;
+                else
+                    falsePositive += predictedAsActual;
+
+                for (const auto& [prediction, count] : outcomes)
+                    if (expected == actual && prediction != actual)
+                        falseNegative += count;
+            }
+            juce::ignoreUnused(predictions);
+            const auto precision = truePositive + falsePositive > 0
+                ? static_cast<double>(truePositive) / (truePositive + falsePositive) : 0.0;
+            const auto recallDenominator = truePositive + falseNegative;
+            const auto recall = recallDenominator > 0
+                ? static_cast<double>(truePositive) / recallDenominator : 0.0;
+            f1Total += precision + recall > 0.0 ? 2.0 * precision * recall / (precision + recall) : 0.0;
+            ++classCount;
+        }
+        const auto macroF1 = classCount > 0 ? f1Total / classCount : 0.0;
+        if (macroF1 > bestMacroF1 + 1.0e-9)
+        {
+            bestMacroF1 = macroF1;
+            bestWeight = weight;
+        }
+    }
+    return bestWeight;
+}
+}
+
+AudioClassifier::AudioClassifier() : classificationModel(std::make_shared<HeuristicDrumClassificationModel>())
+{
+}
+
+AudioClassifier::AudioClassifier(std::shared_ptr<const DrumClassificationModel> model)
+    : classificationModel(model != nullptr ? std::move(model) : std::make_shared<HeuristicDrumClassificationModel>())
+{
+}
+
+DrumClassification AudioClassifier::classify(const ScannedSample& sample) const
+{
+    if (classificationModel == nullptr) return {};
+    auto result = classificationModel->classify(sample);
+    const juce::StringArray supported{"Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Pedal hi-hat",
+                                      "Clap", "Tom", "Rimshot", "Ride", "Crash", "Percussion", "Unknown"};
+    if (!supported.contains(result.category) || !std::isfinite(result.confidence)
+        || result.confidence < 0.0 || result.confidence > 1.0)
+        return {};
+    return result;
+}
+
+ManualExampleDrumClassificationModel::ManualExampleDrumClassificationModel(std::vector<ScannedSample> trainingSamples)
+    : examples(std::move(trainingSamples))
+{
+    acousticFingerprintWeight = selectAcousticWeight(examples);
+}
+
+DrumClassification ManualExampleDrumClassificationModel::classify(const ScannedSample& sample) const
+{
+    return classifyWithExamples(sample, examples, acousticFingerprintWeight);
 }

@@ -93,7 +93,8 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'The sample-sort label and library scan separators use ASCII punctuation to avoid code-page glyph corruption. Localization catalogs are decoded as UTF-8; a Windows smoke test checks drum-machine, library and sort labels in all eight languages, including French accents.',
         'The sample browser uses a persistent SQLite FTS5 trigram index for substring search over sample names and paths, tags, sources, plugins and kits. Windows and Linux tests cover schema migration rebuilds and a 250,000-row indexed search.',
         'Sequencer Play follows host PPQ and BPM during DAW playback, schedules exact MIDI mappings in the audio callback, and reports hits that have no exact mapping. When the host is stopped, the plugin tempo preview remains available.',
-        'The installed-library scan includes Cubase 15 Media and VST Sound locations alongside detected Native Instruments and Spectrasonics locations.'
+        'The installed-library scan includes Cubase 15 Media and VST Sound locations alongside detected Native Instruments and Spectrasonics locations.',
+        'The manual-example classifier selects an acoustic fingerprint weight using category-stratified validation with query filenames hidden. It remains a local, low-confidence review aid; the current folder-labeled collections do not demonstrate reliable audio-only or cross-kit classification.'
     )
 }
 
