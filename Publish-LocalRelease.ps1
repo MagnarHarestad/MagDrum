@@ -87,7 +87,11 @@ if ($missingNames.Count -gt 0) {
     $noteLines += @('', 'Not included in this release:', ($missingNames | ForEach-Object { "- $_" }))
 }
 if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -contains 'MagDrum-Windows-ARM64.zip') {
-    $noteLines += @('', 'The Windows installer refuses to replace MagDrum while a Cubase process is running, including a hidden process without a visible window.')
+    $noteLines += @(
+        '',
+        'The Windows installer refuses to replace MagDrum while a Cubase process is running, including a hidden process without a visible window.',
+        'The sample-sort label and library scan separators use ASCII punctuation to avoid code-page glyph corruption. The eight-language menu remains available.'
+    )
 }
 
 if ($includedNames -contains 'MagDrum-Windows-ARM64.zip') {
