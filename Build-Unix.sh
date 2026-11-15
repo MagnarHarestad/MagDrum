@@ -99,6 +99,8 @@ else
   [[ -f "$app" && -x "$app" && -n "$vst" ]] || { echo "Expected Linux app and VST3 bundle were not both produced." >&2; exit 1; }
   cp "$app" "$stage/MagDrum"
   cp -a "$vst" "$stage/MagDrum.vst3"
+  cp "$repo_root/installer/Install-MagDrum-Linux.sh" "$stage/Install-MagDrum-Linux.sh"
+  chmod 755 "$stage/Install-MagDrum-Linux.sh"
   cp "$repo_root/installer/README-Linux.txt" "$stage/README.txt"
   archive="$repo_root/latest-publish/MagDrum-$platform.tar.gz"
   mkdir -p "$(dirname "$archive")"

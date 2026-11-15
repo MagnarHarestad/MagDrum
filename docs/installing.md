@@ -4,7 +4,7 @@ Download the archive for your platform from the GitHub release. These early
 builds are not code-signed, so the operating system may ask you to confirm that
 you trust the application.
 
-The latest packages are in [v0.1.1-test.138](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.138): Windows x64, Windows ARM64, and Linux x64. The VST includes the eight-language picker, per-pad gain/pan/tune controls, a bounded UI-to-audio trigger queue for pad and sequencer playback, and a sequencer grid that follows supported MIDI time-signature changes. Preset, MIDI, profile and metadata file chooser titles use the selected language. Velocity-layer and round-robin review dialogs, candidate reports, confirmation controls and results are also translated. English is the first-run default; a selected language is saved and shared by the VST3 and standalone app. Both Windows x64 and Linux Release CTest suites passed (2/2). Windows ARM64 was cross-compiled from x64 and all three bundled executables passed PE machine-type inspection, but it has not been run on native ARM64 Windows; JUCE omits the optional ARM64 `moduleinfo.json`, so hosts may take longer to scan it. Linux CTest loads the byte-identical release module and verifies note capture; Ardour 8.4 recognizes it, while interactive Linux DAW/audio testing and macOS packages remain pending; see [local build requirements](local-builds.md).
+The latest packages are in [v0.1.1-test.139](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.139): Windows x64, Windows ARM64, and Linux x64. The VST includes the eight-language picker, per-pad gain/pan/tune controls, a bounded UI-to-audio trigger queue for pad and sequencer playback, and a sequencer grid that follows supported MIDI time-signature changes. Preset, MIDI, profile and metadata file chooser titles use the selected language. Velocity-layer and round-robin review dialogs, candidate reports, confirmation controls and results are also translated. English is the first-run default; a selected language is saved and shared by the VST3 and standalone app. Both Windows x64 and Linux Release CTest suites passed (2/2). Windows ARM64 was cross-compiled from x64 and all three bundled executables passed PE machine-type inspection, but it has not been run on native ARM64 Windows; JUCE omits the optional ARM64 `moduleinfo.json`, so hosts may take longer to scan it. Linux CTest loads the byte-identical release module and verifies note capture; Ardour 8.4 recognizes it, while interactive Linux DAW/audio testing and macOS packages remain pending; see [local build requirements](local-builds.md).
 
 The latest package archives contain the standalone app, VST3 bundle, installer, MagDrum's AGPLv3 `LICENSE`, and JUCE and bundled-component license notices, including FLAC, Ogg Vorbis/libvorbis, JPEG, PNG, zlib, HarfBuzz and SheenBidi. The installer keeps previous plug-in bundles under `%LOCALAPPDATA%\MagDrum\VST3-backups` (per-user) or `%ProgramData%\MagDrum\VST3-backups` (all-users), outside Cubase's VST3 scan folders. After installing, use **Rescan All** in Cubase's VST Plug-in Manager so it drops cached entries for older copies. Check the release page for the matching package checksums.
 
@@ -42,10 +42,10 @@ architecture builds are configured; neither archive is published yet.
 
 ## Linux x64
 
-Extract `MagDrum-Linux-x64.tar.gz`. Launch `linux-x64/MagDrum` for the
-standalone app. Copy `linux-x64/MagDrum.vst3` to `~/.vst3` and rescan plugins
-in your DAW. The host system must provide the GUI/audio libraries used by the
-build.
+Extract `MagDrum-Linux-x64.tar.gz`. Launch `MagDrum` for the standalone app, or
+run `./Install-MagDrum-Linux.sh` to install/update it and the VST3 to your user
+folders. Previous versions are moved outside the VST3 scan path. The host
+system must provide the GUI/audio libraries used by the build.
 
 These archives are test packages, not signed commercial installers. AUv3 and
 iOS/iPadOS packages are not available yet.

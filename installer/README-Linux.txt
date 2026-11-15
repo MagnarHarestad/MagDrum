@@ -1,15 +1,17 @@
 MagDrum test package for Linux x64
 
 This archive contains the standalone MagDrum app and the MagDrum VST3
-instrument.
+instrument, plus a per-user installer.
 
-Run ./MagDrum to start the standalone app. The VST3 bundle is MagDrum.vst3.
-For a per-user install, copy the bundle to:
-~/.vst3/
+Run ./MagDrum to start the standalone app. Run
+./Install-MagDrum-Linux.sh to install or update the standalone app and VST3.
+The installer places the app in ~/.local/bin and the plug-in in ~/.vst3.
+Previous versions are moved under ~/.local/share/MagDrum, outside plug-in
+scan paths. No administrator access is required.
 
-For a system-wide install, copy it to /usr/lib/vst3/ or another VST3 path
-configured in your audio host. Close the host before replacing an older copy,
-and keep backup bundles outside the host's plug-in scan locations.
+Set MAGDRUM_BIN_DIR, MAGDRUM_VST3_DIR, or XDG_DATA_HOME before running the
+installer to customize these per-user locations. Close your DAW before
+updating the plug-in.
 
 Reopen the host and rescan its plug-ins. The standalone app and VST3 use the
 same local MagDrum sample database.
