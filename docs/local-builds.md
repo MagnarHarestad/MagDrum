@@ -18,12 +18,12 @@ The script configures a dedicated `build/local-windows-x64` directory by default
 
 The first build compiles JUCE and takes several minutes. Later runs reuse the CMake build. Requirements are CMake, Git, Visual Studio's C++ desktop workload, and a Windows x64 host. ARM64 cross-compilation additionally requires Visual Studio's ARM64 C++ tools. `-SkipTests` omits the test executables and CTest run.
 
-The iOS library UI's shared C++ can be compile-checked on Windows with a desktop preview target. This does not produce an iOS app or verify Apple entitlements:
+The iOS library UI and the AUv3 editor layout (without the desktop VST3 scanner) can be compile-checked on Windows with desktop preview targets. This does not produce an iOS app or verify Apple entitlements:
 
 ```powershell
 cmake -S . -B build/local-windows-x64-mobile-preview -A x64 `
   -DBUILD_TESTING=ON -DMAGDRUM_BUILD_MOBILE_PREVIEW=ON
-cmake --build build/local-windows-x64-mobile-preview --config Release --target MagDrumMobilePreview
+cmake --build build/local-windows-x64-mobile-preview --config Release --target MagDrumMobilePreview MagDrumPlugin_VST3 MagDrumPluginTests
 ctest --test-dir build/local-windows-x64-mobile-preview -C Release --output-on-failure
 ```
 
