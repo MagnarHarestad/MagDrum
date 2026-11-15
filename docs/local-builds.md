@@ -1,5 +1,7 @@
 # Local builds
 
+Release v0.1.1-test.136 contains Windows x64, Windows ARM64 and Linux x64 packages. Windows x64 and Linux x64 Release CTest suites passed (2/2 each). Windows x64 SHA-256: `33a536870fa96467863e727e68c57bd67f0938103940013759f3e77eb262633e`. Windows ARM64 SHA-256: `0902e43c1eecf99df9e23edb2b254214fa31482fd87716db1b13353c67b1c2d5`. Linux x64 SHA-256: `7afa579d3dd7fdc888a6cfb5b42fd80ad6115229a3187b7cd87867097ccfaf1a`. ARM64 was cross-compiled with `-SkipTests` on an AMD64 host; the standalone app, plugin and helper executable PE machine values are all `0xAA64`. Native ARM64 runtime and CTest remain unverified. JUCE disabled ARM64 VST3 moduleinfo generation because its helper cannot run on the AMD64 host. Windows x64 .135 remains installed; Linux native DAW validation and Cubase manual rescan/interaction remain pending.
+
 The Windows x64 app, VST3, tests, and Cubase ZIP can be built without a GitHub Actions runner:
 
 ```powershell
