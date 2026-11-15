@@ -143,7 +143,7 @@ private:
     juce::Slider gainSlider, panSlider, tuneSlider;
     bool updatingPadControls = false;
     juce::TextEditor velocityRange;
-    juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load WAV"};
+    juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load sample"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
     juce::TextEditor tempoEditor, metadataBeat, metadataValue;
     juce::ComboBox metadataType;

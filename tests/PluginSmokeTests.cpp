@@ -106,29 +106,31 @@ int main(int argc, char** argv)
     struct LocalizationFixture
     {
         Language language;
-        std::array<const char*, 7> expected;
+        std::array<const char*, 9> expected;
     };
     const std::array<LocalizationFixture, 8> localizedTabs{{
-        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Off-grid hits in this step remain; use Edit hits to review them.", "While the host transport is playing, the sequencer follows its tempo and position.", "Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.", "No MIDI mapping"}},
-        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“.", "Während der Host-Transport läuft, folgt der Sequenzer dessen Tempo und Position.", "Der Sequenzer überspringt {count} Schläge ohne exakte MIDI-Zuordnung. Überprüfe MIDI-Zuordnungen.", "Keine MIDI-Zuordnung"}},
-        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes.", "Pendant la lecture du transport hôte, le séquenceur suit son tempo et sa position.", "Le séquenceur ignore {count} frappes sans correspondance MIDI exacte. Vérifiez les correspondances MIDI.", "Aucune correspondance MIDI"}},
-        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes.", "Mientras el transporte del anfitrión está en marcha, el secuenciador sigue su tempo y posición.", "El secuenciador omite {count} golpes sin una asignación MIDI exacta. Revisa los mapas MIDI.", "Sin asignación MIDI"}},
-        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag.", "När värdens transport spelar följer sequencern dess tempo och position.", "Sequencern hoppar över {count} slag utan exakt MIDI-mappning. Granska MIDI-mappningarna.", "Ingen MIDI-mappning"}},
-        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag.", "Når vertens transport spiller, følger sequenceren tempoet og posisjonen.", "Sequenceren hopper over {count} slag uten nøyaktig MIDI-tilordning. Se gjennom MIDI-kartene.", "Ingen MIDI-tilordning"}},
-        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag.", "Når værtens transport afspiller, følger sequenceren dens tempo og position.", "Sequenceren springer {count} slag over uden en præcis MIDI-tilknytning. Gennemgå MIDI-kortene.", "Ingen MIDI-tilknytning"}},
-        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja.", "Kun isännän kuljetus toistaa, sekvensseri seuraa sen tempoa ja sijaintia.", "Sekvensseri ohittaa {count} iskua, joilla ei ole tarkkaa MIDI-määritystä. Tarkista MIDI-kartat.", "Ei MIDI-määritystä"}}
+        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Off-grid hits in this step remain; use Edit hits to review them.", "While the host transport is playing, the sequencer follows its tempo and position.", "Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.", "No MIDI mapping", "Load sample", "Sample index unavailable. Choose an audio file or scan a folder here."}},
+        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“.", "Während der Host-Transport läuft, folgt der Sequenzer dessen Tempo und Position.", "Der Sequenzer überspringt {count} Schläge ohne exakte MIDI-Zuordnung. Überprüfe MIDI-Zuordnungen.", "Keine MIDI-Zuordnung", "Sample laden", "Sampleindex nicht verfügbar. Lade eine Audiodatei oder scanne hier einen Ordner."}},
+        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes.", "Pendant la lecture du transport hôte, le séquenceur suit son tempo et sa position.", "Le séquenceur ignore {count} frappes sans correspondance MIDI exacte. Vérifiez les correspondances MIDI.", "Aucune correspondance MIDI", "Charger un son", "Index des sons indisponible. Choisissez un fichier audio ou analysez un dossier ici."}},
+        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes.", "Mientras el transporte del anfitrión está en marcha, el secuenciador sigue su tempo y posición.", "El secuenciador omite {count} golpes sin una asignación MIDI exacta. Revisa los mapas MIDI.", "Sin asignación MIDI", "Cargar muestra", "Índice de muestras no disponible. Elige un archivo de audio o analiza una carpeta aquí."}},
+        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag.", "När värdens transport spelar följer sequencern dess tempo och position.", "Sequencern hoppar över {count} slag utan exakt MIDI-mappning. Granska MIDI-mappningarna.", "Ingen MIDI-mappning", "Ladda sample", "Sampleindexet är inte tillgängligt. Välj en ljudfil eller skanna en mapp här."}},
+        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag.", "Når vertens transport spiller, følger sequenceren tempoet og posisjonen.", "Sequenceren hopper over {count} slag uten nøyaktig MIDI-tilordning. Se gjennom MIDI-kartene.", "Ingen MIDI-tilordning", "Last inn sample", "Sampleindeksen er ikke tilgjengelig. Velg en lydfil eller skann en mappe her."}},
+        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag.", "Når værtens transport afspiller, følger sequenceren dens tempo og position.", "Sequenceren springer {count} slag over uden en præcis MIDI-tilknytning. Gennemgå MIDI-kortene.", "Ingen MIDI-tilknytning", "Indlæs sample", "Sampleindekset er ikke tilgængeligt. Vælg en lydfil eller scan en mappe her."}},
+        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja.", "Kun isännän kuljetus toistaa, sekvensseri seuraa sen tempoa ja sijaintia.", "Sekvensseri ohittaa {count} iskua, joilla ei ole tarkkaa MIDI-määritystä. Tarkista MIDI-kartat.", "Ei MIDI-määritystä", "Lataa näyte", "Näyteindeksi ei ole käytettävissä. Valitse äänitiedosto tai skannaa kansio tässä."}}
     }};
     for (const auto& [language, expected] : localizedTabs)
     {
         magdrum::ui::setLanguage(language, false);
-        const std::array<juce::String, 7> actual{
+        const std::array<juce::String, 9> actual{
             magdrum::ui::localisedText("DRUM MACHINE"),
             magdrum::ui::localisedText("Sample Library"),
             magdrum::ui::localisedText("Duration shortest"),
             magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),
             magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."),
             magdrum::ui::localisedText("Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps."),
-            magdrum::ui::localisedText("No MIDI mapping")
+            magdrum::ui::localisedText("No MIDI mapping"),
+            magdrum::ui::localisedText("Load sample"),
+            magdrum::ui::localisedText("Sample index unavailable. Choose an audio file or scan a folder here.")
         };
         for (size_t item = 0; item < actual.size(); ++item)
         {
@@ -145,6 +147,35 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+
+    juce::AudioFormatManager fixtureFormats;
+    fixtureFormats.registerBasicFormats();
+    auto* aiffFormat = fixtureFormats.findFormatForFileExtension("aiff");
+    auto* flacFormat = fixtureFormats.findFormatForFileExtension("flac");
+    if (aiffFormat == nullptr || flacFormat == nullptr) return 32;
+    const auto writeFormatFixture = [](juce::AudioFormat& format, const juce::File& file)
+    {
+        constexpr double sampleRate = 48000.0;
+        juce::AudioBuffer<float> audio(1, 960);
+        for (int sampleIndex = 0; sampleIndex < audio.getNumSamples(); ++sampleIndex)
+            audio.setSample(0, sampleIndex, static_cast<float>(0.25 * std::sin(
+                2.0 * juce::MathConstants<double>::pi * 220.0 * sampleIndex / sampleRate)));
+        std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());
+        if (!stream) return false;
+        auto writer = format.createWriterFor(stream, juce::AudioFormatWriterOptions()
+            .withSampleRate(sampleRate).withNumChannels(1).withBitsPerSample(24));
+        return writer != nullptr && writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples());
+    };
+    const auto aiffSample = root.getChildFile("kick.aiff");
+    const auto flacSample = root.getChildFile("kick.flac");
+    if (!writeFormatFixture(*aiffFormat, aiffSample) || !writeFormatFixture(*flacFormat, flacSample)) return 33;
+    for (const auto& encodedSample : {aiffSample, flacSample})
+    {
+        MagDrumAudioProcessor encodedProcessor;
+        if (!encodedProcessor.loadSampleForNote(36, encodedSample)) return 34;
+        encodedProcessor.prepareToPlay(48000.0, 128);
+        if (renderPeak(encodedProcessor, 36, 100) < 0.05) return 35;
+    }
 
     const auto importFolder = root.getChildFile("imports");
     const auto sourceBytes = root.getChildFile("url-source.mid");
