@@ -1,9 +1,9 @@
 # MagDrum local test packages
 
-Release candidate `v0.1.1-test.145` packages the FTS5 trigram library-search migration for Windows x64, Windows ARM64 and Linux x64.
+Release candidate `v0.1.1-test.151` packages the default shared content-root scan for Windows x64, Windows ARM64 and Linux x64.
 
-- Windows x64 SHA-256: `e7a7068e9acb55d9c6647fd221704bee96bb08b6a2dd57109b032e1973e49c97`
-- Windows ARM64 SHA-256: `c87c4421b8a8df6841877ae7a5346c7fba3257e3ec1a1ab98db319775ee6d800`
-- Linux x64 SHA-256: `07b38286fb91beb3cdfaa76d35c018f2a2ecd4c3a1a03268322a8c166ce735b8`
+- Windows x64 SHA-256: `eaf3f88d14f4b664ce98c6e35b259a24204ed113c465a5fc70876557cfdecb1e`
+- Windows ARM64 SHA-256: `1696a8cca354b6ba69f4237c0dcfcc8681d6f1cbeeadc7bce8c1a46295188e91`
+- Linux x64 SHA-256: `43267411285089f948517f513c87c8f822a84f9b7e23e08688392edf5dd1a473`
 
-Windows x64 and Linux x64 Release CTest both pass 2/2, including a schema-17 migration rebuild and a 250,000-row query-plan assertion. Windows ARM64 app, plugin and tests cross-compile but have not run on native ARM64 hardware. The system VST3 copy remains .135; Windows still reports hidden Cubase15.exe PID 20148, so the new bundle has not been installed.
+Windows x64 and Linux x64 Release CTest both pass 2/2, including the default-folder nesting regression. Windows ARM64 app, VST3 and test binaries cross-compile, but have not run on native ARM64 hardware; the build script now skips CTest execution when cross-compiling on x64. The installed system VST3 remains .135. Windows still reports hidden Cubase15.exe PID 20148, so the new bundle is built and staged but not installed.

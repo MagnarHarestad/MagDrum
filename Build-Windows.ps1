@@ -93,9 +93,12 @@ try {
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel 4
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
 
-    if (-not $SkipTests) {
+    if (-not $SkipTests -and $Architecture -eq 'x64') {
         & $ctestPath --test-dir $buildDirectory -C Release --output-on-failure
         if ($LASTEXITCODE -ne 0) { throw "CTest failed with exit code $LASTEXITCODE." }
+    }
+    elseif (-not $SkipTests) {
+        Write-Host 'Windows ARM64 test binaries were cross-compiled but not executed; run CTest on native ARM64 Windows.'
     }
 
     $app = Get-ChildItem -LiteralPath $buildDirectory -Recurse -File -Filter 'MagDrum.exe' |

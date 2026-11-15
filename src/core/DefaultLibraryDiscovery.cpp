@@ -6,8 +6,13 @@ namespace magdrum::library
 {
 std::vector<juce::File> findDefaultLibraryFolders()
 {
+    auto commonDocuments = juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory);
+#if ! JUCE_WINDOWS && ! JUCE_MAC
+    // JUCE maps this location to /opt on Linux, which is not a sample-library root.
+    commonDocuments = juce::File();
+#endif
     return findDefaultLibraryFolders({
-        juce::File::getSpecialLocation(juce::File::commonDocumentsDirectory),
+        commonDocuments,
         juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory),
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
@@ -24,6 +29,9 @@ std::vector<juce::File> findDefaultLibraryFolders(const DefaultLibraryRoots& roo
     const auto& programFiles = roots.programFiles;
 
     const std::vector<juce::File> candidates{
+        // Native Access installs NI content directly under the shared Public Documents
+        // directory by default, not only beneath a Native Instruments subfolder.
+        commonDocuments,
         commonDocuments.getChildFile("Native Instruments"),
         commonDocuments.getChildFile("Steinberg"),
         commonDocuments.getChildFile("VST Sound"),
@@ -45,8 +53,16 @@ std::vector<juce::File> findDefaultLibraryFolders(const DefaultLibraryRoots& roo
         if (!folder.isDirectory())
             continue;
         const auto foldedPath = folder.getFullPathName().toLowerCase().toStdString();
-        if (uniquePaths.insert(foldedPath).second)
-            found.push_back(folder);
+        if (!uniquePaths.insert(foldedPath).second)
+            continue;
+
+        // A parent default content root already covers its known vendor folders.
+        // Returning both would recursively scan the same samples multiple times.
+        if (std::any_of(found.begin(), found.end(), [&folder](const juce::File& parent)
+            { return folder.isAChildOf(parent); }))
+            continue;
+
+        found.push_back(folder);
     }
     return found;
 }
