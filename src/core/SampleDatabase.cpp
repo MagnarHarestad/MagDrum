@@ -98,6 +98,14 @@ bool SampleDatabase::open(const juce::File& file)
     }
     if (sqlite3_exec(connection, "CREATE INDEX IF NOT EXISTS samples_fingerprint ON samples(fingerprint); CREATE INDEX IF NOT EXISTS samples_duration ON samples(duration); CREATE INDEX IF NOT EXISTS samples_name_path ON samples(name COLLATE NOCASE,path COLLATE NOCASE); CREATE INDEX IF NOT EXISTS samples_duration_name_path ON samples(duration,name COLLATE NOCASE,path COLLATE NOCASE); CREATE INDEX IF NOT EXISTS samples_centroid_name_path ON samples(spectral_centroid,name COLLATE NOCASE,path COLLATE NOCASE)", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
+    int previousSchemaVersion = 0;
+    sqlite3_stmt* versionStatement = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT version FROM schema_info WHERE singleton=1", -1, &versionStatement, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(versionStatement) == SQLITE_ROW)
+            previousSchemaVersion = sqlite3_column_int(versionStatement, 0);
+        sqlite3_finalize(versionStatement);
+    }
     const char* pluginSchema = "CREATE TABLE IF NOT EXISTS schema_info(singleton INTEGER PRIMARY KEY CHECK(singleton=1),version INTEGER NOT NULL); INSERT INTO schema_info(singleton,version) VALUES(1,10) ON CONFLICT(singleton) DO UPDATE SET version=max(version,excluded.version); CREATE TABLE IF NOT EXISTS plugin_instruments(id INTEGER PRIMARY KEY,identifier TEXT NOT NULL UNIQUE,format TEXT NOT NULL,name TEXT NOT NULL,manufacturer TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT '',file TEXT NOT NULL DEFAULT '',version TEXT NOT NULL DEFAULT '',last_scanned TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS plugin_instruments_name ON plugin_instruments(name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS plugin_kits(id INTEGER PRIMARY KEY,plugin_id INTEGER NOT NULL,name TEXT NOT NULL,plugin_state BLOB,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(plugin_id,name),FOREIGN KEY(plugin_id) REFERENCES plugin_instruments(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS plugin_sounds(id INTEGER PRIMARY KEY,kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),velocity INTEGER NOT NULL CHECK(velocity BETWEEN 1 AND 127),articulation TEXT NOT NULL DEFAULT '',silent INTEGER NOT NULL DEFAULT 0,preview_path TEXT NOT NULL DEFAULT '',duration REAL NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,spectral_flatness REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,transient_count INTEGER NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',UNIQUE(kit_id,midi_note,velocity,articulation),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS plugin_sounds_note ON plugin_sounds(midi_note,velocity); CREATE TABLE IF NOT EXISTS plugin_velocity_layer_candidates(kit_id INTEGER NOT NULL,midi_note INTEGER NOT NULL CHECK(midi_note BETWEEN 0 AND 127),lower_velocity INTEGER NOT NULL CHECK(lower_velocity BETWEEN 1 AND 127),upper_velocity INTEGER NOT NULL CHECK(upper_velocity BETWEEN 1 AND 127),spectral_distance REAL NOT NULL,algorithm_version INTEGER NOT NULL,PRIMARY KEY(kit_id,midi_note,lower_velocity,upper_velocity),FOREIGN KEY(kit_id) REFERENCES plugin_kits(id) ON DELETE CASCADE)";
     if (sqlite3_exec(connection, pluginSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
@@ -136,6 +144,130 @@ bool SampleDatabase::open(const juce::File& file)
     if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,last_completed_path TEXT NOT NULL DEFAULT '')",nullptr,nullptr,nullptr)!=SQLITE_OK)
         return false;
     sqlite3_exec(connection, "ALTER TABLE sample_scan_history ADD COLUMN last_completed_path TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr); // duplicate column means already upgraded
+    const char* searchSchema = R"sql(
+        CREATE VIRTUAL TABLE IF NOT EXISTS sample_search_fts USING fts5(name,path,metadata,tokenize='trigram');
+        CREATE VIEW IF NOT EXISTS sample_search_values AS
+        SELECT s.rowid AS sample_rowid,s.name,s.path,
+            trim(
+                coalesce((SELECT group_concat(tag,' ') FROM sample_tags WHERE path=s.path),'') || ' ' ||
+                coalesce((SELECT group_concat(tag,' ') FROM sample_classification_tags WHERE path=s.path),'') || ' ' ||
+                coalesce(src.display_name,'') || ' ' || coalesce(src.identifier,'') || ' ' ||
+                coalesce((SELECT group_concat(p.name || ' ' || k.name,' ')
+                    FROM plugin_sounds ps JOIN plugin_kits k ON k.id=ps.kit_id
+                    JOIN plugin_instruments p ON p.id=k.plugin_id WHERE ps.preview_path=s.path),'') || ' ' ||
+                coalesce((SELECT group_concat(p.name || ' ' || k.name,' ')
+                    FROM plugin_round_robin_takes rr JOIN plugin_kits k ON k.id=rr.kit_id
+                    JOIN plugin_instruments p ON p.id=k.plugin_id WHERE rr.preview_path=s.path),'')
+            ) AS metadata
+        FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id;
+        CREATE TRIGGER IF NOT EXISTS samples_search_insert AFTER INSERT ON samples BEGIN
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=NEW.rowid;
+        END;
+        CREATE TRIGGER IF NOT EXISTS samples_search_delete AFTER DELETE ON samples BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=OLD.rowid;
+        END;
+        CREATE TRIGGER IF NOT EXISTS samples_search_update AFTER UPDATE OF name,path,source_id ON samples BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=OLD.rowid;
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=NEW.rowid;
+        END;
+        CREATE TRIGGER IF NOT EXISTS sample_tags_search_insert AFTER INSERT ON sample_tags BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=NEW.path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=NEW.path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS sample_tags_search_delete AFTER DELETE ON sample_tags BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=OLD.path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=OLD.path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS sample_classification_tags_search_insert AFTER INSERT ON sample_classification_tags BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=NEW.path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=NEW.path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS sample_classification_tags_search_delete AFTER DELETE ON sample_classification_tags BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=OLD.path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=OLD.path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS sample_sources_search_update AFTER UPDATE OF display_name,identifier ON sample_sources BEGIN
+            DELETE FROM sample_search_fts WHERE rowid IN (SELECT rowid FROM samples WHERE source_id=OLD.id OR source_id=NEW.id);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values
+            WHERE sample_rowid IN (SELECT rowid FROM samples WHERE source_id=OLD.id OR source_id=NEW.id);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_sounds_search_insert AFTER INSERT ON plugin_sounds WHEN NEW.preview_path<>'' BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=NEW.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=NEW.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_sounds_search_delete AFTER DELETE ON plugin_sounds WHEN OLD.preview_path<>'' BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=OLD.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=OLD.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_sounds_search_update AFTER UPDATE OF preview_path,kit_id ON plugin_sounds BEGIN
+            DELETE FROM sample_search_fts WHERE rowid IN (SELECT rowid FROM samples WHERE path=OLD.preview_path OR path=NEW.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values
+            WHERE sample_rowid IN (SELECT rowid FROM samples WHERE path=OLD.preview_path OR path=NEW.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_round_robin_search_insert AFTER INSERT ON plugin_round_robin_takes WHEN NEW.preview_path<>'' BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=NEW.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=NEW.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_round_robin_search_delete AFTER DELETE ON plugin_round_robin_takes WHEN OLD.preview_path<>'' BEGIN
+            DELETE FROM sample_search_fts WHERE rowid=(SELECT rowid FROM samples WHERE path=OLD.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid=(SELECT rowid FROM samples WHERE path=OLD.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_round_robin_search_update AFTER UPDATE OF preview_path,kit_id ON plugin_round_robin_takes BEGIN
+            DELETE FROM sample_search_fts WHERE rowid IN (SELECT rowid FROM samples WHERE path=OLD.preview_path OR path=NEW.preview_path);
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values
+            WHERE sample_rowid IN (SELECT rowid FROM samples WHERE path=OLD.preview_path OR path=NEW.preview_path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_kits_search_update AFTER UPDATE OF name,plugin_id ON plugin_kits BEGIN
+            DELETE FROM sample_search_fts WHERE rowid IN (
+                SELECT s.rowid FROM samples s JOIN plugin_sounds ps ON ps.preview_path=s.path WHERE ps.kit_id=NEW.id
+                UNION SELECT s.rowid FROM samples s JOIN plugin_round_robin_takes rr ON rr.preview_path=s.path WHERE rr.kit_id=NEW.id
+            );
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid IN (
+                SELECT s.rowid FROM samples s JOIN plugin_sounds ps ON ps.preview_path=s.path WHERE ps.kit_id=NEW.id
+                UNION SELECT s.rowid FROM samples s JOIN plugin_round_robin_takes rr ON rr.preview_path=s.path WHERE rr.kit_id=NEW.id
+            );
+        END;
+        CREATE TRIGGER IF NOT EXISTS plugin_instruments_search_update AFTER UPDATE OF name ON plugin_instruments BEGIN
+            DELETE FROM sample_search_fts WHERE rowid IN (
+                SELECT s.rowid FROM samples s JOIN plugin_sounds ps ON ps.preview_path=s.path
+                JOIN plugin_kits k ON k.id=ps.kit_id WHERE k.plugin_id=NEW.id
+                UNION SELECT s.rowid FROM samples s JOIN plugin_round_robin_takes rr ON rr.preview_path=s.path
+                JOIN plugin_kits k ON k.id=rr.kit_id WHERE k.plugin_id=NEW.id
+            );
+            INSERT OR REPLACE INTO sample_search_fts(rowid,name,path,metadata)
+            SELECT sample_rowid,name,path,metadata FROM sample_search_values WHERE sample_rowid IN (
+                SELECT s.rowid FROM samples s JOIN plugin_sounds ps ON ps.preview_path=s.path
+                JOIN plugin_kits k ON k.id=ps.kit_id WHERE k.plugin_id=NEW.id
+                UNION SELECT s.rowid FROM samples s JOIN plugin_round_robin_takes rr ON rr.preview_path=s.path
+                JOIN plugin_kits k ON k.id=rr.kit_id WHERE k.plugin_id=NEW.id
+            );
+        END;
+    )sql";
+    if (sqlite3_exec(connection, searchSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    if (previousSchemaVersion < 17)
+    {
+        const char* rebuildSearch = "BEGIN IMMEDIATE; DELETE FROM sample_search_fts; INSERT INTO sample_search_fts(rowid,name,path,metadata) SELECT sample_rowid,name,path,metadata FROM sample_search_values; UPDATE schema_info SET version=max(version,17) WHERE singleton=1; COMMIT";
+        if (sqlite3_exec(connection, rebuildSearch, nullptr, nullptr, nullptr) != SQLITE_OK)
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            return false;
+        }
+    }
     sqlite3_stmt* roots = nullptr;
     if (sqlite3_prepare_v2(connection, "SELECT root_path FROM sample_scan_history GROUP BY root_path ORDER BY length(root_path)", -1, &roots, nullptr) == SQLITE_OK)
     {
@@ -1541,19 +1673,27 @@ juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const 
     juce::Array<SampleBrowseRecord> records;
     if (connection == nullptr || limit <= 0) return records;
 
-    sqlite3_stmt* statement = nullptr;
-    const char* sql = "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>''),(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) "
-                      "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
-                      "WHERE (?1='' OR instr(lower(s.name),lower(?2))>0 OR instr(lower(s.path),lower(?3))>0 OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0)) "
-                      "AND (?4='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?5 COLLATE NOCASE) "
-                      "ORDER BY s.name COLLATE NOCASE,s.path COLLATE NOCASE LIMIT ?6 OFFSET ?7";
-    if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK) return records;
-
     const auto trimmedQuery = query.trim();
+    const bool useTrigramSearch = trimmedQuery.length() >= 3;
+    const auto ftsQuery = juce::String("\"") + trimmedQuery.replace("\"", "\"\"") + "\"";
+    const auto queryPredicate = trimmedQuery.isEmpty()
+        ? juce::String("1")
+        : useTrigramSearch
+            ? juce::String("s.rowid IN (SELECT rowid FROM sample_search_fts WHERE sample_search_fts MATCH ?1)")
+            : juce::String("(instr(lower(s.name),lower(?1))>0 OR instr(lower(s.path),lower(?1))>0 "
+                           "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
+                           "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0))");
+    sqlite3_stmt* statement = nullptr;
+    const auto sql = juce::String(
+        "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),s.classification_confidence,(s.user_category<>''),(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) "
+        "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id WHERE (") + queryPredicate
+        + ") AND (?4='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?5 COLLATE NOCASE) "
+        "ORDER BY s.name COLLATE NOCASE,s.path COLLATE NOCASE LIMIT ?6 OFFSET ?7";
+    if (sqlite3_prepare_v2(connection, sql.toRawUTF8(), -1, &statement, nullptr) != SQLITE_OK) return records;
+
     const auto trimmedCategory = category.trim();
-    sqlite3_bind_text(statement, 1, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(statement, 2, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(statement, 3, trimmedQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const auto& boundQuery = useTrigramSearch ? ftsQuery : trimmedQuery;
+    sqlite3_bind_text(statement, 1, boundQuery.toRawUTF8(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(statement, 4, trimmedCategory.toRawUTF8(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(statement, 5, trimmedCategory.toRawUTF8(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(statement, 6, juce::jmin(limit, 1000));
@@ -1592,6 +1732,17 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
     SampleBrowsePage page;
     if (connection == nullptr || limit <= 0) return page;
 
+    const auto trimmedQuery = filter.query.trim();
+    const bool useTrigramSearch = trimmedQuery.length() >= 3;
+    const auto ftsQuery = juce::String("\"") + trimmedQuery.replace("\"", "\"\"") + "\"";
+    const auto queryPredicate = trimmedQuery.isEmpty()
+        ? juce::String("1")
+        : useTrigramSearch
+            ? juce::String("s.rowid IN (SELECT rowid FROM sample_search_fts WHERE sample_search_fts MATCH ?1)")
+            : juce::String("(instr(lower(s.name),lower(?1))>0 OR instr(lower(s.path),lower(?1))>0 "
+                           "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
+                           "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
+                           "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0))");
     const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";
     switch (filter.sort)
     {
@@ -1614,11 +1765,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "FROM plugin_round_robin_takes WHERE silent=0 AND preview_path<>'' GROUP BY preview_path) rr ON rr.preview_path=s.path "
         "LEFT JOIN plugin_kits k ON k.id=COALESCE(ps.kit_id,rr.kit_id) "
         "LEFT JOIN plugin_instruments p ON p.id=k.plugin_id "
-        "WHERE (?1='' OR instr(lower(s.name),lower(?1))>0 OR instr(lower(s.path),lower(?1))>0 "
-        "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
-        "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
-        "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0)) "
-        "AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
+        "WHERE (") + queryPredicate + ") AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
         "AND (?3='' OR src.source_type=?3) AND (?4='' OR src.identifier=?4) "
         "AND (?5='' OR p.name=?5 COLLATE NOCASE) AND (?6='' OR k.name=?6 COLLATE NOCASE) "
         "AND (?7=0 OR (s.user_category='' AND (s.category='Unknown' OR s.classification_confidence<0.75))) "
@@ -1626,7 +1773,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "OR (?8=4 AND s.duration>=0.5 AND s.duration<2.0) OR (?8=5 AND s.duration>=2.0) "
         "OR (?8=6 AND s.spectral_centroid>0 AND s.spectral_centroid<1000) "
         "OR (?8=7 AND s.spectral_centroid>=1000 AND s.spectral_centroid<3000) "
-        "OR (?8=8 AND s.spectral_centroid>=3000)) ORDER BY ") + ordering
+        "OR (?8=8 AND s.spectral_centroid>=3000)) ORDER BY " + ordering
         + " LIMIT ?9 OFFSET ?10";
 
     sqlite3_stmt* statement = nullptr;
@@ -1636,7 +1783,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         const auto trimmed = value.trim();
         sqlite3_bind_text(statement, index, trimmed.toRawUTF8(), -1, SQLITE_TRANSIENT);
     };
-    bindText(1, filter.query); bindText(2, filter.category); bindText(3, filter.sourceType);
+    bindText(1, useTrigramSearch ? ftsQuery : trimmedQuery); bindText(2, filter.category); bindText(3, filter.sourceType);
     bindText(4, filter.sourceIdentifier); bindText(5, filter.pluginName); bindText(6, filter.kitName);
     sqlite3_bind_int(statement, 7, filter.needsReview ? 1 : 0);
     sqlite3_bind_int(statement, 8, juce::jlimit(1, 8, filter.feature));
@@ -1673,7 +1820,12 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
 juce::Array<juce::File> SampleDatabase::searchPaths(const juce::String& query,int limit) const
 {
     juce::Array<juce::File> files;if(connection==nullptr||limit<=0)return files;sqlite3_stmt* statement=nullptr;
-    if(sqlite3_prepare_v2(connection,"SELECT path FROM samples WHERE instr(lower(name),lower(?))>0 OR instr(lower(path),lower(?))>0 ORDER BY name COLLATE NOCASE LIMIT ?",-1,&statement,nullptr)!=SQLITE_OK)return files;
-    const auto term=query.trim();sqlite3_bind_text(statement,1,term.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_text(statement,2,term.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_int(statement,3,juce::jmin(limit,1000));
+    const auto term=query.trim();const bool useTrigramSearch=term.length()>=3;
+    const auto ftsQuery=juce::String("\"")+term.replace("\"","\"\"")+"\"";
+    const auto sql=useTrigramSearch
+        ? juce::String("SELECT s.path FROM samples s WHERE s.rowid IN (SELECT rowid FROM sample_search_fts WHERE sample_search_fts MATCH ?1) ORDER BY s.name COLLATE NOCASE LIMIT ?2")
+        : juce::String("SELECT path FROM samples WHERE instr(lower(name),lower(?1))>0 OR instr(lower(path),lower(?1))>0 ORDER BY name COLLATE NOCASE LIMIT ?2");
+    if(sqlite3_prepare_v2(connection,sql.toRawUTF8(),-1,&statement,nullptr)!=SQLITE_OK)return files;
+    const auto& boundQuery=useTrigramSearch?ftsQuery:term;sqlite3_bind_text(statement,1,boundQuery.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_int(statement,2,juce::jmin(limit,1000));
     while(sqlite3_step(statement)==SQLITE_ROW){const auto* value=reinterpret_cast<const char*>(sqlite3_column_text(statement,0));if(value)files.add(juce::File(juce::String::fromUTF8(value)));}sqlite3_finalize(statement);return files;
 }

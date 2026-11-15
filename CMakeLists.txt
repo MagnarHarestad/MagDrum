@@ -21,7 +21,7 @@ juce_add_binary_data(MagDrumUiAssets NAMESPACE MagDrumUiAssets SOURCES assets/ui
 add_library(sqlite3 STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
 set_target_properties(sqlite3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(sqlite3 PUBLIC ${sqlite_SOURCE_DIR})
-target_compile_definitions(sqlite3 PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
+target_compile_definitions(sqlite3 PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_ENABLE_FTS5=1)
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  juce_add_gui_app(MagDrum PRODUCT_NAME "MagDrum" COMPANY_NAME "Censor Design" BUNDLE_ID "com.censordesign.magdrum")
  juce_generate_juce_header(MagDrum)

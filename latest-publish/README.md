@@ -1,9 +1,9 @@
 # MagDrum local test packages
 
-Public release [v0.1.1-test.142](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.142) contains Windows x64, Windows ARM64 and Linux x64. The Windows VST scan includes Cubase 15 Media folders; regression coverage verifies configured roots and duplicate removal. Translation catalogs now decode as UTF-8, fixing mojibake in accented Windows UI text. Windows plugin smoke coverage checks drum-machine, library and sort labels in all eight languages, including French accents. Windows x64 and Linux Release CTest suites passed (2/2 each). The Linux archive includes a per-user installer; its update test confirms previous bundles stay outside plug-in scan paths. The newly built Windows ARM64 app and VST3 identify as ARM64; native runtime testing remains outstanding. Linux CTest loads the release module through JUCE's VST3 host, scans MIDI notes 0–127 and verifies audible note 36 after restoring saved state. Ardour 8.4 recognizes the Linux package in Ubuntu 24.04 WSL2. An interactive Ardour session and physical Linux audio-device test remain outstanding.
+Release candidate `v0.1.1-test.145` packages the FTS5 trigram library-search migration for Windows x64, Windows ARM64 and Linux x64.
 
-- Windows x64 SHA-256: `d337f37d7e6dbffe2c456adbe5335e0a51700446213b90716f1b423dabaed9ef`
-- Windows ARM64 SHA-256: `e1cd9e04c7c33189b3e10e26eb167454476c03bba9f9ca497477dcedaa2f94d1`
-- Linux x64 SHA-256: `f5ecfbc163fae5cb209d6d3a76a958f0961fdfc8712a75ee86a5af01b49eb112`
+- Windows x64 SHA-256: `e7a7068e9acb55d9c6647fd221704bee96bb08b6a2dd57109b032e1973e49c97`
+- Windows ARM64 SHA-256: `c87c4421b8a8df6841877ae7a5346c7fba3257e3ec1a1ab98db319775ee6d800`
+- Linux x64 SHA-256: `07b38286fb91beb3cdfaa76d35c018f2a2ecd4c3a1a03268322a8c166ce735b8`
 
-The system-installed Windows VST3 remains .135. The .142 installer refuses replacement while Cubase15.exe PID 20148 is still running without a visible window. After that process exits, run the bundled `Install-MagDrum.ps1 -AllUsers` script as administrator. It installs into `C:\Program Files\Common Files\VST3\MagDrum.vst3` and moves the previous bundle to `%ProgramData%\MagDrum\VST3-backups`, outside Cubase's scan path. Restart Cubase and rescan its VST3 plug-ins to use the new build.
+Windows x64 and Linux x64 Release CTest both pass 2/2, including a schema-17 migration rebuild and a 250,000-row query-plan assertion. Windows ARM64 app, plugin and tests cross-compile but have not run on native ARM64 hardware. The system VST3 copy remains .135; Windows still reports hidden Cubase15.exe PID 20148, so the new bundle has not been installed.
