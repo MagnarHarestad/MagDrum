@@ -59,6 +59,18 @@ MagDrumAudioProcessor::~MagDrumAudioProcessor()
         sampleStateLoadWorkers->removeAllJobs(true, -1);
 }
 
+void MagDrumAudioProcessor::recalculateTailLengthSeconds() noexcept
+{
+    double longestSampleSeconds = previewData != nullptr && previewData->sampleRate > 0.0
+        ? previewData->audio.getNumSamples() / previewData->sampleRate : 0.0;
+    for (const auto& noteLayers : ownedSamples)
+        for (const auto& sample : noteLayers)
+            if (sample != nullptr && sample->sampleRate > 0.0)
+                longestSampleSeconds = juce::jmax(longestSampleSeconds,
+                    sample->audio.getNumSamples() / sample->sampleRate);
+    tailLengthSeconds.store(longestSampleSeconds, std::memory_order_relaxed);
+}
+
 void MagDrumAudioProcessor::prepareToPlay(double rate, int)
 {
     outputSampleRate = rate > 0.0 ? rate : 44100.0;
@@ -158,6 +170,7 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
             roundRobinGroup = targetLayer;
         roundRobinCounters[static_cast<size_t>(note)][static_cast<size_t>(roundRobinGroup)]
             .store(0, std::memory_order_relaxed);
+        recalculateTailLengthSeconds();
         for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
         {
             if (it->note == note && it->minimumVelocity == minimumVelocity
@@ -200,6 +213,7 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
         path.clear();
     for (auto& counter : roundRobinCounters[static_cast<size_t>(note)])
         counter.store(0, std::memory_order_relaxed);
+    recalculateTailLengthSeconds();
     for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
     {
         if (it->note == note)
@@ -241,6 +255,7 @@ bool MagDrumAudioProcessor::previewSample(const juce::File& file, const std::fun
         for (auto& voice : voices) if (voice.sample == old) voice = {};
     retiredPreview = std::move(previewData);
     previewData = std::move(sample);
+    recalculateTailLengthSeconds();
     auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
     voice = {previewData.get(), 0.0, 0.85f, 1.0f, 1.0f, 1.0, true};
     return true;
@@ -258,6 +273,7 @@ void MagDrumAudioProcessor::stopSamplePreview()
         if (voice.sample == preview)
             voice = {};
     retiredPreview = std::move(previewData);
+    recalculateTailLengthSeconds();
 }
 
 void MagDrumAudioProcessor::triggerNote(int note, int velocity)
@@ -772,6 +788,7 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                                            juce::File(layer.path), std::move(cancellation)});
             }
         }
+        recalculateTailLengthSeconds();
         for (auto& voice : voices) voice = {};
     }
     for (int note = 0; note < 128; ++note)

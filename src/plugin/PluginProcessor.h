@@ -54,7 +54,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 10.0; }
+    double getTailLengthSeconds() const override { return tailLengthSeconds.load(std::memory_order_relaxed); }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
@@ -132,6 +132,7 @@ private:
     std::array<PendingNoteTrigger, pendingTriggerCapacity> pendingTriggers{};
     magdrum::plugin::DeferredNoteTriggers deferredNoteTriggers;
     double outputSampleRate = 44100.0;
+    std::atomic<double> tailLengthSeconds{0.0};
     juce::AudioFormatManager formats;
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
@@ -160,6 +161,7 @@ private:
     std::array<Voice, maxVoices> voices{};
     int nextVoice = 0;
     void startNoteVoice(int midiNote, int velocity);
+    void recalculateTailLengthSeconds() noexcept;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagDrumAudioProcessor)
 };

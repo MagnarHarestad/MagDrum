@@ -108,10 +108,10 @@ public:
     PositionInfo position;
 };
 
-bool writeFixture(const juce::File& file, float amplitude = 0.25f)
+bool writeFixture(const juce::File& file, float amplitude = 0.25f, int sampleCount = 960)
 {
     constexpr double sampleRate = 48000.0;
-    juce::AudioBuffer<float> audio(1, 960);
+    juce::AudioBuffer<float> audio(1, sampleCount);
     for (int sample = 0; sample < audio.getNumSamples(); ++sample)
         audio.setSample(0, sample, static_cast<float>(amplitude * std::sin(2.0 * juce::MathConstants<double>::pi * 220.0 * sample / sampleRate)));
 
@@ -813,6 +813,21 @@ int main(int argc, char** argv)
     MagDrumAudioProcessorTestAccess::stopVoices(independentRoundRobin);
     if (independentFirstPeak <= 0.0 || otherVelocityPeak <= 0.0
         || independentSecondPeak < independentFirstPeak * 1.8) return 283;
+
+    const auto longTailFile = root.getChildFile("long-tail-sample.wav");
+    const auto shortTailFile = root.getChildFile("short-tail-sample.wav");
+    if (!writeFixture(longTailFile, 0.15f, 12 * 48000) || !writeFixture(shortTailFile, 0.1f, 48000)) return 284;
+    auto& reportedTail = makeTestProcessor();
+    if (reportedTail.getTailLengthSeconds() != 0.0
+        || !reportedTail.loadSampleForNote(36, longTailFile)
+        || !reportedTail.loadSampleForNote(38, shortTailFile)
+        || std::abs(reportedTail.getTailLengthSeconds() - 12.0) > 0.001) return 285;
+    if (!reportedTail.clearSamplesForNote(36) || std::abs(reportedTail.getTailLengthSeconds() - 1.0) > 0.001
+        || !reportedTail.clearSamplesForNote(38) || reportedTail.getTailLengthSeconds() != 0.0) return 286;
+    if (!reportedTail.previewSample(longTailFile) || std::abs(reportedTail.getTailLengthSeconds() - 12.0) > 0.001)
+        return 287;
+    reportedTail.stopSamplePreview();
+    if (reportedTail.getTailLengthSeconds() != 0.0) return 288;
 
     juce::MemoryBlock roundRobinState;
     roundRobin.getStateInformation(roundRobinState);
