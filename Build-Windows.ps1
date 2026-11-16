@@ -47,6 +47,7 @@ $generator = switch ($vsMajorVersion) {
     default { throw "Unsupported Visual Studio major version: $vsMajorVersion." }
 }
 $latestDirectory = Join-Path $repoRoot 'latest-publish'
+$buildTesting = if ($SkipTests) { 'OFF' } else { 'ON' }
 
 & (Join-Path $repoRoot 'tools/Validate-Localization.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerGuard.ps1')
@@ -78,7 +79,7 @@ try {
         '-G', $generator,
         '-A', $Architecture,
         "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
-        '-DBUILD_TESTING=ON'
+        "-DBUILD_TESTING=$buildTesting"
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'
     $sqliteSource = Join-Path $dependencyDirectory 'sqlite-src'
@@ -162,6 +163,9 @@ try {
     Write-Host "SHA-256: $hash"
     Write-Host "Product version: 0.1.2.$BuildRevision"
     Write-Host "Build parallelism: $Parallel."
+    if ($SkipTests) {
+        Write-Host 'CTest targets were not configured or run. Treat this package as a local iteration build; run the default full build before publishing.'
+    }
     Write-Host 'Publish this archive with gh release create when it is ready for distribution.'
 }
 finally {
