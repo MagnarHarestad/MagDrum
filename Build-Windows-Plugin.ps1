@@ -79,13 +79,39 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Windows x64 development configure failed with exit code $LASTEXITCODE." }
     }
 
-    # With tests, mobile preview, and classifier evaluation disabled, ALL_BUILD contains
-    # only the Windows app, VST3, and their dependencies. One root target keeps CMake
-    # from starting MSBuild separately for the app and plugin.
-    & $cmakePath --build $buildPath --config Debug --target ALL_BUILD --parallel $Parallel
+    # The standalone executable is shipped inside the bundle as an isolated scanner
+    # helper. VST-only edits do not require relinking that helper, so build it only on
+    # first use or when one of its own/shared sources has changed.
+    $app = Join-Path $buildPath 'MagDrum_artefacts/Debug/MagDrum.exe'
+    $appInputs = @(
+        (Join-Path $repoRoot 'CMakeLists.txt'),
+        (Join-Path $repoRoot 'src/app'),
+        (Join-Path $repoRoot 'src/core'),
+        (Join-Path $repoRoot 'src/ui'),
+        (Join-Path $repoRoot 'assets/ui')
+    )
+    $appNeedsBuild = -not (Test-Path -LiteralPath $app -PathType Leaf)
+    if (-not $appNeedsBuild) {
+        $appTimestamp = (Get-Item -LiteralPath $app).LastWriteTimeUtc
+        foreach ($input in $appInputs) {
+            if (Test-Path -LiteralPath $input -PathType Leaf) {
+                $item = Get-Item -LiteralPath $input
+                if ($item.LastWriteTimeUtc -gt $appTimestamp) { $appNeedsBuild = $true; break }
+            }
+            elseif (Test-Path -LiteralPath $input -PathType Container) {
+                $newerInput = Get-ChildItem -LiteralPath $input -Recurse -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.LastWriteTimeUtc -gt $appTimestamp } |
+                    Select-Object -First 1
+                if ($null -ne $newerInput) { $appNeedsBuild = $true; break }
+            }
+        }
+    }
+
+    $buildTargets = if ($appNeedsBuild) { @('MagDrum', 'MagDrumPlugin_VST3') } else { @('MagDrumPlugin_VST3') }
+    Write-Host "Building Debug targets: $($buildTargets -join ', ')"
+    & $cmakePath --build $buildPath --config Debug --target $buildTargets --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows x64 development build failed with exit code $LASTEXITCODE." }
 
-    $app = Join-Path $buildPath 'MagDrum_artefacts/Debug/MagDrum.exe'
     $bundle = Join-Path $buildPath 'MagDrumPlugin_artefacts/Debug/VST3/MagDrum.vst3'
     $module = Join-Path $bundle 'Contents/x86_64-win/MagDrum.vst3'
     if (-not (Test-Path -LiteralPath $app -PathType Leaf)) { throw 'The matching-architecture MagDrum scanner helper is missing.' }
