@@ -96,8 +96,14 @@ try {
         if (Test-Path -LiteralPath $resourceFile) { Remove-Item -LiteralPath $resourceFile -Force }
     }
 
-    $buildTargets = @('MagDrum', 'MagDrumPlugin_VST3')
-    if (-not $SkipTests) { $buildTargets += @('MagDrumTests', 'MagDrumPluginTests') }
+    $buildTargets = if ($SkipTests) {
+        @('MagDrum', 'MagDrumPlugin_VST3')
+    } else {
+        # MagDrumTests depends on the app, VST3, and plugin-test executable.
+        # One dependency-root invocation avoids repeated MSBuild startup while
+        # excluding unrelated cached targets such as the mobile preview.
+        @('MagDrumTests')
+    }
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
 
