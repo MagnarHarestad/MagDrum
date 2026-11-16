@@ -48,8 +48,10 @@ if (-not $newBuildTree) {
     $cache = Get-Content -LiteralPath $cachePath -Raw
     if ($cache -notmatch '(?m)^CMAKE_GENERATOR_PLATFORM:INTERNAL=x64\s*$' -or
         $cache -notmatch '(?m)^CMAKE_GENERATOR:INTERNAL=Visual Studio' -or
-        $cache -notmatch '(?m)^MAGDRUM_BUILD_MOBILE_PREVIEW:BOOL=OFF\s*$') {
-        throw 'The development build tree must be a Windows x64 Visual Studio build.'
+        $cache -notmatch '(?m)^MAGDRUM_BUILD_MOBILE_PREVIEW:BOOL=OFF\s*$' -or
+        $cache -notmatch '(?m)^BUILD_TESTING:BOOL=OFF\s*$' -or
+        $cache -notmatch '(?m)^MAGDRUM_BUILD_CLASSIFIER_EVALUATION:BOOL=OFF\s*$') {
+        throw 'The development build tree must use Windows x64 Visual Studio with tests, mobile preview, and classifier evaluation disabled.'
     }
 }
 
@@ -62,6 +64,7 @@ try {
             '-G', $generator,
             '-A', 'x64',
             '-DBUILD_TESTING=OFF',
+            '-DMAGDRUM_BUILD_CLASSIFIER_EVALUATION=OFF',
             '-DMAGDRUM_BUILD_REVISION=0',
             '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
         )
@@ -75,7 +78,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Windows x64 development configure failed with exit code $LASTEXITCODE." }
     }
 
-    & $cmakePath --build $buildPath --config Debug --target MagDrum MagDrumPlugin_VST3 --parallel $Parallel
+    & $cmakePath --build $buildPath --config Debug --target ALL_BUILD --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows x64 development build failed with exit code $LASTEXITCODE." }
 
     $app = Join-Path $buildPath 'MagDrum_artefacts/Debug/MagDrum.exe'
