@@ -17,7 +17,7 @@ juce::String drumCategoryForFolder(juce::String folderName)
     folderName = folderName.trim();
     while (folderName.contains("  ")) folderName = folderName.replace("  ", " ");
 
-    static const std::array<std::pair<const char*, const char*>, 48> aliases{{
+    static const std::array<std::pair<const char*, const char*>, 52> aliases{{
         {"kick", "Kick"}, {"kicks", "Kick"}, {"bass drum", "Kick"}, {"bass drums", "Kick"},
         {"bassdrum", "Kick"}, {"bassdrums", "Kick"}, {"bd", "Kick"}, {"808s", "Kick"},
         {"snare", "Snare"}, {"snares", "Snare"}, {"snr", "Snare"}, {"sd", "Snare"},
@@ -35,7 +35,7 @@ juce::String drumCategoryForFolder(juce::String folderName)
         {"foot hat", "Pedal hi-hat"}, {"foot hats", "Pedal hi-hat"},
         {"phh", "Pedal hi-hat"}, {"hhp", "Pedal hi-hat"},
         {"clap", "Clap"}, {"claps", "Clap"}, {"handclap", "Clap"}, {"handclaps", "Clap"},
-        {"tom", "Tom"}, {"toms", "Tom"}, {"floor tom", "Tom"}, {"rack tom", "Tom"},
+        {"tom", "Tom"}, {"toms", "Tom"}, {"floor tom", "Tom"}, {"rack tom", "Tom"}, {"htom", "Tom"}, {"ltom", "Tom"}, {"tomhi", "Tom"}, {"tomlo", "Tom"},
         {"ride", "Ride"}, {"rides", "Ride"}
     }};
     for (const auto& [alias, category] : aliases)
@@ -142,7 +142,7 @@ DrumClassification classify(const ScannedSample& sample) const override
         else namedCategories.add("Closed hi-hat");
     }
     if (has({"clap", "handclap"})) namedCategories.add("Clap");
-    if (has({"tom", "floor tom", "rack tom", "tomhi", "tomlo"})) namedCategories.add("Tom");
+    if (has({"tom", "floor tom", "rack tom", "tomhi", "tomlo", "htom", "ltom"})) namedCategories.add("Tom");
     if (has({"rimshot", "rim shot", "side stick", "sidestick"})) namedCategories.add("Rimshot");
     if (has({"ride", "ride cymbal", "ridebell", "ride bell"})) namedCategories.add("Ride");
     if (has({"crash", "crash cymbal"})) namedCategories.add("Crash");
@@ -170,7 +170,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"});
+        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "htom", "ltom", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"});
         out.confidence = categoryFromFolder ? (filenameCategoryCue ? 0.97 : 0.84) : (filenameCategoryCue ? 0.92 : 0.82);
         return out;
     }

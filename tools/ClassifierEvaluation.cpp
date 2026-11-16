@@ -150,7 +150,7 @@ juce::String labelForFolder(const juce::String& rawName)
     if (name == "open hat" || name == "open hats" || name == "open hi hat" || name == "open hi hats") return "Open hi-hat";
     if (name == "pedal hat" || name == "pedal hats" || name == "foot hat" || name == "foot hats") return "Pedal hi-hat";
     if (name == "clap" || name == "claps" || name == "handclap" || name == "handclaps") return "Clap";
-    if (name == "tom" || name == "toms" || name == "floor tom" || name == "floor toms" || name == "rack tom" || name == "rack toms") return "Tom";
+    if (name == "tom" || name == "toms" || name == "floor tom" || name == "floor toms" || name == "rack tom" || name == "rack toms" || name == "htom" || name == "ltom" || name == "tomhi" || name == "tomlo") return "Tom";
     if (name == "rimshot" || name == "rimshots" || name == "side stick" || name == "side sticks") return "Rimshot";
     if (name == "ride" || name == "rides" || name == "ride cymbal" || name == "ride cymbals") return "Ride";
     if (name == "crash" || name == "crashes" || name == "crash cymbal" || name == "crash cymbals") return "Crash";
