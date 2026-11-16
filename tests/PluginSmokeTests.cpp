@@ -228,6 +228,10 @@ public:
         if (editor.comparisonWindow == nullptr || editor.comparisonWindow->getContentComponent() == nullptr)
             return 2;
         auto* comparisonContent = editor.comparisonWindow->getContentComponent();
+        editor.openMidiEventEditor();
+        if (editor.midiEventWindow == nullptr || editor.midiEventWindow->getContentComponent() == nullptr)
+            return 5;
+        auto* midiEventContent = editor.midiEventWindow->getContentComponent();
         const std::array<Language, 8> languages{
             Language::english, Language::german, Language::french, Language::spanish,
             Language::swedish, Language::norwegian, Language::danish, Language::finnish};
@@ -284,6 +288,26 @@ public:
                           << magdrum::ui::languageName(language) << ".\n";
                 magdrum::ui::setLanguage(Language::english, false);
                 return 4;
+            }
+
+            const juce::StringArray expectedEventButtons{
+                magdrum::ui::localisedText("Apply edit"),
+                magdrum::ui::localisedText("Add hit"),
+                magdrum::ui::localisedText("Delete hit")};
+            juce::StringArray actualEventButtons;
+            for (int childIndex = 0; childIndex < midiEventContent->getNumChildComponents(); ++childIndex)
+                if (auto* button = dynamic_cast<juce::TextButton*>(midiEventContent->getChildComponent(childIndex)))
+                    actualEventButtons.add(button->getButtonText());
+            actualEventButtons.sort(false);
+            auto sortedExpectedEventButtons = expectedEventButtons;
+            sortedExpectedEventButtons.sort(false);
+            if (actualEventButtons != sortedExpectedEventButtons
+                || editor.midiEventWindow->getName() != magdrum::ui::localisedText("Edit MIDI events"))
+            {
+                std::cerr << "Live localization failed in the open MIDI-event window for "
+                          << magdrum::ui::languageName(language) << ".\n";
+                magdrum::ui::setLanguage(Language::english, false);
+                return 6;
             }
         }
         magdrum::ui::setLanguage(Language::english, false);
