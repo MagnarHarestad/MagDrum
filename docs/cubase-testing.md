@@ -6,7 +6,7 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 
 1. Download `MagDrum-Windows-x64.zip` from the latest MagDrum test release and extract it.
 2. Close Cubase completely. For the standard system-wide VST3 location (`C:\Program Files\Common Files\VST3`), open PowerShell as administrator and run `Install-MagDrum.ps1 -AllUsers`. If its window is closed but the installer reports `Cubase15.exe` still running, check Task Manager's **Details** tab and end the remaining Cubase process after saving the project. The installer moves the previous bundle outside VST3 scan folders and keeps the matching `MagDrum.exe` helper inside the new bundle.
-3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.167`, the VST3 version should read `0.1.2.167`.
+3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.168`, the VST3 version should read `0.1.2.168`.
 4. Create an instrument track with MagDrum and open its editor.
 
 ## Use the plug-in views
