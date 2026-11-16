@@ -739,6 +739,48 @@ int runSmokeTests(int argc,char** argv)
         || !portableSourceDb.getUserTags(portableSourceFile).contains("Concurrent tag")) return 270;
      if(portableSourceDb.getUserTags(portableSourceFile).contains("Local tag"))return 254;
     const auto invalidSyncFolder=root.getSiblingFile("MagDrumPortableMetadataInvalidSync"),invalidSyncDbFile=root.getSiblingFile("MagDrumPortableMetadataInvalidSync.sqlite3");invalidSyncFolder.deleteRecursively();invalidSyncDbFile.deleteFile();if(!invalidSyncFolder.createDirectory().wasOk())return 255;for(const auto& existingArchive:metadataSyncFolder.findChildFiles(juce::File::findFiles,false,"MagDrum-sync-*.json"))if(!existingArchive.copyFileTo(invalidSyncFolder.getChildFile(existingArchive.getFileName())))return 256;if(!invalidSyncFolder.getChildFile("MagDrum-sync-invalid.json").replaceWithText("{\"format\":\"com.magdrum.library-metadata\",\"version\":2,\"device_id\":\"invalid\",\"samples\":[],\"mapping_profiles\":[]}"))return 257;SampleDatabase invalidSyncDb;if(!invalidSyncDb.open(invalidSyncDbFile)||!invalidSyncDb.insertSample(portableTargetSamples.getFirst()))return 258;const auto invalidSyncCategory=invalidSyncDb.getCategory(portableTargetFile);const auto invalidSyncResult=invalidSyncDb.syncPortableMetadataFolder(invalidSyncFolder);if(invalidSyncResult.ok||!invalidSyncDb.getUserTags(portableTargetFile).isEmpty()||invalidSyncDb.getCategory(portableTargetFile)!=invalidSyncCategory||invalidSyncDb.loadMappingProfile("Portable GM"))return 259;
+    const auto invalidReferenceFolder = root.getSiblingFile("MagDrumInvalidTagReferenceSync");
+    const auto invalidReferenceDbFile = root.getSiblingFile("MagDrumInvalidTagReferenceSync.sqlite3");
+    invalidReferenceFolder.deleteRecursively();
+    invalidReferenceDbFile.deleteFile();
+    if (!invalidReferenceFolder.createDirectory().wasOk()) return 272;
+    const auto sourceSnapshot = juce::JSON::parse(metadataSyncFolder.getChildFile("MagDrum-sync-" + sourceSync.deviceId + ".json").loadFileAsString());
+    if (!sourceSnapshot.isObject()) return 273;
+    auto tamperedSnapshot = sourceSnapshot;
+    auto* tagOperations = tamperedSnapshot.getProperty("tag_operations", {}).getArray();
+    if (tagOperations == nullptr) return 274;
+    bool changedReference = false;
+    for (auto& removalOperation : *tagOperations)
+    {
+        if (removalOperation.getProperty("type", {}).toString() != "remove") continue;
+        for (const auto& addOperation : *tagOperations)
+        {
+            if (addOperation.getProperty("type", {}).toString() != "add"
+                || addOperation.getProperty("tag", {}).toString() == removalOperation.getProperty("tag", {}).toString()) continue;
+            auto* observedAddIds = removalOperation.getProperty("observed_add_ids", {}).getArray();
+            if (observedAddIds == nullptr) return 275;
+            observedAddIds->clear();
+            observedAddIds->add(addOperation.getProperty("operation_id", {}));
+            changedReference = true;
+            break;
+        }
+        if (changedReference) break;
+    }
+    if (!changedReference || !invalidReferenceFolder.getChildFile("MagDrum-sync-tampered.json").replaceWithText(juce::JSON::toString(tamperedSnapshot, true))) return 276;
+    SampleDatabase invalidReferenceDb;
+    if (!invalidReferenceDb.open(invalidReferenceDbFile) || !invalidReferenceDb.insertSample(portableTargetSamples.getFirst())) return 277;
+    const auto invalidReferenceCategoryBefore = invalidReferenceDb.getCategory(portableTargetFile);
+    const auto invalidReferenceResult = invalidReferenceDb.syncPortableMetadataFolder(invalidReferenceFolder);
+    const auto invalidReferenceTags = invalidReferenceDb.getUserTags(portableTargetFile);
+    const auto invalidReferenceCategory = invalidReferenceDb.getCategory(portableTargetFile);
+    const auto invalidReferenceProfile = invalidReferenceDb.loadMappingProfile("Portable GM");
+    if (invalidReferenceResult.ok || !invalidReferenceTags.isEmpty() || invalidReferenceCategory != invalidReferenceCategoryBefore || invalidReferenceProfile)
+    {
+        std::cerr << "Invalid tag reference rollback check: ok=" << invalidReferenceResult.ok
+                  << ", error=" << invalidReferenceResult.error << ", tags=" << invalidReferenceTags.joinIntoString(",")
+                  << ", category=" << invalidReferenceCategory << ", profile=" << invalidReferenceProfile.has_value() << '\n';
+        return 278;
+    }
      MidiPattern pattern;pattern.events.push_back(hat);pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::tempoMetaEvent(600000)});pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::timeSignatureMetaEvent(7,8)});pattern.lengthBeats=8.0;
     MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
     if(!midiIO.write(midiFile,pattern,gm,false))return 23;

@@ -263,6 +263,42 @@ bool mergeMetadataTagOperations(sqlite3* connection, const std::vector<MetadataT
     return true;
 }
 
+bool validateSynchronizedTagRemovalReferences(sqlite3* connection, juce::String& error)
+{
+    const char* sql = R"sql(
+        SELECT 1
+        FROM metadata_tag_observed_adds AS reference
+        LEFT JOIN metadata_tag_operations AS removal
+            ON removal.operation_id=reference.remove_operation_id
+        LEFT JOIN metadata_tag_operations AS addition
+            ON addition.operation_id=reference.add_operation_id
+        WHERE removal.operation_id IS NULL OR removal.operation<>'remove'
+            OR addition.operation_id IS NULL OR addition.operation<>'add'
+            OR addition.sample_sha256<>removal.sample_sha256
+            OR addition.sample_size_bytes<>removal.sample_size_bytes
+            OR addition.tag<>removal.tag
+        LIMIT 1
+    )sql";
+    sqlite3_stmt* query = nullptr;
+    if (sqlite3_prepare_v2(connection, sql, -1, &query, nullptr) != SQLITE_OK)
+    {
+        error = "Could not validate synchronized tag-removal references.";
+        return false;
+    }
+    const int step = sqlite3_step(query);
+    sqlite3_finalize(query);
+    if (step == SQLITE_ROW)
+    {
+        error = "A synchronized tag removal references a missing or unrelated add operation.";
+        return false;
+    }
+    if (step != SQLITE_DONE)
+    {
+        error = "Could not validate synchronized tag-removal references.";
+        return false;
+    }
+    return true;
+}
 bool rebuildSynchronizedTags(sqlite3* connection, const std::string& hash, std::int64_t size,
                              int& tagsAdded, juce::String& error)
 {
@@ -2239,6 +2275,18 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
         }
     }
 
+    if (!validateSynchronizedTagRemovalReferences(connection, result.error))
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.archivesMerged = 0;
+        result.samplesMatched = 0;
+        result.samplesUnavailable = 0;
+        result.tagsAdded = 0;
+        result.categoryConflicts = 0;
+        result.profilesAdded = 0;
+        result.profileConflicts = 0;
+        return result;
+    }
     for (const auto& identity : touchedTagIdentities)
     {
         if (!rebuildSynchronizedTags(connection, identity.first, identity.second, result.tagsAdded, result.error))
