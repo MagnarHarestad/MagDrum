@@ -4,7 +4,9 @@ param(
     [string] $BuildDirectory,
     [switch] $SkipTests,
     [ValidateRange(1, 64)]
-    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8)
+    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8),
+    [ValidateRange(0, 99999)]
+    [int] $BuildRevision = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,6 +77,7 @@ try {
         '-B', $buildDirectory,
         '-G', $generator,
         '-A', $Architecture,
+        "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
         '-DBUILD_TESTING=ON'
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'
@@ -157,6 +160,7 @@ try {
     $hash = (Get-FileHash -LiteralPath $latestZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Windows $Architecture package: $latestZipPath"
     Write-Host "SHA-256: $hash"
+    Write-Host "Product version: 0.1.2.$BuildRevision"
     Write-Host "Build parallelism: $Parallel."
     Write-Host 'Publish this archive with gh release create when it is ready for distribution.'
 }

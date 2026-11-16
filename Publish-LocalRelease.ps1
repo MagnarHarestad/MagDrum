@@ -62,6 +62,26 @@ foreach ($name in $Asset) {
     $releaseAssets.Add($resolvedPath)
     $includedNames.Add($name)
 }
+
+if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $publishDirectory 'MagDrum-Windows-x64.zip'))
+    try {
+        $manifestEntry = $zip.GetEntry('MagDrum.vst3/Contents/Resources/moduleinfo.json')
+        if ($null -eq $manifestEntry) { throw 'The Windows x64 package has no VST3 moduleinfo.json; refusing to publish an unidentifiable test build.' }
+        $manifestReader = [System.IO.StreamReader]::new($manifestEntry.Open())
+        try { $moduleInfo = $manifestReader.ReadToEnd() | ConvertFrom-Json }
+        finally { $manifestReader.Dispose() }
+    }
+    finally { $zip.Dispose() }
+
+    if ($Tag -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)-test\.([0-9]+)$') { throw "Cannot derive the Windows product version from release tag $Tag." }
+    $expectedProductVersion = "$($Matches[1]).$($Matches[2])"
+    if ($moduleInfo.Version -ne $expectedProductVersion) {
+        throw "Windows package VST3 version '$($moduleInfo.Version)' does not match release tag $Tag (expected $expectedProductVersion). Rebuild with -BuildRevision $($Matches[2])."
+    }
+}
+
 $uniqueNames = @($includedNames | Select-Object -Unique)
 if ($includedNames.Count -ne $uniqueNames.Count) {
     throw 'Each release asset may be listed only once.'
