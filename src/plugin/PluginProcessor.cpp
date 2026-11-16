@@ -394,6 +394,25 @@ std::vector<MagDrumAudioProcessor::SampleLayerInfo> MagDrumAudioProcessor::getSa
     return layers;
 }
 
+std::vector<MagDrumAudioProcessor::SampleAssignmentInfo> MagDrumAudioProcessor::getAllSampleAssignments() const
+{
+    const juce::ScopedLock lock(stateLock);
+    std::vector<SampleAssignmentInfo> assignments;
+    for (int note = 0; note < 128; ++note)
+        for (int layer = 0; layer < maxVelocityLayers; ++layer)
+        {
+            const auto noteIndex = static_cast<size_t>(note);
+            const auto layerIndex = static_cast<size_t>(layer);
+            const auto& path = samplePaths[noteIndex][layerIndex];
+            if (path.isNotEmpty())
+                assignments.push_back({note, ownedSamples[noteIndex][layerIndex]->minimumVelocity,
+                    ownedSamples[noteIndex][layerIndex]->maximumVelocity, path});
+        }
+    for (const auto& pending : pendingSampleLoads)
+        assignments.push_back({pending.note, pending.minimumVelocity, pending.maximumVelocity, pending.path});
+    return assignments;
+}
+
 void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;

@@ -22,6 +22,14 @@ public:
         juce::String path;
     };
 
+    struct SampleAssignmentInfo
+    {
+        int midiNote = 0;
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
+        juce::String path;
+    };
+
     struct NoteParameters
     {
         float gainDb = 0.0f;
@@ -67,6 +75,7 @@ public:
     NoteParameters getNoteParameters(int midiNote) const;
     void setNoteParameters(int midiNote, NoteParameters);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
+    std::vector<SampleAssignmentInfo> getAllSampleAssignments() const;
     juce::String getSamplePathForNote(int midiNote) const;
     void setPluginEditorState(const juce::XmlElement&);
     std::unique_ptr<juce::XmlElement> getPluginEditorState() const;

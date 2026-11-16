@@ -1453,7 +1453,10 @@ void MagDrumAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster
     if (source == &magdrum::ui::languageChangeBroadcaster())
         applyLanguage();
     else if (processor.isSampleStateChangeSource(source))
+    {
         updateLayerSummary();
+        refreshSampleAssignmentLabels();
+    }
 }
 
 void MagDrumAudioProcessorEditor::applyLanguage()
@@ -1803,6 +1806,8 @@ void MagDrumAudioProcessorEditor::paintListBoxItem(int row,juce::Graphics& g,int
         if(sample.articulation.isNotEmpty())info+="  ·  "+sample.articulation;
         if(sample.takeIndex>1)info+="  ·  "+magdrum::ui::localisedText("Take")+" "+juce::String(sample.takeIndex);
     }
+    if(const auto assignment=sampleAssignmentLabels.find(sample.file.getFullPathName().toStdString());assignment!=sampleAssignmentLabels.end())
+        info+="  ·  MIDI → "+assignment->second;
     g.setColour(Palette::Muted);g.setFont(10.5f);
     g.drawText(info,18,22,width-24,height-23,juce::Justification::centredLeft,true);
 }
@@ -1878,6 +1883,7 @@ void MagDrumAudioProcessorEditor::loadSampleAsync(const juce::File& file, int no
                     juce::dontSendNotification);
                 return;
             }
+            safe->refreshSampleAssignmentLabels();
             if (!fromLibrary)
             {
                 safe->processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
@@ -1914,6 +1920,29 @@ void MagDrumAudioProcessorEditor::refreshSamples()
         if (safe != nullptr && safe->sampleBrowseGeneration == requestGeneration)
             safe->loadSamplePage(true, requestGeneration);
     });
+}
+
+void MagDrumAudioProcessorEditor::refreshSampleAssignmentLabels()
+{
+    sampleAssignmentLabels.clear();
+    std::unordered_map<std::string, int> counts;
+    for (const auto& assignment : processor.getAllSampleAssignments())
+    {
+        const auto path = juce::File(assignment.path).getFullPathName().toStdString();
+        auto& count = counts[path];
+        if (count < 3)
+        {
+            auto& label = sampleAssignmentLabels[path];
+            if (label.isNotEmpty()) label += " · ";
+            label += noteName(assignment.midiNote) + " " + juce::String(assignment.minimumVelocity)
+                + "–" + juce::String(assignment.maximumVelocity);
+        }
+        ++count;
+    }
+    for (const auto& [path, count] : counts)
+        if (count > 3)
+            sampleAssignmentLabels[path] += " +" + juce::String(count - 3);
+    indexedList.repaint();
 }
 
 void MagDrumAudioProcessorEditor::refreshPluginInventory()
@@ -2487,6 +2516,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             safe->hasMoreSamples = result.hasMore;
             safe->indexedList.updateContent();
             safe->sampleMap->setSamples(safe->samples, -1);
+            safe->refreshSampleAssignmentLabels();
             safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
             safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
             safe->status.setText(juce::String(safe->samples.size()) + (safe->hasMoreSamples ? "+" : "") + " "
@@ -3394,7 +3424,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&stopPreviewButton){stopSamplePreview();return;}
     if(button==&assignButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample first."),juce::dontSendNotification);return;}loadSampleAsync(file,selectedNote,velocityMinimum(velocityRange.getText()),velocityMaximum(velocityRange.getText()),true);return;}
     for(size_t i=0;i<pads.size();++i)if(button==&pads[i]){setNote(mappedPadNotes[i]);processor.triggerNote(selectedNote);status.setText(processor.getSampleLayersForNote(selectedNote).empty()?magdrum::ui::localisedText("Pad selected · no sample assigned yet."):magdrum::ui::localisedText("Played ")+localizedPadName(i),juce::dontSendNotification);return;}
-    if(button==&clearPadButton){const bool cleared=processor.clearSamplesForNote(selectedNote);if(cleared)processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));status.setText(cleared?magdrum::ui::localisedText("Pad cleared."):magdrum::ui::localisedText("Pad is already empty."),juce::dontSendNotification);updateLayerSummary();return;}
+    if(button==&clearPadButton){const bool cleared=processor.clearSamplesForNote(selectedNote);if(cleared){processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));refreshSampleAssignmentLabels();}status.setText(cleared?magdrum::ui::localisedText("Pad cleared."):magdrum::ui::localisedText("Pad is already empty."),juce::dontSendNotification);updateLayerSummary();return;}
     if(button==&loadButton){chooser=std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Choose a drum sample"),juce::File(),"*.wav;*.aif;*.aiff;*.flac",true,false,this);juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[safe](const juce::FileChooser& fc){if(safe==nullptr)return;const auto file=fc.getResult();if(!file.existsAsFile())return;safe->loadSampleAsync(file,safe->selectedNote,velocityMinimum(safe->velocityRange.getText()),velocityMaximum(safe->velocityRange.getText()),false);});return;}
     if(button==&loadProfileButton){const auto name=profileSelect.getText();if(name=="General MIDI"){mappingProfile=MidiMappingProfile::generalMidi();}else if(const auto loaded=database.loadMappingProfile(name))mappingProfile=*loaded;else{status.setText(magdrum::ui::localisedText("Could not load mapping profile."),juce::dontSendNotification);return;}profileName.setText(name,juce::dontSendNotification);updateDrumNotes();refreshMappingSummary();status.setText(magdrum::ui::localisedText("Loaded MIDI profile: ")+name,juce::dontSendNotification);return;}
     if(button==&saveProfileButton){const auto name=profileName.getText().trim();if(name.isEmpty()||!database.saveMappingProfile(name,mappingProfile)){status.setText(magdrum::ui::localisedText("Could not save mapping profile."),juce::dontSendNotification);return;}int id=0;for(int i=0;i<profileSelect.getNumItems();++i)if(profileSelect.getItemText(i)==name)id=profileSelect.getItemId(i);if(id==0){id=profileSelect.getNumItems()+1;profileSelect.addItem(name,id);}profileSelect.setSelectedId(id,juce::dontSendNotification);savePluginEditorState();status.setText(magdrum::ui::localisedText("Saved MIDI profile: ")+name,juce::dontSendNotification);return;}

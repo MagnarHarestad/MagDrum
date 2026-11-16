@@ -8,6 +8,8 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 class MagDrumSampleMap;
@@ -48,6 +50,7 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void refreshSamples();
+    void refreshSampleAssignmentLabels();
     void previewSampleAsync(const juce::File&);
     void stopSamplePreview();
     void loadSampleAsync(const juce::File&, int note, int minimumVelocity, int maximumVelocity,
@@ -133,6 +136,7 @@ private:
     SampleDatabase database;
     juce::File databaseFile;
     juce::Array<SampleBrowseRecord> samples;
+    std::unordered_map<std::string, juce::String> sampleAssignmentLabels;
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
     int sampleOffset = 0, previousMeterId = 404, previousPatternBars = 16;
     bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;

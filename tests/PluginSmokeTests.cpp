@@ -459,6 +459,10 @@ int main(int argc, char** argv)
 
     auto& processor = makeTestProcessor();
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
+    const auto sampleAssignments = processor.getAllSampleAssignments();
+    if (sampleAssignments.size() != 1 || sampleAssignments.front().midiNote != 36
+        || sampleAssignments.front().minimumVelocity != 1 || sampleAssignments.front().maximumVelocity != 127
+        || sampleAssignments.front().path != sample.getFullPathName()) return 35;
     const auto generalMidi = MidiMappingProfile::generalMidi();
     const std::vector<DrumEvent> unmappedSequence{{DrumInstrument::Percussion,DrumArticulation::Edge,100,0.0,0.1}};
     if (processor.setSequencerPattern(unmappedSequence,generalMidi,4.0)!=1
@@ -676,6 +680,15 @@ int main(int argc, char** argv)
         || layered.loadSampleForVelocityRange(36, 50, 80, sample)
         || layered.loadSampleForNote(36, sample)
         || layered.getSamplePathForNote(36) != softLayer.getFullPathName()) return 16;
+    const auto layeredAssignments = layered.getAllSampleAssignments();
+    bool hasSoftAssignment = false, hasHardAssignment = false;
+    for (const auto& assignment : layeredAssignments)
+    {
+        if (assignment.midiNote != 36) return 36;
+        hasSoftAssignment = hasSoftAssignment || (assignment.minimumVelocity == 1 && assignment.maximumVelocity == 63);
+        hasHardAssignment = hasHardAssignment || (assignment.minimumVelocity == 64 && assignment.maximumVelocity == 127);
+    }
+    if (layeredAssignments.size() != 2 || !hasSoftAssignment || !hasHardAssignment) return 37;
     juce::MemoryBlock layeredState;
     layered.getStateInformation(layeredState);
     auto& restoredLayers = makeTestProcessor();
