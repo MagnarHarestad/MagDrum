@@ -29,7 +29,7 @@ the app, VST3 and matching helper, installer scripts, project and third-party
 license texts, and Microsoft runtime were present. The packaged app and VST3
 both report product version `0.1.2.201`; the runtime signature is valid.
 `tools/Test-WindowsPackage.ps1` now repeats these checks for each x64 package.
-Package SHA-256: `dbd6d8d6a93199acdbd92028388e61d5c5f36be381871e037b790f0cb2234e3c`.
+Package SHA-256: `dbd6d8d6a93199acdbd92028388e61d5c5f36be381871e037b790f0cb2234e3c`. The installed VST3 module SHA-256 is `ae71fe82a5aece4e5ce2a604c49b5671b2038f6fa84a44a6ac02abc7c7615c87`; it matches the module in the ZIP.
 
 MSVC-built Windows x64 and ARM64 packages include the matching Microsoft Visual
 C++ v14 Redistributable (vc_redist.x64.exe or vc_redist.arm64.exe). The
