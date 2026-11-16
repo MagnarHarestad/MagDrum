@@ -2,7 +2,9 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Architecture = 'x64',
     [string] $BuildDirectory,
-    [switch] $SkipTests
+    [switch] $SkipTests,
+    [ValidateRange(1, 64)]
+    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,6 +48,7 @@ $latestDirectory = Join-Path $repoRoot 'latest-publish'
 
 & (Join-Path $repoRoot 'tools/Validate-Localization.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerGuard.ps1')
+& (Join-Path $repoRoot 'tools/Test-WindowsInstallerCleanup.ps1')
 
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmakePath = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
@@ -91,7 +94,7 @@ try {
 
     $buildTargets = @('MagDrum', 'MagDrumPlugin_VST3')
     if (-not $SkipTests) { $buildTargets += @('MagDrumTests', 'MagDrumPluginTests') }
-    & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel 4
+    & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
 
     if (-not $SkipTests -and $Architecture -eq 'x64') {
@@ -122,7 +125,7 @@ try {
     New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
     Copy-Item -LiteralPath $app.FullName -Destination $stagingDirectory
     Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $stagingDirectory 'MagDrum.vst3') -Recurse
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/MagDrumInstallHelpers.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingDirectory
     $juceSourceDirectory = Join-Path $dependencyDirectory 'juce-src'
     $thirdPartyLicenses = [ordered]@{
@@ -154,6 +157,7 @@ try {
     $hash = (Get-FileHash -LiteralPath $latestZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Windows $Architecture package: $latestZipPath"
     Write-Host "SHA-256: $hash"
+    Write-Host "Build parallelism: $Parallel."
     Write-Host 'Publish this archive with gh release create when it is ready for distribution.'
 }
 finally {

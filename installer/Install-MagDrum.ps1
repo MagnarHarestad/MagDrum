@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'MagDrumInstallHelpers.ps1')
 $cubaseProcesses = @(Get-Process -Name 'Cubase15', 'Cubase' -ErrorAction SilentlyContinue | Where-Object {
     try {
         $_.Refresh()
@@ -30,7 +31,7 @@ if ($AllUsers) {
 }
 else {
     if (Test-Path -LiteralPath $systemWideDestination) {
-        Write-Warning "A system-wide MagDrum VST3 already exists at '$systemWideDestination'. A per-user install creates a second copy. To replace the system-wide copy and keep a backup, run PowerShell as administrator and use Install-MagDrum.ps1 -AllUsers."
+        throw "A system-wide MagDrum VST3 already exists at '$systemWideDestination'. To replace it without leaving a duplicate, run PowerShell as administrator and use Install-MagDrum.ps1 -AllUsers."
     }
     $destination = Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3\MagDrum.vst3'
 }
@@ -63,4 +64,7 @@ catch {
 }
 Write-Host "Installed MagDrum VST3 to $destination"
 if (Test-Path -LiteralPath $backup) { Write-Host "Previous version preserved at $backup" }
+$cleanup = Move-OldMagDrumVst3Bundles -Destination $destination -BackupParent $backupParent -ScanRoots (Get-MagDrumDefaultVst3ScanRoots)
+foreach ($movedBundle in $cleanup.Moved) { Write-Host "Moved duplicate MagDrum plug-in outside VST3 scan paths: $movedBundle" }
+foreach ($failedBundle in $cleanup.Failed) { Write-Warning "Could not move an older MagDrum plug-in out of a VST3 scan path: $failedBundle" }
 Write-Host 'Restart Cubase and run Studio > VST Plug-in Manager > Rescan All.'
