@@ -5,6 +5,7 @@
 #include "../core/SequencerGrid.h"
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
+#include <cstdint>
 #include <functional>
 #include <vector>
 
@@ -80,7 +81,7 @@ private:
     void startNextDefaultLibraryFolder();
     void startSampleScan(const juce::File&);
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
-    void loadSamplePage(bool reset);
+    void loadSamplePage(bool reset, std::uint64_t requestGeneration = 0);
     void refreshSourceKitFilters();
     void refreshPluginInventory();
     void refreshPluginKits();
@@ -114,6 +115,9 @@ private:
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
     int sampleOffset = 0, previousMeterId = 404, previousPatternBars = 16;
     bool sequencerPlaying = false, databaseReady = false, scanning = false, hasMoreSamples = false;
+    bool sampleBrowseQueryPending = false;
+    std::uint64_t sampleBrowseGeneration = 0;
+    juce::ThreadPool sampleBrowseWorkers{1};
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
     std::vector<juce::File> defaultMidiPatterns;

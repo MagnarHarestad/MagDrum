@@ -370,6 +370,38 @@ private:
     juce::File rootFolder,dbPath;std::shared_ptr<std::atomic<bool>>cancelFlag;Completion onComplete;Progress onProgress;
 };
 
+class PluginSampleBrowseJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(bool, SampleBrowsePage)>;
+
+    PluginSampleBrowseJob(juce::File databaseFile, SampleBrowseFilter filter, int limit, int offset,
+                          Completion completion)
+        : ThreadPoolJob("MagDrum VST sample library query"), dbPath(std::move(databaseFile)),
+          queryFilter(std::move(filter)), pageLimit(limit), pageOffset(offset), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        SampleDatabase queryDatabase;
+        const bool opened = queryDatabase.open(dbPath);
+        auto page = opened ? queryDatabase.searchSampleBrowseRecords(queryFilter, pageLimit, pageOffset)
+                           : SampleBrowsePage{};
+        juce::MessageManager::callAsync([completion = std::move(onComplete), opened,
+                                         page = std::move(page)]() mutable
+        {
+            if (completion)
+                completion(opened, std::move(page));
+        });
+        return jobHasFinished;
+    }
+
+private:
+    juce::File dbPath;
+    SampleBrowseFilter queryFilter;
+    int pageLimit = 250, pageOffset = 0;
+    Completion onComplete;
+};
+
 class PluginMetadataFolderSyncJob final : public juce::ThreadPoolJob
 {
 public:
@@ -1028,7 +1060,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -1521,7 +1553,24 @@ void MagDrumAudioProcessorEditor::listBoxItemDoubleClicked(int row,const juce::M
 
 void MagDrumAudioProcessorEditor::refreshSamples()
 {
-    loadSamplePage(true);
+    if (!databaseReady || databaseFile == juce::File())
+        return;
+
+    const auto requestGeneration = ++sampleBrowseGeneration;
+    sampleBrowseQueryPending = true;
+    indexedList.setEnabled(false);
+    sampleMap->setEnabled(false);
+    openSourceKitButton.setEnabled(false);
+    previewButton.setEnabled(false);
+    assignButton.setEnabled(false);
+    libraryToolsButton.setEnabled(false);
+    moreSamplesButton.setEnabled(false);
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    juce::Timer::callAfterDelay(120, [safe, requestGeneration]
+    {
+        if (safe != nullptr && safe->sampleBrowseGeneration == requestGeneration)
+            safe->loadSamplePage(true, requestGeneration);
+    });
 }
 
 void MagDrumAudioProcessorEditor::refreshPluginInventory()
@@ -2004,14 +2053,103 @@ void MagDrumAudioProcessorEditor::refreshSourceKitFilters()
     if(priorSourceId==2)sourceFilter.setSelectedId(2,juce::dontSendNotification);else if(priorSourceId<=1||sourceFilter.getSelectedId()==0)sourceFilter.setSelectedId(1,juce::dontSendNotification);else if(priorSourceId<sourceFilter.getNumItems()+1)sourceFilter.setSelectedId(priorSourceId,juce::dontSendNotification);
     kitFilter.clear(juce::dontSendNotification);kitFilter.addItem(magdrum::ui::localisedText("All kits"),1);int kitId=2;for(const auto& name:database.getPluginKitNames()){kitFilter.addItem(name,kitId);if(name==priorKit)kitFilter.setSelectedId(kitId,juce::dontSendNotification);++kitId;}if(priorKitId==1||priorKit.isEmpty()||kitFilter.getSelectedId()==0)kitFilter.setSelectedId(1,juce::dontSendNotification);else kitFilter.setSelectedId(priorKitId,juce::dontSendNotification);
 }
-void MagDrumAudioProcessorEditor::loadSamplePage(bool reset)
+void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t requestGeneration)
 {
-    if(!databaseReady)return;if(reset){samples.clear();sampleOffset=0;hasMoreSamples=false;openSourceKitButton.setEnabled(false);}
-    SampleBrowseFilter options;options.query=sampleSearch.getText();if(categoryFilter.getSelectedId()>1){static constexpr const char* categories[]{"All sounds","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Percussion","Unknown"};const int categoryId=categoryFilter.getSelectedId()-1;if(juce::isPositiveAndBelow(categoryId,12))options.category=categories[categoryId];}options.feature=juce::jmax(1,featureFilter.getSelectedId());options.sort=juce::jmax(1,sortFilter.getSelectedId());options.needsReview=confidenceFilter.getSelectedId()==2;
-    const auto source=sourceFilter.getText();if(sourceFilter.getSelectedId()==2)options.sourceType="folder";else if(source.startsWith(magdrum::ui::localisedText("Folder: "))){options.sourceType="folder";options.sourceIdentifier=source.fromFirstOccurrenceOf(magdrum::ui::localisedText("Folder: "),false,false);}else if(sourceFilter.getSelectedId()>2&&source.isNotEmpty()){options.sourceType="plugin";options.pluginName=source;}
-    const auto kit=kitFilter.getText();if(kitFilter.getSelectedId()>1&&kit.isNotEmpty()){options.sourceType="plugin";if(options.pluginName.isEmpty())options.pluginName=kit.upToFirstOccurrenceOf(" / ",false,false);options.kitName=kit.fromFirstOccurrenceOf(" / ",false,false);}
-    const auto result=database.searchSampleBrowseRecords(options,250,sampleOffset);for(const auto& record:result.records)samples.add(record);sampleOffset=samples.size();hasMoreSamples=result.hasMore;
-    indexedList.updateContent();if(reset)indexedList.deselectAllRows();sampleMap->setSamples(samples,-1);moreSamplesButton.setEnabled(hasMoreSamples);status.setText(juce::String(samples.size())+(hasMoreSamples?"+":"")+" "+magdrum::ui::localisedText("samples · select, preview or use Sample tools"),juce::dontSendNotification);
+    if (!databaseReady || databaseFile == juce::File())
+        return;
+
+    if (requestGeneration == 0)
+        requestGeneration = ++sampleBrowseGeneration;
+    if (requestGeneration != sampleBrowseGeneration)
+        return;
+
+    SampleBrowseFilter options;
+    options.query = sampleSearch.getText();
+    if (categoryFilter.getSelectedId() > 1)
+    {
+        static constexpr const char* categories[]{"All sounds", "Kick", "Snare", "Closed hi-hat", "Open hi-hat",
+                                                  "Pedal hi-hat", "Tom", "Ride", "Crash", "Clap", "Percussion", "Unknown"};
+        const int categoryId = categoryFilter.getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(categoryId, 12))
+            options.category = categories[categoryId];
+    }
+    options.feature = juce::jmax(1, featureFilter.getSelectedId());
+    options.sort = juce::jmax(1, sortFilter.getSelectedId());
+    options.needsReview = confidenceFilter.getSelectedId() == 2;
+
+    const auto source = sourceFilter.getText();
+    if (sourceFilter.getSelectedId() == 2)
+        options.sourceType = "folder";
+    else if (source.startsWith(magdrum::ui::localisedText("Folder: ")))
+    {
+        options.sourceType = "folder";
+        options.sourceIdentifier = source.fromFirstOccurrenceOf(magdrum::ui::localisedText("Folder: "), false, false);
+    }
+    else if (sourceFilter.getSelectedId() > 2 && source.isNotEmpty())
+    {
+        options.sourceType = "plugin";
+        options.pluginName = source;
+    }
+
+    const auto kit = kitFilter.getText();
+    if (kitFilter.getSelectedId() > 1 && kit.isNotEmpty())
+    {
+        options.sourceType = "plugin";
+        if (options.pluginName.isEmpty())
+            options.pluginName = kit.upToFirstOccurrenceOf(" / ", false, false);
+        options.kitName = kit.fromFirstOccurrenceOf(" / ", false, false);
+    }
+
+    const int offset = reset ? 0 : sampleOffset;
+    sampleBrowseQueryPending = true;
+    indexedList.setEnabled(false);
+    sampleMap->setEnabled(false);
+    previewButton.setEnabled(false);
+    assignButton.setEnabled(false);
+    libraryToolsButton.setEnabled(false);
+    moreSamplesButton.setEnabled(false);
+
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    sampleBrowseWorkers.addJob(new PluginSampleBrowseJob(databaseFile, std::move(options), 250, offset,
+        [safe, requestGeneration, reset](bool opened, SampleBrowsePage result)
+        {
+            if (safe == nullptr || requestGeneration != safe->sampleBrowseGeneration)
+                return;
+
+            safe->sampleBrowseQueryPending = false;
+            safe->indexedList.setEnabled(true);
+            safe->sampleMap->setEnabled(true);
+            safe->previewButton.setEnabled(true);
+            safe->assignButton.setEnabled(true);
+            safe->libraryToolsButton.setEnabled(true);
+
+            if (!opened)
+            {
+                safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
+                safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
+                safe->status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                                     juce::dontSendNotification);
+                return;
+            }
+
+            if (reset)
+            {
+                safe->samples.clear();
+                safe->sampleOffset = 0;
+                safe->indexedList.deselectAllRows();
+            }
+            for (const auto& record : result.records)
+                safe->samples.add(record);
+            safe->sampleOffset = safe->samples.size();
+            safe->hasMoreSamples = result.hasMore;
+            safe->indexedList.updateContent();
+            safe->sampleMap->setSamples(safe->samples, -1);
+            safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
+            safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
+            safe->status.setText(juce::String(safe->samples.size()) + (safe->hasMoreSamples ? "+" : "") + " "
+                                     + magdrum::ui::localisedText("samples · select, preview or use Sample tools"),
+                                 juce::dontSendNotification);
+        }), true);
 }
 juce::File MagDrumAudioProcessorEditor::selectedSample()const{const int row=indexedList.getSelectedRow();return juce::isPositiveAndBelow(row,samples.size())?samples.getReference(row).file:juce::File();}
 
@@ -2495,7 +2633,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&refreshPluginInventoryButton){refreshPluginInventory();return;}if(button==&scanPluginInventoryButton){startPluginInventoryScan();return;}if(button==&choosePluginFolderButton){choosePluginFolder();return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){choosePluginPreset();return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}
     for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step)if(button==&steps[lane][step]){const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),static_cast<int>(step));if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
     if(button==&scanButton){chooseSampleFolder();return;}if(button==&scanDefaultsButton){scanDefaultLibraryFolders();return;}if(button==&instrumentScannerButton){launchInstrumentScanner();return;}if(button==&openSourceKitButton){openSourceKitForSelectedSample();return;}
-    if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples)loadSamplePage(false);return;}
+    if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples&&!sampleBrowseQueryPending)loadSamplePage(false);return;}
     if(button==&previewButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample to preview."),juce::dontSendNotification);return;}status.setText(processor.previewSample(file)?magdrum::ui::localisedText("Previewing ")+file.getFileName():magdrum::ui::localisedText("Could not read this audio file."),juce::dontSendNotification);return;}
     if(button==&assignButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample first."),juce::dontSendNotification);return;}if(processor.loadSampleForVelocityRange(selectedNote,velocityMinimum(velocityRange.getText()),velocityMaximum(velocityRange.getText()),file)){updateLayerSummary();const auto padIndex=static_cast<size_t>(std::max(0,static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin())));status.setText(magdrum::ui::localisedText("Assigned ")+file.getFileName()+magdrum::ui::localisedText(" to ")+localizedPadName(padIndex)+".",juce::dontSendNotification);}else status.setText(magdrum::ui::localisedText("Assignment failed. Check velocity ranges and the eight-layer limit."),juce::dontSendNotification);return;}
     for(size_t i=0;i<pads.size();++i)if(button==&pads[i]){setNote(mappedPadNotes[i]);processor.triggerNote(selectedNote);status.setText(processor.getSampleLayersForNote(selectedNote).empty()?magdrum::ui::localisedText("Pad selected · no sample assigned yet."):magdrum::ui::localisedText("Played ")+localizedPadName(i),juce::dontSendNotification);return;}
