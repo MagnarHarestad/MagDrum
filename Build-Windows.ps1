@@ -1,8 +1,7 @@
 param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Architecture = 'x64',
-    # Keep one warm Release tree across test releases; clean trees rebuild all of JUCE.
-    [string] $BuildDirectory = 'build/local-windows-release-20261116',
+    [string] $BuildDirectory,
     [switch] $SkipTests,
     [ValidateRange(1, 64)]
     [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8),
@@ -16,7 +15,14 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $architectureKey = $Architecture.ToLowerInvariant()
 $buildDirectory = if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
-    Join-Path $repoRoot "build/local-windows-$architectureKey"
+    # Keep one warm x64 Release tree across test releases; clean trees rebuild all of JUCE.
+    $defaultBuildDirectory = if ($Architecture -eq 'x64') {
+        'build/local-windows-release-20261116'
+    }
+    else {
+        "build/local-windows-$architectureKey"
+    }
+    Join-Path $repoRoot $defaultBuildDirectory
 } else {
     $candidate = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $BuildDirectory))
     $repoPrefix = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
