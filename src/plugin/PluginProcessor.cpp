@@ -15,6 +15,22 @@ constexpr std::array<DrumArticulation, 8> sequencerLaneArticulations{
     DrumArticulation::Default, DrumArticulation::Default, DrumArticulation::Closed, DrumArticulation::Open,
     DrumArticulation::Low, DrumArticulation::Bow, DrumArticulation::Default, DrumArticulation::Default};
 
+class PluginStateSampleLoadJob final : public juce::ThreadPoolJob
+{
+public:
+    explicit PluginStateSampleLoadJob(std::function<void()> task)
+        : ThreadPoolJob("MagDrum restore project samples"), work(std::move(task)) {}
+
+    JobStatus runJob() override
+    {
+        if (!shouldExit() && work)
+            work();
+        return jobHasFinished;
+    }
+
+private:
+    std::function<void()> work;
+};
 }
 
 MagDrumAudioProcessor::MagDrumAudioProcessor()
@@ -24,6 +40,20 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
     for (auto& noteSlots : sampleSlots)
         for (auto& slot : noteSlots)
             slot.store(nullptr);
+}
+
+MagDrumAudioProcessor::~MagDrumAudioProcessor()
+{
+    sampleStateLoadGeneration.fetch_add(1, std::memory_order_acq_rel);
+    {
+        const juce::ScopedLock lock(stateLock);
+        for (auto& layer : pendingSampleLoads)
+            if (layer.cancellation != nullptr)
+                layer.cancellation->store(false, std::memory_order_release);
+    }
+    const juce::ScopedLock workerLock(sampleStateLoadWorkerLock);
+    if (sampleStateLoadWorkers != nullptr)
+        sampleStateLoadWorkers->removeAllJobs(true, -1);
 }
 
 void MagDrumAudioProcessor::prepareToPlay(double rate, int)
@@ -49,11 +79,13 @@ bool MagDrumAudioProcessor::loadSampleForNote(int note, const juce::File& file)
 }
 
 bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelocity, int maximumVelocity,
-    const juce::File& file)
+    const juce::File& file, const std::function<bool()>& shouldCancel)
 {
-    if (note < 0 || note > 127 || minimumVelocity < 1 || maximumVelocity > 127
+    if ((shouldCancel && shouldCancel()) || note < 0 || note > 127 || minimumVelocity < 1 || maximumVelocity > 127
         || minimumVelocity > maximumVelocity || !file.existsAsFile()) return false;
-    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    juce::AudioFormatManager sampleFormats;
+    sampleFormats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader(sampleFormats.createReaderFor(file));
     if (!reader || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0 || reader->numChannels == 0) return false;
     constexpr double maxSampleSeconds = 600.0;
     if (reader->lengthInSamples > reader->sampleRate * maxSampleSeconds || reader->lengthInSamples > std::numeric_limits<int>::max()) return false;
@@ -65,12 +97,20 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
     const int channels = static_cast<int>(juce::jmin(2u, reader->numChannels));
     const int sampleCount = static_cast<int>(reader->lengthInSamples);
     sample->audio.setSize(channels, sampleCount);
-    if (!reader->read(sample->audio.getArrayOfWritePointers(), channels, 0, sampleCount)) return false;
+    constexpr int sampleChunkSize = 16384;
+    for (int offset = 0; offset < sampleCount; offset += sampleChunkSize)
+    {
+        if (shouldCancel && shouldCancel()) return false;
+        const int count = juce::jmin(sampleChunkSize, sampleCount - offset);
+        if (!reader->read(&sample->audio, offset, count, offset, true, true)) return false;
+    }
 
     std::unique_ptr<SampleData> retiredSample;
+    if (shouldCancel && shouldCancel()) return false;
     {
         const juce::ScopedLock sampleGuard(sampleLock);
         const juce::ScopedLock stateGuard(stateLock);
+        if (shouldCancel && shouldCancel()) return false;
         int targetLayer = -1;
         for (int layer = 0; layer < maxVelocityLayers; ++layer)
         {
@@ -107,6 +147,18 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
         oldSample = std::move(sample);
         sampleSlots[static_cast<size_t>(note)][static_cast<size_t>(targetLayer)].store(oldSample.get(), std::memory_order_release);
         samplePaths[static_cast<size_t>(note)][static_cast<size_t>(targetLayer)] = file.getFullPathName();
+        for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
+        {
+            if (it->note == note && it->minimumVelocity == minimumVelocity
+                && it->maximumVelocity == maximumVelocity)
+            {
+                if (it->cancellation != nullptr)
+                    it->cancellation->store(false, std::memory_order_release);
+                it = pendingSampleLoads.erase(it);
+            }
+            else
+                ++it;
+        }
     }
     return true;
 }
@@ -135,6 +187,17 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     }
     for (auto& path : samplePaths[static_cast<size_t>(note)])
         path.clear();
+    for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
+    {
+        if (it->note == note)
+        {
+            if (it->cancellation != nullptr)
+                it->cancellation->store(false, std::memory_order_release);
+            it = pendingSampleLoads.erase(it);
+        }
+        else
+            ++it;
+    }
     return removedAny;
 }
 
@@ -498,6 +561,17 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 onlyLayer = sample;
                 onlyPath = path;
             }
+            for (const auto& pending : pendingSampleLoads)
+            {
+                if (pending.note != note)
+                    continue;
+                auto* savedLayer = state.createNewChildElement("SAMPLE_LAYER");
+                savedLayer->setAttribute("note", note);
+                savedLayer->setAttribute("minimumVelocity", pending.minimumVelocity);
+                savedLayer->setAttribute("maximumVelocity", pending.maximumVelocity);
+                savedLayer->setAttribute("path", pending.path);
+                ++layerCount;
+            }
             if (layerCount == 1 && onlyLayer != nullptr
                 && onlyLayer->minimumVelocity == 1 && onlyLayer->maximumVelocity == 127)
                 state.setAttribute("sample" + juce::String(note), onlyPath);
@@ -552,9 +626,23 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                 savedLayers[index].push_back({1, 127, legacyPath});
         }
     }
+    struct RestoreRequest
+    {
+        int note = 0;
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
+        juce::File file;
+        std::shared_ptr<std::atomic<bool>> cancellation;
+    };
+    std::vector<RestoreRequest> restoreRequests;
+    const auto generation = sampleStateLoadGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
     {
         const juce::ScopedLock sampleGuard(sampleLock);
         const juce::ScopedLock stateGuard(stateLock);
+        for (auto& pending : pendingSampleLoads)
+            if (pending.cancellation != nullptr)
+                pending.cancellation->store(false, std::memory_order_release);
+        pendingSampleLoads.clear();
         for (int note = 0; note < 128; ++note)
         {
             const auto noteIndex = static_cast<size_t>(note);
@@ -565,15 +653,43 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                 ownedSamples[noteIndex][layerIndex].reset();
                 samplePaths[noteIndex][layerIndex].clear();
             }
+            for (const auto& layer : savedLayers[noteIndex])
+            {
+                auto cancellation = std::make_shared<std::atomic<bool>>(true);
+                pendingSampleLoads.push_back(
+                    {note, layer.minimumVelocity, layer.maximumVelocity, layer.path, cancellation});
+                restoreRequests.push_back({note, layer.minimumVelocity, layer.maximumVelocity,
+                                           juce::File(layer.path), std::move(cancellation)});
+            }
         }
         for (auto& voice : voices) voice = {};
     }
     for (int note = 0; note < 128; ++note)
-    {
         setNoteParameters(note, savedParameters[static_cast<size_t>(note)]);
-        for (const auto& layer : savedLayers[static_cast<size_t>(note)])
-            loadSampleForVelocityRange(note, layer.minimumVelocity, layer.maximumVelocity, juce::File(layer.path));
-    }
+    if (restoreRequests.empty())
+        return;
+
+    const juce::ScopedLock workerLock(sampleStateLoadWorkerLock);
+    if (sampleStateLoadWorkers == nullptr)
+        sampleStateLoadWorkers = std::make_unique<juce::ThreadPool>(1);
+    sampleStateLoadWorkers->addJob(new PluginStateSampleLoadJob(
+        [this, generation, requests = std::move(restoreRequests)]() mutable
+        {
+            for (const auto& request : requests)
+            {
+                if (sampleStateLoadGeneration.load(std::memory_order_acquire) != generation)
+                    return;
+                const auto shouldCancel = [this, generation, &request]
+                {
+                    return sampleStateLoadGeneration.load(std::memory_order_acquire) != generation
+                        || request.cancellation == nullptr
+                        || !request.cancellation->load(std::memory_order_acquire);
+                };
+                if (!shouldCancel())
+                    loadSampleForVelocityRange(request.note, request.minimumVelocity,
+                        request.maximumVelocity, request.file, shouldCancel);
+            }
+        }), true);
 }
 
 void MagDrumAudioProcessor::setPluginEditorState(const juce::XmlElement& value)

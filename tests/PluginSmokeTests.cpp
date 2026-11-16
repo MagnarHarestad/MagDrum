@@ -3,13 +3,16 @@
 #include "core/ScopedFileAccess.h"
 #include "ui/MagDrumLocalization.h"
 #include <cmath>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <atomic>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <new>
 #include <thread>
+#include <vector>
 #if defined(_MSC_VER)
 #include <malloc.h>
 #endif
@@ -154,6 +157,28 @@ double renderPeakInRange(MagDrumAudioProcessor& processor, int note, int velocit
             peak = juce::jmax(peak, std::abs(static_cast<double>(audio.getSample(channel, sample))));
     return peak;
 }
+
+bool waitForSamplePath(MagDrumAudioProcessor& processor, int note, const juce::String& expectedPath)
+{
+    for (int attempt = 0; attempt < 1000; ++attempt)
+    {
+        if (processor.getSamplePathForNote(note) == expectedPath)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return false;
+}
+
+bool waitForSampleLayerCount(MagDrumAudioProcessor& processor, int note, size_t expectedCount)
+{
+    for (int attempt = 0; attempt < 1000; ++attempt)
+    {
+        if (processor.getSampleLayersForNote(note).size() == expectedCount)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return false;
+}
 }
 
 class MagDrumAudioProcessorTestAccess
@@ -165,6 +190,19 @@ public:
     }
 };
 
+namespace
+{
+std::vector<std::unique_ptr<MagDrumAudioProcessor>>* activeTestProcessors = nullptr;
+
+MagDrumAudioProcessor& makeTestProcessor()
+{
+    auto processor = std::make_unique<MagDrumAudioProcessor>();
+    auto& result = *processor;
+    activeTestProcessors->push_back(std::move(processor));
+    return result;
+}
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-plugin-scan-worker") == 0)
@@ -172,10 +210,10 @@ int main(int argc, char** argv)
 
     if (argc == 4 && std::strcmp(argv[1], "--magdrum-test-write-plugin-state") == 0)
     {
-        MagDrumAudioProcessor fixture;
-        if (!fixture.loadSampleForNote(36, juce::File(argv[2]))) return 201;
+        auto fixture = std::make_unique<MagDrumAudioProcessor>();
+        if (!fixture->loadSampleForNote(36, juce::File(argv[2]))) return 201;
         juce::MemoryBlock processorState;
-        fixture.getStateInformation(processorState);
+        fixture->getStateInformation(processorState);
         if (processorState.isEmpty()) return 202;
 
         // A host's AudioPluginInstance state wraps processor state in a VST3 envelope.
@@ -185,6 +223,9 @@ int main(int argc, char** argv)
         juce::AudioProcessor::copyXmlToBinary(hostedState, state);
         return !state.isEmpty() && juce::File(argv[3]).replaceWithData(state.getData(), state.getSize()) ? 0 : 203;
     }
+
+    std::vector<std::unique_ptr<MagDrumAudioProcessor>> testProcessors;
+    activeTestProcessors = &testProcessors;
 
     magdrum::plugin::DeferredNoteTriggers deferredTriggers;
     if (!deferredTriggers.push(36, 96) || !deferredTriggers.push(38, 110)
@@ -286,7 +327,7 @@ int main(int argc, char** argv)
                 std::abs(static_cast<double>(previewAudio.getSample(channel, sampleIndex))));
     if (previewPeak <= 0.05) return 252;
 
-    MagDrumAudioProcessor contendedSampleUpdate;
+    auto& contendedSampleUpdate = makeTestProcessor();
     if (!contendedSampleUpdate.loadSampleForNote(36, sample)) return 208;
     contendedSampleUpdate.prepareToPlay(48000.0, 128);
     auto& sampleLock = MagDrumAudioProcessorTestAccess::sampleLock(contendedSampleUpdate);
@@ -348,7 +389,7 @@ int main(int argc, char** argv)
     if (!writeFormatFixture(*aiffFormat, aiffSample) || !writeFormatFixture(*flacFormat, flacSample)) return 33;
     for (const auto& encodedSample : {aiffSample, flacSample})
     {
-        MagDrumAudioProcessor encodedProcessor;
+        auto& encodedProcessor = makeTestProcessor();
         if (!encodedProcessor.loadSampleForNote(36, encodedSample)) return 34;
         encodedProcessor.prepareToPlay(48000.0, 128);
         if (renderPeak(encodedProcessor, 36, 100) < 0.05) return 35;
@@ -397,7 +438,7 @@ int main(int argc, char** argv)
     if (!MagDrumFiles::copyFileToURL(copiedBytes, juce::URL(roundTripBytes), copyError)
         || !filesMatch(sourceBytes, roundTripBytes)) return 8;
 
-    MagDrumAudioProcessor processor;
+    auto& processor = makeTestProcessor();
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
     const auto generalMidi = MidiMappingProfile::generalMidi();
     const std::vector<DrumEvent> unmappedSequence{{DrumInstrument::Percussion,DrumArticulation::Edge,100,0.0,0.1}};
@@ -441,6 +482,8 @@ int main(int argc, char** argv)
     missingMappedEvent->setAttribute("duration",0.1);
     processor.setPluginEditorState(sequencerState);
     if (processor.getSequencerUnmappedEventCount()!=1) return 36;
+    if (processor.loadSampleForVelocityRange(37, 1, 127, sample, [] { return true; })
+        || !processor.getSamplePathForNote(37).isEmpty()) return 253;
     if (processor.loadSampleForNote(-1, sample) || processor.loadSampleForNote(128, sample)
         || processor.loadSampleForNote(37, root.getChildFile("missing.wav"))) return 9;
     if (processor.getSamplePathForNote(37).isNotEmpty()) return 10;
@@ -449,9 +492,15 @@ int main(int argc, char** argv)
     processor.getStateInformation(state);
     if (state.isEmpty()) return 11;
 
-    MagDrumAudioProcessor restored;
+    auto& restored = makeTestProcessor();
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
-    if (restored.getSamplePathForNote(36) != sample.getFullPathName()) return 12;
+    juce::MemoryBlock stateSavedWhileRestoring;
+    restored.getStateInformation(stateSavedWhileRestoring);
+    auto& restoredAgain = makeTestProcessor();
+    restoredAgain.setStateInformation(stateSavedWhileRestoring.getData(),
+                                      static_cast<int>(stateSavedWhileRestoring.getSize()));
+    if (!waitForSamplePath(restored, 36, sample.getFullPathName())
+        || !waitForSamplePath(restoredAgain, 36, sample.getFullPathName())) return 12;
     const auto restoredEditorState=restored.getPluginEditorState();
     if(!restoredEditorState||restoredEditorState->getIntAttribute("gridResolution",4)!=8
         ||restoredEditorState->getStringAttribute("tempo")!="137"
@@ -465,8 +514,9 @@ int main(int argc, char** argv)
     if(restoredEditorState->getIntAttribute("bars",0)!=2||restoredEventCount!=3||restoredMetadataCount!=2)return 40;
     restored.prepareToPlay(44100.0, 128);
     const double fullVelocityPeak = renderPeak(restored, 36, 127);
-    MagDrumAudioProcessor lowVelocity;
+    auto& lowVelocity = makeTestProcessor();
     lowVelocity.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    if (!waitForSamplePath(lowVelocity, 36, sample.getFullPathName())) return 13;
     lowVelocity.prepareToPlay(44100.0, 128);
     const double lowVelocityPeak = renderPeak(lowVelocity, 36, 64);
     if (fullVelocityPeak <= 0.05 || fullVelocityPeak > 0.26 || lowVelocityPeak <= 0.0
@@ -477,7 +527,7 @@ int main(int argc, char** argv)
         return 13;
     }
 
-    MagDrumAudioProcessor queuedTrigger;
+    auto& queuedTrigger = makeTestProcessor();
     if (!queuedTrigger.loadSampleForNote(36, sample)) return 32;
     queuedTrigger.prepareToPlay(44100.0, 128);
     queuedTrigger.triggerNote(36, 127);
@@ -494,7 +544,7 @@ int main(int argc, char** argv)
         return 33;
     }
 
-    MagDrumAudioProcessor hostSyncedSequencer;
+    auto& hostSyncedSequencer = makeTestProcessor();
     if (!hostSyncedSequencer.loadSampleForNote(36, sample)) return 37;
     hostSyncedSequencer.prepareToPlay(48000.0, 128);
     const std::vector<DrumEvent> hostEvents{{DrumInstrument::Kick, DrumArticulation::Default, 100, 0.001, 0.1}};
@@ -545,7 +595,7 @@ int main(int argc, char** argv)
     hostSyncedSequencer.processBlock(stoppedHostAudio, stoppedHostMidi);
     if (hostSyncedSequencer.isSequencerHostSynchronized()) return 38;
 
-    MagDrumAudioProcessor controlStateSource;
+    auto& controlStateSource = makeTestProcessor();
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
     controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f});
     controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f});
@@ -555,8 +605,9 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.tuneSemitones - 24.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
-    MagDrumAudioProcessor controlStateRestored;
+    auto& controlStateRestored = makeTestProcessor();
     controlStateRestored.setStateInformation(controlState.getData(), static_cast<int>(controlState.getSize()));
+    if (!waitForSamplePath(controlStateRestored, 36, sample.getFullPathName())) return 24;
     const auto restoredParameters = controlStateRestored.getNoteParameters(36);
     if (std::abs(restoredParameters.gainDb + 6.0f) > 0.001f
         || std::abs(restoredParameters.pan + 1.0f) > 0.001f
@@ -569,7 +620,8 @@ int main(int argc, char** argv)
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
         || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
 
-    MagDrumAudioProcessor gainReference, gainReduced;
+    auto& gainReference = makeTestProcessor();
+    auto& gainReduced = makeTestProcessor();
     if (!gainReference.loadSampleForNote(36, sample) || !gainReduced.loadSampleForNote(36, sample)) return 25;
     gainReference.prepareToPlay(44100.0, 128);
     gainReduced.prepareToPlay(44100.0, 128);
@@ -578,7 +630,8 @@ int main(int argc, char** argv)
     const double attenuatedPeak = renderPeak(gainReduced, 36, 127);
     if (unattenuatedPeak <= 0.05 || std::abs(attenuatedPeak / unattenuatedPeak - 0.501187) > 0.02) return 26;
 
-    MagDrumAudioProcessor leftPan, rightPan;
+    auto& leftPan = makeTestProcessor();
+    auto& rightPan = makeTestProcessor();
     if (!leftPan.loadSampleForNote(36, sample) || !rightPan.loadSampleForNote(36, sample)) return 27;
     leftPan.prepareToPlay(44100.0, 128);
     rightPan.prepareToPlay(44100.0, 128);
@@ -589,7 +642,7 @@ int main(int argc, char** argv)
     if (leftPeaks[0] < 0.05 || leftPeaks[1] > 0.001
         || rightPeaks[1] < 0.05 || rightPeaks[0] > 0.001) return 28;
 
-    MagDrumAudioProcessor octaveUp;
+    auto& octaveUp = makeTestProcessor();
     if (!octaveUp.loadSampleForNote(36, sample)) return 29;
     octaveUp.prepareToPlay(44100.0, 128);
     octaveUp.setNoteParameters(36, {0.0f, 0.0f, 12.0f});
@@ -598,7 +651,7 @@ int main(int argc, char** argv)
     const auto softLayer = root.getChildFile("kick-soft.wav");
     const auto hardLayer = root.getChildFile("kick-hard.wav");
     if (!writeFixture(softLayer, 0.10f) || !writeFixture(hardLayer, 0.22f)) return 15;
-    MagDrumAudioProcessor layered;
+    auto& layered = makeTestProcessor();
     if (!layered.loadSampleForVelocityRange(36, 64, 127, hardLayer)
         || !layered.loadSampleForVelocityRange(36, 1, 63, softLayer)
         || layered.loadSampleForVelocityRange(36, 50, 80, sample)
@@ -606,8 +659,10 @@ int main(int argc, char** argv)
         || layered.getSamplePathForNote(36) != softLayer.getFullPathName()) return 16;
     juce::MemoryBlock layeredState;
     layered.getStateInformation(layeredState);
-    MagDrumAudioProcessor restoredLayers;
+    auto& restoredLayers = makeTestProcessor();
     restoredLayers.setStateInformation(layeredState.getData(), static_cast<int>(layeredState.getSize()));
+    if (!waitForSamplePath(restoredLayers, 36, softLayer.getFullPathName())
+        || !waitForSampleLayerCount(restoredLayers, 36, 2)) return 17;
     const auto restoredLayerInfo = restoredLayers.getSampleLayersForNote(36);
     if (restoredLayers.getSamplePathForNote(36) != softLayer.getFullPathName() || restoredLayerInfo.size() != 2
         || restoredLayerInfo[0].minimumVelocity != 1 || restoredLayerInfo[0].maximumVelocity != 63
@@ -619,7 +674,7 @@ int main(int argc, char** argv)
     if (!restoredLayers.clearSamplesForNote(36) || restoredLayers.clearSamplesForNote(36)
         || restoredLayers.getSamplePathForNote(36).isNotEmpty() || renderPeak(restoredLayers, 36, 96) != 0.0) return 19;
 
-    MagDrumAudioProcessor concurrentSwaps;
+    auto& concurrentSwaps = makeTestProcessor();
     if (!concurrentSwaps.loadSampleForNote(36, sample)) return 20;
     concurrentSwaps.prepareToPlay(44100.0, 64);
     std::atomic<bool> inspectLayers{true}, layersWereValid{true};
@@ -654,7 +709,7 @@ int main(int argc, char** argv)
     audioCallback.join();
     if (!swapsSucceeded || !layersWereValid.load(std::memory_order_acquire)) return 21;
 
-    MagDrumAudioProcessor emptyNote;
+    auto& emptyNote = makeTestProcessor();
     emptyNote.prepareToPlay(44100.0, 128);
     if (renderPeak(emptyNote, 37, 100) != 0.0) return 14;
 

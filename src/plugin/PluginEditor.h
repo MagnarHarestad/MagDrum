@@ -49,6 +49,8 @@ private:
     void updateLayerSummary();
     void refreshSamples();
     void previewSampleAsync(const juce::File&);
+    void loadSampleAsync(const juce::File&, int note, int minimumVelocity, int maximumVelocity,
+                         bool fromLibrary);
     void setPage(int);
     void setNote(int);
     void updateDrumNotes();
@@ -138,6 +140,8 @@ private:
     juce::ThreadPool sampleBrowseWorkers{1};
     std::atomic<std::uint64_t> samplePreviewGeneration{0};
     juce::ThreadPool samplePreviewWorkers{1};
+    std::atomic<bool> sampleLoadCancellation{false};
+    juce::ThreadPool sampleLoadWorkers{1};
     juce::ThreadPool sampleLookupWorkers{1};
     bool sampleLookupRunning = false;
     juce::ThreadPool sampleReviewWorkers{1};

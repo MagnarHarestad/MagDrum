@@ -30,6 +30,7 @@ public:
     };
 
     MagDrumAudioProcessor();
+    ~MagDrumAudioProcessor() override;
     void prepareToPlay(double, int) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout&) const override;
@@ -50,7 +51,8 @@ public:
     void setStateInformation(const void*, int) override;
 
     bool loadSampleForNote(int midiNote, const juce::File&);
-    bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&);
+    bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&,
+                                    const std::function<bool()>& shouldCancel = {});
     bool clearSamplesForNote(int midiNote);
     bool previewSample(const juce::File&, const std::function<bool()>& shouldCancel = {});
     // UI-thread pad/sequencer triggers are queued for the next audio block.
@@ -77,6 +79,14 @@ private:
         double sampleRate = 44100.0;
         int minimumVelocity = 1;
         int maximumVelocity = 127;
+    };
+    struct PendingSampleLoad
+    {
+        int note = 0;
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
+        juce::String path;
+        std::shared_ptr<std::atomic<bool>> cancellation;
     };
     struct Voice
     {
@@ -105,12 +115,16 @@ private:
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
     std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
+    std::vector<PendingSampleLoad> pendingSampleLoads;
     std::array<std::atomic<float>, 128> noteGainDb{};
     std::array<std::atomic<float>, 128> notePan{};
     std::array<std::atomic<float>, 128> noteTuneSemitones{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
+    std::unique_ptr<juce::ThreadPool> sampleStateLoadWorkers;
+    juce::CriticalSection sampleStateLoadWorkerLock;
+    std::atomic<std::uint64_t> sampleStateLoadGeneration{0};
     juce::CriticalSection editorStateLock;
     juce::CriticalSection sequencerPatternLock;
     std::vector<magdrum::sequencer::PlaybackEvent> sequencerPlaybackEvents;
