@@ -416,6 +416,8 @@ countries: de
 "cancelled" = "abgebrochen"
 
 "Scan plugin folders" = "VST3-Pluginordner durchsuchen"
+"Choose VST3 folder" = "VST3-Ordner wählen"
+"The selected VST3 folder is unavailable." = "Der ausgewählte VST3-Ordner ist nicht verfügbar."
 "Preset kit name" = "Name des Preset-Kits"
 "Instrument programs" = "Instrumentenprogramme"
 "Scan programs" = "Programme durchsuchen"
@@ -1084,6 +1086,8 @@ countries: fr
 "cancelled" = "annulée"
 
 "Scan plugin folders" = "Analyser les dossiers de plug-ins"
+"Choose VST3 folder" = "Choisir un dossier VST3"
+"The selected VST3 folder is unavailable." = "Le dossier VST3 sélectionné est indisponible."
 "Preset kit name" = "Nom du kit de préréglage"
 "Instrument programs" = "Programmes de l’instrument"
 "Scan programs" = "Rechercher les programmes"
@@ -1752,6 +1756,8 @@ countries: es
 "cancelled" = "cancelado"
 
 "Scan plugin folders" = "Analizar carpetas de plugins"
+"Choose VST3 folder" = "Elegir carpeta VST3"
+"The selected VST3 folder is unavailable." = "La carpeta VST3 seleccionada no está disponible."
 "Preset kit name" = "Nombre del kit de preset"
 "Instrument programs" = "Programas del instrumento"
 "Scan programs" = "Buscar programas"
@@ -2420,6 +2426,8 @@ countries: se
 "cancelled" = "avbruten"
 
 "Scan plugin folders" = "Sök igenom pluginmappar"
+"Choose VST3 folder" = "Välj VST3-mapp"
+"The selected VST3 folder is unavailable." = "Den valda VST3-mappen är inte tillgänglig."
 "Preset kit name" = "Namn på preset-kit"
 "Instrument programs" = "Instrumentprogram"
 "Scan programs" = "Hämta program"
@@ -3088,6 +3096,8 @@ countries: no
 "cancelled" = "avbrutt"
 
 "Scan plugin folders" = "Skann pluginmapper"
+"Choose VST3 folder" = "Velg VST3-mappe"
+"The selected VST3 folder is unavailable." = "Den valgte VST3-mappen er ikke tilgjengelig."
 "Preset kit name" = "Navn på preset-kit"
 "Instrument programs" = "Instrumentprogrammer"
 "Scan programs" = "Hent programmer"
@@ -3756,6 +3766,8 @@ countries: dk
 "cancelled" = "annulleret"
 
 "Scan plugin folders" = "Scan pluginmapper"
+"Choose VST3 folder" = "Vælg VST3-mappe"
+"The selected VST3 folder is unavailable." = "Den valgte VST3-mappe er ikke tilgængelig."
 "Preset kit name" = "Navn på preset-kit"
 "Instrument programs" = "Instrumentprogrammer"
 "Scan programs" = "Hent programmer"
@@ -4424,6 +4436,8 @@ countries: fi
 "cancelled" = "peruutettu"
 
 "Scan plugin folders" = "Skannaa lisäosakansiot"
+"Choose VST3 folder" = "Valitse VST3-kansio"
+"The selected VST3 folder is unavailable." = "Valittu VST3-kansio ei ole käytettävissä."
 "Preset kit name" = "Preset-rumpusetin nimi"
 "Instrument programs" = "Soittimen ohjelmat"
 "Scan programs" = "Hae ohjelmat"

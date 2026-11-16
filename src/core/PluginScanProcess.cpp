@@ -4,6 +4,15 @@
 #include <cmath>
 #include <limits>
 
+juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
+    const juce::FileSearchPath& defaultLocations, const juce::File& additionalFolder)
+{
+    auto result = defaultLocations;
+    if (additionalFolder.isDirectory())
+        result.addIfNotAlreadyThere(additionalFolder);
+    return result;
+}
+
 namespace
 {
 juce::var readJson(const juce::File& file)

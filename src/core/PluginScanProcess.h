@@ -4,6 +4,12 @@
 #include <functional>
 #include <vector>
 
+namespace magdrum::plugins
+{
+juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
+                                                    const juce::File& additionalFolder = {});
+}
+
 struct PluginScanProcessCapture
 {
     int midiNote = 0;

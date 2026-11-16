@@ -674,8 +674,11 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 void MainComponent::openPluginBrowser(){if(pluginWindow==nullptr)pluginWindow=std::make_unique<PluginWindow>(*this);pluginWindow->toFront(true);status.setText(juce::String(database.getPluginInstruments().size())+" plugin instruments indexed.",juce::dontSendNotification);}
-int runIsolatedVst3Discovery()
+int runIsolatedVst3Discovery(const juce::File& additionalFolder = {})
 {
+    if (additionalFolder != juce::File() && ! additionalFolder.isDirectory())
+        return 7;
+
     const auto dataDirectory = getMagDrumDataDirectory();
     if ((! dataDirectory.isDirectory()) && ! dataDirectory.createDirectory().wasOk())
         return 2;
@@ -699,8 +702,10 @@ int runIsolatedVst3Discovery()
     if (vst3 == nullptr)
         return 4;
 
+    const auto searchPath = magdrum::plugins::createVst3DiscoverySearchPath(
+        vst3->getDefaultLocationsToSearch(), additionalFolder);
     juce::PluginDirectoryScanner scanner(knownPlugins, *vst3,
-        juce::FileSearchPath(vst3->getDefaultLocationsToSearch()), true,
+        searchPath, true,
         dataDirectory.getChildFile("RecentlyCrashedPluginsList"));
     juce::String name;
     while (scanner.scanNextFile(true, name)) {}
@@ -841,11 +846,13 @@ public:
         juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         juce::StringArray arguments;
         arguments.addTokens(commandLine, true);
-        if (arguments.size() == 1 && arguments[0] == "--magdrum-vst3-discovery-worker")
+        if ((arguments.size() == 1 || arguments.size() == 2)
+            && arguments[0] == "--magdrum-vst3-discovery-worker")
         {
-            if (! juce::Thread::launch([this]
+            const auto additionalFolder = arguments.size() == 2 ? juce::File(arguments[1]) : juce::File();
+            if (! juce::Thread::launch([this, additionalFolder]
                 {
-                    const auto exitCode = runIsolatedVst3Discovery();
+                    const auto exitCode = runIsolatedVst3Discovery(additionalFolder);
                     juce::MessageManager::callAsync([this, exitCode]
                     {
                         setApplicationReturnValue(exitCode);

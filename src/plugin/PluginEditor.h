@@ -84,7 +84,8 @@ private:
     void refreshSourceKitFilters();
     void refreshPluginInventory();
     void refreshPluginKits();
-    void startPluginInventoryScan();
+    void choosePluginFolder();
+    void startPluginInventoryScan(const juce::File& additionalFolder = {});
     void finishPluginInventoryScan(int exitCode, bool cancelled);
     void choosePluginPreset();
     void startPluginPresetImport();
@@ -174,13 +175,14 @@ private:
     juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
     juce::TextEditor pluginPresetKitName;
-    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
+    juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, choosePluginFolderButton{"Choose VST3 folder"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
     juce::Label pluginScanProgress, pluginScanInfo;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::DocumentWindow> comparisonWindow;
     std::unique_ptr<juce::DocumentWindow> midiEventWindow;
     std::unique_ptr<juce::FileChooser> pluginPresetChooser;
+    std::unique_ptr<juce::FileChooser> pluginFolderChooser;
     juce::File selectedPluginPresetFile;
     std::shared_ptr<std::atomic<bool>> pluginPresetImportCancellation;
     bool pluginPresetImportRunning = false;

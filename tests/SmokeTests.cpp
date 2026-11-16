@@ -249,6 +249,18 @@ int runSmokeTests(int argc,char** argv)
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    const auto defaultPluginRootA=root.getChildFile("default-vst3-a");
+    const auto defaultPluginRootB=root.getChildFile("default-vst3-b");
+    const auto customPluginRoot=root.getChildFile("custom-vst3-root");
+    if(!defaultPluginRootA.createDirectory().wasOk()||!defaultPluginRootB.createDirectory().wasOk()
+        ||!customPluginRoot.createDirectory().wasOk())return 207;
+    const auto defaultPluginPath=defaultPluginRootA.getFullPathName()+";"+defaultPluginRootB.getFullPathName();
+    const juce::FileSearchPath defaultPluginSearch(defaultPluginPath);
+    const auto customPluginSearch=magdrum::plugins::createVst3DiscoverySearchPath(defaultPluginSearch,customPluginRoot);
+    if(customPluginSearch.getNumPaths()!=3||customPluginSearch[2]!=customPluginRoot)return 208;
+    const juce::FileSearchPath defaultsWithCustom(defaultPluginPath+";"+customPluginRoot.getFullPathName());
+    const auto duplicatePluginSearch=magdrum::plugins::createVst3DiscoverySearchPath(defaultsWithCustom,customPluginRoot);
+    if(duplicatePluginSearch.getNumPaths()!=3)return 209;
     const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
     midiFixture.deleteRecursively();
     const auto midiRoot=midiFixture.getChildFile("midi-discovery");

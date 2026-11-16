@@ -571,14 +571,18 @@ private:
 class PluginInventoryScanJob final : public juce::ThreadPoolJob
 {
 public:
-    PluginInventoryScanJob(MagDrumAudioProcessorEditor& owner, std::shared_ptr<std::atomic<bool>> cancel)
-        : ThreadPoolJob("MagDrum isolated VST3 discovery"), editor(&owner), cancellation(std::move(cancel)) {}
+    PluginInventoryScanJob(MagDrumAudioProcessorEditor& owner, std::shared_ptr<std::atomic<bool>> cancel,
+                           juce::File folder)
+        : ThreadPoolJob("MagDrum isolated VST3 discovery"), editor(&owner), cancellation(std::move(cancel)),
+          additionalFolder(std::move(folder)) {}
     JobStatus runJob() override
     {
         const auto helper = bundledScannerApplication();
         if (! helper.existsAsFile()) { finish(-1, false); return jobHasFinished; }
         juce::ChildProcess child;
-        if (! child.start({helper.getFullPathName(), "--magdrum-vst3-discovery-worker"}, 0))
+        juce::StringArray command{helper.getFullPathName(), "--magdrum-vst3-discovery-worker"};
+        if (additionalFolder.isDirectory()) command.add(additionalFolder.getFullPathName());
+        if (! child.start(command, 0))
         { finish(-1, false); return jobHasFinished; }
         while (child.isRunning() && ! shouldExit() && ! cancellation->load())
             child.waitForProcessToFinish(100);
@@ -596,6 +600,7 @@ private:
     }
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> editor;
     std::shared_ptr<std::atomic<bool>> cancellation;
+    juce::File additionalFolder;
 };
 
 class PluginPresetImportJob final : public juce::ThreadPoolJob
@@ -848,6 +853,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     scanButton.addListener(this);scanDefaultsButton.addListener(this);instrumentScannerButton.addListener(this);openSourceKitButton.addListener(this);searchButton.addListener(this);previewButton.addListener(this);assignButton.addListener(this);libraryToolsButton.addListener(this);moreSamplesButton.addListener(this);addAndMakeVisible(scanButton);addAndMakeVisible(scanDefaultsButton);addAndMakeVisible(instrumentScannerButton);addAndMakeVisible(openSourceKitButton);addAndMakeVisible(searchButton);addAndMakeVisible(previewButton);addAndMakeVisible(assignButton);addAndMakeVisible(libraryToolsButton);addAndMakeVisible(moreSamplesButton);
     refreshPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Refresh instruments"));
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText(pluginInventoryScanRunning ? "Cancel instrument scan" : "Scan plugin folders"));
+    choosePluginFolderButton.setButtonText(magdrum::ui::localisedText("Choose VST3 folder"));
     openPluginManagerButton.setButtonText(magdrum::ui::localisedText("Open instrument manager"));
     scanPluginNotesButton.setButtonText(magdrum::ui::localisedText("Scan kit notes"));
     cancelPluginNotesButton.setButtonText(magdrum::ui::localisedText("Cancel scan"));
@@ -996,6 +1002,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     pluginProgramSelect.onChange=[this]{if(pluginProgramSelect.getSelectedId()>0)pluginPresetKitName.setText(pluginProgramSelect.getText(),juce::dontSendNotification);importPluginProgramButton.setEnabled(pluginProgramSelect.getSelectedId()>0&&!pluginPresetImportRunning);};addAndMakeVisible(pluginProgramSelect);
     refreshPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Refresh instruments"));refreshPluginInventoryButton.addListener(this);addAndMakeVisible(refreshPluginInventoryButton);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders"));scanPluginInventoryButton.addListener(this);addAndMakeVisible(scanPluginInventoryButton);
+    choosePluginFolderButton.setButtonText(magdrum::ui::localisedText("Choose VST3 folder"));choosePluginFolderButton.addListener(this);addAndMakeVisible(choosePluginFolderButton);
     pluginPresetKitName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Preset kit name"),Palette::Muted);addAndMakeVisible(pluginPresetKitName);
     choosePluginPresetButton.setButtonText(magdrum::ui::localisedText("Choose VST3 preset"));choosePluginPresetButton.addListener(this);addAndMakeVisible(choosePluginPresetButton);
     importPluginPresetButton.setButtonText(magdrum::ui::localisedText("Import preset as kit"));importPluginPresetButton.addListener(this);importPluginPresetButton.setEnabled(false);addAndMakeVisible(importPluginPresetButton);
@@ -1126,7 +1133,7 @@ void MagDrumAudioProcessorEditor::resized()
         }
     }
     else if(page==3){auto top=bounds.removeFromTop(36);profileSelect.setBounds(top.removeFromLeft(210));top.removeFromLeft(8);profileName.setBounds(top.removeFromLeft(190));top.removeFromLeft(8);loadProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);saveProfileButton.setBounds(top.removeFromLeft(105));top.removeFromLeft(6);importCsvButton.setBounds(top.removeFromLeft(95));top.removeFromLeft(6);exportCsvButton.setBounds(top.removeFromLeft(95));bounds.removeFromTop(12);auto edit=bounds.removeFromTop(36);mappingInstrument.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingArticulation.setBounds(edit.removeFromLeft(150));edit.removeFromLeft(8);mappingNote.setBounds(edit.removeFromLeft(110));edit.removeFromLeft(8);setMappingButton.setBounds(edit.removeFromLeft(120));edit.removeFromLeft(8);removeMappingButton.setBounds(edit.removeFromLeft(130));bounds.removeFromTop(14);mappingSummary.setBounds(bounds);}
-    else{auto row=bounds.removeFromTop(36);pluginInstrumentSelect.setBounds(row.removeFromLeft(300));row.removeFromLeft(8);refreshPluginInventoryButton.setBounds(row.removeFromLeft(142));row.removeFromLeft(6);scanPluginInventoryButton.setBounds(row.removeFromLeft(155));row.removeFromLeft(6);openPluginManagerButton.setBounds(row.removeFromLeft(180));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginKitSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);pluginPresetKitName.setBounds(row.removeFromLeft(235));row.removeFromLeft(8);choosePluginPresetButton.setBounds(row.removeFromLeft(165));row.removeFromLeft(6);importPluginPresetButton.setBounds(row.removeFromLeft(175));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginProgramSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);scanPluginProgramsButton.setBounds(row.removeFromLeft(150));row.removeFromLeft(8);importPluginProgramButton.setBounds(row.removeFromLeft(190));row.removeFromLeft(12);pluginRenderMode.setBounds(row.removeFromLeft(200));bounds.removeFromTop(8);auto labels=bounds.removeFromTop(18);pluginVelocityLabel.setBounds(labels.removeFromLeft(250));labels.removeFromLeft(8);pluginNoteDurationLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginReleaseLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginCaptureLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginRepeatLabel.setBounds(labels.removeFromLeft(90));row=bounds.removeFromTop(36);pluginVelocities.setBounds(row.removeFromLeft(250));row.removeFromLeft(8);pluginNoteDuration.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRelease.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginCaptureLength.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRepeatCount.setBounds(row.removeFromLeft(90));bounds.removeFromTop(10);row=bounds.removeFromTop(36);scanPluginNotesButton.setBounds(row.removeFromLeft(160));row.removeFromLeft(8);cancelPluginNotesButton.setBounds(row.removeFromLeft(140));row.removeFromLeft(12);pluginScanProgress.setBounds(row);bounds.removeFromTop(12);pluginScanInfo.setBounds(bounds);}
+    else{auto row=bounds.removeFromTop(36);pluginInstrumentSelect.setBounds(row.removeFromLeft(300));row.removeFromLeft(8);refreshPluginInventoryButton.setBounds(row.removeFromLeft(142));row.removeFromLeft(6);scanPluginInventoryButton.setBounds(row.removeFromLeft(155));row.removeFromLeft(6);choosePluginFolderButton.setBounds(row.removeFromLeft(170));row.removeFromLeft(6);openPluginManagerButton.setBounds(row.removeFromLeft(180));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginKitSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);pluginPresetKitName.setBounds(row.removeFromLeft(235));row.removeFromLeft(8);choosePluginPresetButton.setBounds(row.removeFromLeft(165));row.removeFromLeft(6);importPluginPresetButton.setBounds(row.removeFromLeft(175));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginProgramSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);scanPluginProgramsButton.setBounds(row.removeFromLeft(150));row.removeFromLeft(8);importPluginProgramButton.setBounds(row.removeFromLeft(190));row.removeFromLeft(12);pluginRenderMode.setBounds(row.removeFromLeft(200));bounds.removeFromTop(8);auto labels=bounds.removeFromTop(18);pluginVelocityLabel.setBounds(labels.removeFromLeft(250));labels.removeFromLeft(8);pluginNoteDurationLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginReleaseLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginCaptureLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginRepeatLabel.setBounds(labels.removeFromLeft(90));row=bounds.removeFromTop(36);pluginVelocities.setBounds(row.removeFromLeft(250));row.removeFromLeft(8);pluginNoteDuration.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRelease.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginCaptureLength.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRepeatCount.setBounds(row.removeFromLeft(90));bounds.removeFromTop(10);row=bounds.removeFromTop(36);scanPluginNotesButton.setBounds(row.removeFromLeft(160));row.removeFromLeft(8);cancelPluginNotesButton.setBounds(row.removeFromLeft(140));row.removeFromLeft(12);pluginScanProgress.setBounds(row);bounds.removeFromTop(12);pluginScanInfo.setBounds(bounds);}
 }
 
 void MagDrumAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster* source)
@@ -1537,12 +1544,32 @@ void MagDrumAudioProcessorEditor::refreshPluginInventory()
         : magdrum::ui::localisedText("Select a discovered instrument, import a preset as a kit, then scan its MIDI notes."), juce::dontSendNotification);
 }
 
-void MagDrumAudioProcessorEditor::startPluginInventoryScan()
+void MagDrumAudioProcessorEditor::choosePluginFolder()
+{
+    if (pluginInventoryScanRunning)
+        return;
+    pluginFolderChooser = std::make_unique<juce::FileChooser>(
+        magdrum::ui::localisedText("Choose VST3 folder"), juce::File(), juce::String(), true, false, this);
+    const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    pluginFolderChooser->launchAsync(juce::FileBrowserComponent::openMode
+        | juce::FileBrowserComponent::canSelectDirectories,
+        [safe](const juce::FileChooser& chooser)
+        {
+            if (safe == nullptr)
+                return;
+            const auto folder = chooser.getResult();
+            if (folder.isDirectory())
+                safe->startPluginInventoryScan(folder);
+        });
+}
+
+void MagDrumAudioProcessorEditor::startPluginInventoryScan(const juce::File& additionalFolder)
 {
     if (pluginInventoryScanRunning)
     {
         if (pluginInventoryScanCancellation) pluginInventoryScanCancellation->store(true);
         scanPluginInventoryButton.setEnabled(false);
+        choosePluginFolderButton.setEnabled(false);
         return;
     }
     if (! bundledScannerApplication().existsAsFile())
@@ -1550,11 +1577,17 @@ void MagDrumAudioProcessorEditor::startPluginInventoryScan()
         status.setText(magdrum::ui::localisedText("The bundled MagDrum instrument scanner was not found beside this VST3. Reinstall the latest package."), juce::dontSendNotification);
         return;
     }
+    if (additionalFolder != juce::File() && ! additionalFolder.isDirectory())
+    {
+        status.setText(magdrum::ui::localisedText("The selected VST3 folder is unavailable."), juce::dontSendNotification);
+        return;
+    }
     pluginInventoryScanCancellation = std::make_shared<std::atomic<bool>>(false);
     pluginInventoryScanRunning = true;
+    choosePluginFolderButton.setEnabled(false);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Cancel instrument scan"));
     status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…"), juce::dontSendNotification);
-    pluginInventoryWorkers.addJob(new PluginInventoryScanJob(*this, pluginInventoryScanCancellation), true);
+    pluginInventoryWorkers.addJob(new PluginInventoryScanJob(*this, pluginInventoryScanCancellation, additionalFolder), true);
 }
 
 void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool cancelled)
@@ -1563,6 +1596,7 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
     pluginInventoryScanCancellation.reset();
     scanPluginInventoryButton.setEnabled(true);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders"));
+    choosePluginFolderButton.setEnabled(true);
     if (cancelled) { status.setText(magdrum::ui::localisedText("VST3 instrument scan cancelled."), juce::dontSendNotification); return; }
     if (exitCode != 0) { status.setText(magdrum::ui::localisedText("VST3 instrument scan failed. Check the MagDrum helper."), juce::dontSendNotification); return; }
     refreshPluginInventory();
@@ -2439,7 +2473,7 @@ void MagDrumAudioProcessorEditor::updateLayerSummary()
 void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 {
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}if(hasPluginScannerPage&&button==&pluginScannerTab){setPage(4);return;}
-    if(button==&refreshPluginInventoryButton){refreshPluginInventory();return;}if(button==&scanPluginInventoryButton){startPluginInventoryScan();return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){choosePluginPreset();return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}
+    if(button==&refreshPluginInventoryButton){refreshPluginInventory();return;}if(button==&scanPluginInventoryButton){startPluginInventoryScan();return;}if(button==&choosePluginFolderButton){choosePluginFolder();return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){choosePluginPreset();return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}
     for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step)if(button==&steps[lane][step]){const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),static_cast<int>(step));if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
     if(button==&scanButton){chooseSampleFolder();return;}if(button==&scanDefaultsButton){scanDefaultLibraryFolders();return;}if(button==&instrumentScannerButton){launchInstrumentScanner();return;}if(button==&openSourceKitButton){openSourceKitForSelectedSample();return;}
     if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples)loadSamplePage(false);return;}
