@@ -402,6 +402,49 @@ private:
     Completion onComplete;
 };
 
+class PluginSampleLookupJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(int, bool, juce::Array<juce::File>,
+                                          std::vector<PerceptualDuplicateMatch>)>;
+
+    PluginSampleLookupJob(juce::File databaseFile, juce::File sampleFile, int lookupAction,
+                          Completion completion)
+        : ThreadPoolJob("MagDrum VST sample lookup"), dbPath(std::move(databaseFile)),
+          selectedFile(std::move(sampleFile)), action(lookupAction), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        SampleDatabase queryDatabase;
+        const bool opened = queryDatabase.open(dbPath);
+        juce::Array<juce::File> files;
+        std::vector<PerceptualDuplicateMatch> perceptualMatches;
+        if (opened)
+        {
+            if (action == 2)
+                files = queryDatabase.findSimilar(selectedFile, 20);
+            else if (action == 3)
+                files = queryDatabase.findExactDuplicates(selectedFile, 100);
+            else if (action == 4)
+                perceptualMatches = queryDatabase.findPerceptualDuplicates(selectedFile);
+        }
+
+        juce::MessageManager::callAsync([completion = std::move(onComplete), lookupAction = action,
+                                         opened, files = std::move(files),
+                                         perceptualMatches = std::move(perceptualMatches)]() mutable
+        {
+            if (completion)
+                completion(lookupAction, opened, std::move(files), std::move(perceptualMatches));
+        });
+        return jobHasFinished;
+    }
+
+private:
+    juce::File dbPath, selectedFile;
+    int action = 0;
+    Completion onComplete;
+};
+
 class PluginMetadataFolderSyncJob final : public juce::ThreadPoolJob
 {
 public:
@@ -1060,7 +1103,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2419,17 +2462,33 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
     }
     const auto file=selectedSample();
     if(action>=2&&action<=4&&file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample first."),juce::dontSendNotification);return;}
-    if(action==2)
+    if(action>=2&&action<=4)
     {
-        const auto matches=database.findSimilar(file,20);juce::String details;for(const auto& match:matches)details<<match.getFileName()<<"\n"<<match.getFullPathName()<<"\n\n";juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Similar sample candidates"),matches.isEmpty()?magdrum::ui::localisedText("No similar samples found."):details,magdrum::ui::localisedText("Close"));return;
-    }
-    if(action==3)
-    {
-        const auto matches=database.findExactDuplicates(file,100);juce::String details;for(const auto& match:matches)details<<match.getFileName()<<"\n"<<match.getFullPathName()<<"\n\n";juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Exact file duplicates"),matches.isEmpty()?magdrum::ui::localisedText("No exact duplicates found."):details,magdrum::ui::localisedText("Close"));return;
-    }
-    if(action==4)
-    {
-        const auto matches=database.findPerceptualDuplicates(file);juce::String details;for(const auto& match:matches)details<<juce::String(match.similarity*100.0,1)<<"%  "<<match.file.getFileName()<<"\n"<<match.file.getFullPathName()<<"\n\n";juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Near-duplicate candidates"),matches.empty()?magdrum::ui::localisedText("No likely near duplicates found."):details+"\n"+magdrum::ui::localisedText("These are feature-based candidates. Listen before replacing or deleting samples."),magdrum::ui::localisedText("Close"));return;
+        if (sampleLookupRunning)
+            return;
+        if (!databaseReady || databaseFile == juce::File())
+        {
+            status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                           juce::dontSendNotification);
+            return;
+        }
+
+        sampleLookupRunning = true;
+        libraryToolsButton.setEnabled(false);
+        const char* progressText = action == 2 ? "Similar sample candidates"
+                                   : action == 3 ? "Exact file duplicates"
+                                                 : "Near-duplicate candidates";
+        status.setText(magdrum::ui::localisedText(progressText), juce::dontSendNotification);
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        sampleLookupWorkers.addJob(new PluginSampleLookupJob(databaseFile, file, action,
+            [safe](int lookupAction, bool opened, juce::Array<juce::File> matches,
+                   std::vector<PerceptualDuplicateMatch> perceptualMatches) mutable
+            {
+                if (safe != nullptr)
+                    safe->finishSampleLookup(lookupAction, opened, std::move(matches),
+                                             std::move(perceptualMatches));
+            }), true);
+        return;
     }
     if(action==5)
     {
@@ -2463,6 +2522,48 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
         });
         return;
     }
+}
+
+void MagDrumAudioProcessorEditor::finishSampleLookup(
+    int action, bool opened, juce::Array<juce::File> matches,
+    std::vector<PerceptualDuplicateMatch> perceptualMatches)
+{
+    sampleLookupRunning = false;
+    libraryToolsButton.setEnabled(true);
+
+    const auto title = magdrum::ui::localisedText(action == 2 ? "Similar sample candidates"
+                                                : action == 3 ? "Exact file duplicates"
+                                                              : "Near-duplicate candidates");
+    if (!opened)
+    {
+        status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                       juce::dontSendNotification);
+        return;
+    }
+
+    juce::String details;
+    if (action == 4)
+    {
+        for (const auto& match : perceptualMatches)
+            details << juce::String(match.similarity * 100.0, 1) << "%  " << match.file.getFileName()
+                    << "\n" << match.file.getFullPathName() << "\n\n";
+        const auto message = perceptualMatches.empty()
+            ? magdrum::ui::localisedText("No likely near duplicates found.")
+            : details + "\n" + magdrum::ui::localisedText(
+                "These are feature-based candidates. Listen before replacing or deleting samples.");
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, title, message,
+                                                magdrum::ui::localisedText("Close"));
+        return;
+    }
+
+    for (const auto& match : matches)
+        details << match.getFileName() << "\n" << match.getFullPathName() << "\n\n";
+    const auto message = matches.isEmpty()
+        ? magdrum::ui::localisedText(action == 2 ? "No similar samples found."
+                                                  : "No exact duplicates found.")
+        : details;
+    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, title, message,
+                                            magdrum::ui::localisedText("Close"));
 }
 
 void MagDrumAudioProcessorEditor::reviewVelocityLayers(const SampleBrowseRecord& sample)

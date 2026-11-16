@@ -103,6 +103,8 @@ private:
     void finishPluginNoteScan(int saved, int sounding, int silent, int failures, bool cancelled, const juce::String& error, const juce::String& summary);
     void showLibraryTools();
     void handleLibraryTool(int);
+    void finishSampleLookup(int, bool, juce::Array<juce::File>,
+                            std::vector<PerceptualDuplicateMatch>);
     void reviewVelocityLayers(const SampleBrowseRecord&);
     void reviewRoundRobinGroups(const SampleBrowseRecord&);
     void finishMetadataFolderSync(const PortableMetadataSyncResult&);
@@ -120,6 +122,8 @@ private:
     bool sampleBrowseQueryPending = false;
     std::uint64_t sampleBrowseGeneration = 0;
     juce::ThreadPool sampleBrowseWorkers{1};
+    juce::ThreadPool sampleLookupWorkers{1};
+    bool sampleLookupRunning = false;
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
     std::vector<juce::File> defaultMidiPatterns;
