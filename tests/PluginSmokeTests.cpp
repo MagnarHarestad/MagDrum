@@ -781,7 +781,9 @@ int main(int argc, char** argv)
 
     const auto roundRobinFirstFile = root.getChildFile("kick-round-robin-1.wav");
     const auto roundRobinSecondFile = root.getChildFile("kick-round-robin-2.wav");
-    if (!writeFixture(roundRobinFirstFile, 0.10f) || !writeFixture(roundRobinSecondFile, 0.22f)) return 38;
+    const auto roundRobinHighVelocityFile = root.getChildFile("kick-round-robin-high-velocity.wav");
+    if (!writeFixture(roundRobinFirstFile, 0.10f) || !writeFixture(roundRobinSecondFile, 0.22f)
+        || !writeFixture(roundRobinHighVelocityFile, 0.17f)) return 38;
     auto& roundRobin = makeTestProcessor();
     if (!roundRobin.loadSampleForVelocityRange(36, 1, 127, roundRobinFirstFile)
         || !roundRobin.loadSampleForVelocityRange(36, 1, 127, roundRobinSecondFile)) return 38;
@@ -797,6 +799,20 @@ int main(int argc, char** argv)
     const double thirdRoundRobinPeak = renderPeak(roundRobin, 36, 100);
     if (firstRoundRobinPeak <= 0.0 || secondRoundRobinPeak < firstRoundRobinPeak * 1.8
         || std::abs(thirdRoundRobinPeak - firstRoundRobinPeak) > 0.0001) return 40;
+
+    auto& independentRoundRobin = makeTestProcessor();
+    if (!independentRoundRobin.loadSampleForVelocityRange(36, 1, 63, roundRobinFirstFile)
+        || !independentRoundRobin.loadSampleForVelocityRange(36, 1, 63, roundRobinSecondFile)
+        || !independentRoundRobin.loadSampleForVelocityRange(36, 64, 127, roundRobinHighVelocityFile)) return 282;
+    independentRoundRobin.prepareToPlay(44100.0, 128);
+    const double independentFirstPeak = renderPeak(independentRoundRobin, 36, 60);
+    MagDrumAudioProcessorTestAccess::stopVoices(independentRoundRobin);
+    const double otherVelocityPeak = renderPeak(independentRoundRobin, 36, 100);
+    MagDrumAudioProcessorTestAccess::stopVoices(independentRoundRobin);
+    const double independentSecondPeak = renderPeak(independentRoundRobin, 36, 60);
+    MagDrumAudioProcessorTestAccess::stopVoices(independentRoundRobin);
+    if (independentFirstPeak <= 0.0 || otherVelocityPeak <= 0.0
+        || independentSecondPeak < independentFirstPeak * 1.8) return 283;
 
     juce::MemoryBlock roundRobinState;
     roundRobin.getStateInformation(roundRobinState);

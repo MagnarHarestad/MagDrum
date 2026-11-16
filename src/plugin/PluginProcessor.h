@@ -136,7 +136,7 @@ private:
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
     std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
-    std::array<std::atomic<std::uint32_t>, 128> roundRobinCounters{};
+    std::array<std::array<std::atomic<std::uint32_t>, maxVelocityLayers>, 128> roundRobinCounters{};
     std::vector<PendingSampleLoad> pendingSampleLoads;
     std::array<std::atomic<float>, 128> noteGainDb{};
     std::array<std::atomic<float>, 128> notePan{};
