@@ -13,7 +13,7 @@ The latest package archives contain the standalone app, VST3 bundle, installer, 
 For a step-by-step Cubase Pro 15 play, state-save and velocity-layer checklist,
 see [Verify MagDrum in Cubase Pro 15](cubase-testing.md).
 
-Unzip `MagDrum-Windows-x64.zip`, close Cubase, and run `Install-MagDrum.ps1` from PowerShell. The installer refreshes process records and blocks only while Cubase is still running; an exited process record is ignored. By default it installs to the per-user VST3 folder without administrator access. To replace an existing system-wide copy, run PowerShell as administrator with `-AllUsers -Force`; the old bundle is moved to `%ProgramData%\MagDrum\VST3-backups`, outside the VST3 scan folder. Use `-Force` only for a replacement you have authorized. Start Cubase 15 and rescan plugins in Studio > VST Plug-in Manager. Add MagDrum as an instrument track. The archive also contains the standalone sample library app.
+Unzip `MagDrum-Windows-x64.zip`, close Cubase, and double-click `Install-MagDrum-User.cmd`. It installs to your per-user VST3 folder without UAC and moves any existing system-wide MagDrum copies out of VST3 scan folders through a one-time UAC approval. Future per-user updates need no UAC. For a system-wide installation, use `Install-MagDrum.cmd`. Start Cubase 15 and rescan plugins in Studio > VST Plug-in Manager. Add MagDrum as an instrument track. The archive also contains the standalone sample library app.
 
 ## Windows ARM64
 
