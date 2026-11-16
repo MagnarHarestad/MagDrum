@@ -27,17 +27,42 @@ if ($catalogBlocks.Count -ne $expectedLanguages.Count) {
 }
 
 $failureCount = 0
+$expectedVelocityTranslations = @{
+    german = 'Anschlagstärke'
+    french = 'Vélocité'
+    spanish = 'Velocidad'
+    swedish = 'Anslag'
+    norwegian = 'Anslagsstyrke'
+    danish = 'Anslagsstyrke'
+    finnish = 'Voimakkuus'
+}
+$expectedPercussionTranslations = @{
+    german = 'Schlagwerk'
+}
 foreach ($block in $catalogBlocks) {
     $language = $block.Groups[1].Value
     $catalogKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    foreach ($match in [regex]::Matches($block.Groups[2].Value, '(?m)^"((?:[^"\\]|\\.)*)"\s*=')) {
+    $catalogValues = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    foreach ($match in [regex]::Matches($block.Groups[2].Value, '(?m)^"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"')) {
         [void] $catalogKeys.Add($match.Groups[1].Value)
+        $catalogValues[$match.Groups[1].Value] = $match.Groups[2].Value
     }
 
     $missing = @($sourceKeys | Where-Object { -not $catalogKeys.Contains($_) } | Sort-Object)
     if ($missing.Count -gt 0) {
         $failureCount += $missing.Count
         Write-Error "$language is missing $($missing.Count) translated source label(s):`n  $($missing -join "`n  ")" -ErrorAction Continue
+    }
+
+    $expectedVelocity = $expectedVelocityTranslations[$language]
+    if ($catalogValues['Velocity'] -cne $expectedVelocity) {
+        $failureCount++
+        Write-Error "$language translates 'Velocity' as '$($catalogValues['Velocity'])'; expected '$expectedVelocity'." -ErrorAction Continue
+    }
+    if ($expectedPercussionTranslations.ContainsKey($language) -and
+        $catalogValues['Percussion'] -cne $expectedPercussionTranslations[$language]) {
+        $failureCount++
+        Write-Error "$language translates 'Percussion' as '$($catalogValues['Percussion'])'; expected '$($expectedPercussionTranslations[$language])'." -ErrorAction Continue
     }
 }
 
