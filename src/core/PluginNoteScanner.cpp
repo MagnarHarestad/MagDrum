@@ -76,6 +76,8 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         result.error = "The plugin state is too large to preserve safely.";
         return result;
     }
+    const int previousProgramCount = plugin.getNumPrograms();
+    const int previousProgram = previousProgramCount > 0 ? plugin.getCurrentProgram() : -1;
     const bool wasNonRealtime = plugin.isNonRealtime();
     plugin.setNonRealtime(settings.renderMode == PluginNoteRenderMode::offline);
     bool prepared = false;
@@ -89,6 +91,9 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         }
         if (!previousState.isEmpty())
             plugin.setStateInformation(previousState.getData(), static_cast<int>(previousState.getSize()));
+        if (previousProgram >= 0 && previousProgram < plugin.getNumPrograms()
+            && plugin.getCurrentProgram() != previousProgram)
+            plugin.setCurrentProgram(previousProgram);
         plugin.setNonRealtime(wasNonRealtime);
     };
 

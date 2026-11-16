@@ -36,7 +36,7 @@ class SyntheticInstrument final : public juce::AudioProcessor
 public:
     SyntheticInstrument() : AudioProcessor(BusesProperties().withOutput("Stereo Out", juce::AudioChannelSet::stereo(), true)) {}
     const juce::String getName() const override { return "Synthetic Test Instrument"; }
-    void prepareToPlay(double rate, int) override { sampleRate = rate; phase = 0.0; }
+    void prepareToPlay(double rate, int) override { sampleRate = rate; phase = 0.0; if (changeProgramOnPrepare) program = 0; }
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
     {
@@ -66,16 +66,18 @@ public:
     void setCurrentProgram(int value) override { program = juce::jlimit(0, 1, value); }
     const juce::String getProgramName(int index) override { return index == 0 ? "Factory Kit A" : juce::String(); }
     void changeProgramName(int, const juce::String&) override {}
-    void getStateInformation(juce::MemoryBlock& destination) override { destination.reset(); destination.append(&program, sizeof(program)); }
+    void getStateInformation(juce::MemoryBlock& destination) override { destination.reset(); if (serializeProgram) destination.append(&program, sizeof(program)); }
     void setStateInformation(const void* data, int size) override { if (data != nullptr && size == static_cast<int>(sizeof(program))) std::memcpy(&program, data, sizeof(program)); }
     bool observedOfflineProcessing() const { return sawOfflineProcessing; }
     bool observedRealtimeProcessing() const { return sawRealtimeProcessing; }
     void clearRenderModeObservations() { sawOfflineProcessing = false; sawRealtimeProcessing = false; }
+    void setProgramSerializationEnabled(bool enabled) { serializeProgram = enabled; }
+    void setProgramChangeOnPrepare(bool enabled) { changeProgramOnPrepare = enabled; }
 private:
     double sampleRate = 44100.0, phase = 0.0;
     float amplitude = 0.0f;
     int activeNote = -1, program = 0;
-    bool sawOfflineProcessing = false, sawRealtimeProcessing = false;
+    bool sawOfflineProcessing = false, sawRealtimeProcessing = false, serializeProgram = true, changeProgramOnPrepare = false;
 };
 
 class FixtureClassificationModel final : public DrumClassificationModel
@@ -866,6 +868,7 @@ int runSmokeTests(int argc,char** argv)
     int streamedCaptureCount=0;const auto streamedNoteScan=PluginNoteScanner{}.scan(synthetic,scanSettings,{}, {},[&](const PluginNoteCapture&){++streamedCaptureCount;return true;});if(!streamedNoteScan.error.isEmpty()||!streamedNoteScan.notes.empty()||streamedCaptureCount!=256)return 181;
     scanSettings.repeatCount=3;int repeatedProgress=0;auto repeatedScan=PluginNoteScanner{}.scan(synthetic,scanSettings,{},[&](int done,int total,int,int){if(done<1||done>total)repeatedProgress=-1000;else ++repeatedProgress;});if(!repeatedScan.error.isEmpty()||repeatedScan.notes.size()!=768||repeatedProgress!=768)return 105;for(size_t index=0;index<repeatedScan.notes.size();index+=3)if(repeatedScan.notes[index].takeIndex!=1||repeatedScan.notes[index+1].takeIndex!=2||repeatedScan.notes[index+2].takeIndex!=3||repeatedScan.notes[index].midiNote!=repeatedScan.notes[index+2].midiNote||repeatedScan.notes[index].velocity!=repeatedScan.notes[index+2].velocity)return 106;scanSettings.repeatCount=1;
     auto cancelledScan=PluginNoteScanner{}.scan(synthetic,scanSettings,[]{return true;});if(!cancelledScan.cancelled||!cancelledScan.notes.empty()||synthetic.getCurrentProgram()!=1)return 41;
+    SyntheticInstrument instrumentWithoutStateBlob;instrumentWithoutStateBlob.setCurrentProgram(1);instrumentWithoutStateBlob.setProgramSerializationEnabled(false);instrumentWithoutStateBlob.setProgramChangeOnPrepare(true);const auto restoredProgramScan=PluginNoteScanner{}.scan(instrumentWithoutStateBlob,scanSettings,[]{return true;});if(!restoredProgramScan.cancelled||!restoredProgramScan.error.isEmpty()||instrumentWithoutStateBlob.getCurrentProgram()!=1)return 189;
     auto realtimeSettings=scanSettings;realtimeSettings.velocityLevels={100};realtimeSettings.noteDurationSeconds=.005;realtimeSettings.releaseSeconds=.005;realtimeSettings.captureLengthSeconds=.01;realtimeSettings.renderMode=PluginNoteRenderMode::realtimePaced;synthetic.clearRenderModeObservations();synthetic.setNonRealtime(true);bool stopRealtimeAfterCapture=false;int realtimeCaptures=0;const auto realtimeStart=std::chrono::steady_clock::now();const auto realtimeScan=PluginNoteScanner{}.scan(synthetic,realtimeSettings,[&]{return stopRealtimeAfterCapture;},{},[&](const PluginNoteCapture&){++realtimeCaptures;stopRealtimeAfterCapture=true;return true;});const auto realtimeElapsed=std::chrono::steady_clock::now()-realtimeStart;if(!realtimeScan.error.isEmpty()||!realtimeScan.cancelled||realtimeCaptures!=1||!synthetic.observedRealtimeProcessing()||!synthetic.isNonRealtime()||realtimeElapsed<std::chrono::milliseconds(8))return 184;synthetic.setNonRealtime(false);
     SyntheticInstrument deviceSynthetic;deviceSynthetic.prepareToPlay(8000,64);DeviceRealtimeRenderer deviceRenderer(deviceSynthetic);if(!deviceRenderer.prepareForTesting(8000,64))return 187;juce::AudioBuffer<float> deviceCapture(2,160);deviceCapture.clear();std::atomic<bool> stopDeviceDriver{false};std::thread deviceDriver([&]{float left[64]{},right[64]{};float* outputs[]{left,right};while(!stopDeviceDriver.load(std::memory_order_acquire)&&!deviceRenderer.hasActiveTestRequest())std::this_thread::sleep_for(std::chrono::milliseconds(1));while(!stopDeviceDriver.load(std::memory_order_acquire)){deviceRenderer.invokeTestCallback(outputs,2,64);std::this_thread::sleep_for(std::chrono::milliseconds(1));}});bool deviceCancelled=false;const bool deviceRendered=deviceRenderer.render(36,100,80,deviceCapture,{},deviceCancelled);stopDeviceDriver.store(true,std::memory_order_release);deviceDriver.join();deviceSynthetic.releaseResources();if(!deviceRendered||deviceCancelled||!deviceSynthetic.observedRealtimeProcessing()||deviceCapture.getRMSLevel(0,0,deviceCapture.getNumSamples())<=0.01f)return 188;
     PluginNoteScanSettings largeStreamingSettings;largeStreamingSettings.sampleRate=192000;largeStreamingSettings.blockSize=8192;largeStreamingSettings.velocityLevels={1,8,16,24,32,40,48,56,64,72,80,88,96,104,112,127};largeStreamingSettings.repeatCount=8;largeStreamingSettings.noteDurationSeconds=10;largeStreamingSettings.releaseSeconds=10;largeStreamingSettings.captureLengthSeconds=20;const auto largeStreamingScan=PluginNoteScanner{}.scan(synthetic,largeStreamingSettings,[]{return true;},{},[](const PluginNoteCapture&){return true;});if(!largeStreamingScan.cancelled||!largeStreamingScan.error.isEmpty())return 182;

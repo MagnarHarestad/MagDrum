@@ -116,6 +116,38 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
     $configureTimer.Stop()
 
+    # JUCE does not always refresh the generated Windows .rc version fields when
+    # PROJECT_VERSION changes. Update only stale files so the resource compile and
+    # dependent relink happen when needed, without forcing them on every build.
+    $productVersion = "0.1.2.$BuildRevision"
+    $resourceFileVersion = "0,1,2,$BuildRevision"
+    foreach ($target in @('MagDrum', 'MagDrumPlugin')) {
+        $resourceFile = Join-Path $buildDirectory "$target`_artefacts/JuceLibraryCode/${target}_resources.rc"
+        if (-not (Test-Path -LiteralPath $resourceFile -PathType Leaf)) {
+            throw "JUCE's Windows resource file was not generated for $target."
+        }
+        $resourceText = [System.IO.File]::ReadAllText($resourceFile)
+        $updatedResource = [regex]::Replace($resourceText, '(?m)^FILEVERSION[^\r\n]*', "FILEVERSION  $resourceFileVersion")
+        foreach ($field in @('FileVersion', 'ProductVersion')) {
+            $pattern = "(?m)^([ \t]*VALUE `"$field`",[ \t]*)`"[^`"]*`""
+            if (([regex]::Matches($updatedResource, $pattern)).Count -ne 1) {
+                throw "JUCE's Windows resource file for $target has no unique $field field."
+            }
+            $replacement = '$1' + [char]34 + $productVersion + '\' + '0' + [char]34
+            $updatedResource = [regex]::Replace($updatedResource, $pattern, $replacement)
+        }
+        $expectedVersionValue = [string][char]34 + $productVersion + [string][char]92 + '0' + [string][char]34
+        if (-not $updatedResource.Contains("FILEVERSION  $resourceFileVersion") -or
+            -not $updatedResource.Contains('VALUE "FileVersion",  ' + $expectedVersionValue) -or
+            -not $updatedResource.Contains('VALUE "ProductVersion",  ' + $expectedVersionValue)) {
+            throw "Could not synchronize the Windows resource version for $target to $productVersion."
+        }
+        if ($updatedResource -cne $resourceText) {
+            [System.IO.File]::WriteAllText($resourceFile, $updatedResource, [System.Text.UTF8Encoding]::new($false))
+            Write-Host "Updated $target Windows resource version to $productVersion."
+        }
+    }
+
     $buildTargets = if ($SkipTests) {
         @('MagDrum', 'MagDrumPlugin_VST3')
     } else {
@@ -152,6 +184,10 @@ try {
     $pluginModule = Get-ChildItem -LiteralPath $plugin.FullName -Recurse -File -Filter 'MagDrum.vst3' |
         Select-Object -First 1
     if (-not $pluginModule) { throw 'The Windows VST3 module binary was not found inside its bundle.' }
+    $actualProductVersion = [string](Get-Item -LiteralPath $pluginModule.FullName).VersionInfo.ProductVersion
+    if ($actualProductVersion -ne $productVersion) {
+        throw "Built VST3 version '$actualProductVersion' does not match requested product version '$productVersion'."
+    }
     $pluginArchitectureDirectory = $pluginModule.Directory.FullName
     Copy-Item -LiteralPath $app.FullName -Destination (Join-Path $pluginArchitectureDirectory 'MagDrum.exe') -Force
 
