@@ -667,7 +667,10 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
     for (int note = 0; note < 128; ++note)
         setNoteParameters(note, savedParameters[static_cast<size_t>(note)]);
     if (restoreRequests.empty())
+    {
+        sendChangeMessage();
         return;
+    }
 
     const juce::ScopedLock workerLock(sampleStateLoadWorkerLock);
     if (sampleStateLoadWorkers == nullptr)
@@ -689,6 +692,8 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     loadSampleForVelocityRange(request.note, request.minimumVelocity,
                         request.maximumVelocity, request.file, shouldCancel);
             }
+            if (sampleStateLoadGeneration.load(std::memory_order_acquire) == generation)
+                sendChangeMessage();
         }), true);
 }
 

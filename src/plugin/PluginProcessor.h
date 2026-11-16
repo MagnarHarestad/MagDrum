@@ -12,7 +12,7 @@
 
 class MagDrumAudioProcessorTestAccess;
 
-class MagDrumAudioProcessor final : public juce::AudioProcessor
+class MagDrumAudioProcessor final : public juce::AudioProcessor, private juce::ChangeBroadcaster
 {
 public:
     struct SampleLayerInfo
@@ -69,6 +69,12 @@ public:
     juce::String getSamplePathForNote(int midiNote) const;
     void setPluginEditorState(const juce::XmlElement&);
     std::unique_ptr<juce::XmlElement> getPluginEditorState() const;
+    void addSampleStateListener(juce::ChangeListener* listener) { addChangeListener(listener); }
+    void removeSampleStateListener(juce::ChangeListener* listener) { removeChangeListener(listener); }
+    bool isSampleStateChangeSource(const juce::ChangeBroadcaster* source) const noexcept
+    {
+        return source == static_cast<const juce::ChangeBroadcaster*>(this);
+    }
 
 private:
     friend class MagDrumAudioProcessorTestAccess;
