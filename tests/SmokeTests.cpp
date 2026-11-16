@@ -858,6 +858,13 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (formatMidiNoteName(36) != "C1" || formatMidiNoteName(38) != "D1"
+        || formatMidiNoteName(44) != "G#1" || formatMidiNoteName(56) != "G#2"
+        || !formatMidiNoteName(-1).empty() || !formatMidiNoteName(128).empty())
+    {
+        std::cerr << "MIDI note labels do not match the Cubase octave convention.\n";
+        return 249;
+    }
     const auto result = runSmokeTests(argc, argv);
     if (result != 0)
         std::cerr << "MagDrumTests failed with diagnostic code " << result << ".\n";

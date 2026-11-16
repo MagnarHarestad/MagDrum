@@ -6,6 +6,17 @@
 #include <stdexcept>
 #include <utility>
 
+std::string formatMidiNoteName(int midiNote)
+{
+    static constexpr std::array noteNames{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    if (midiNote < 0 || midiNote > 127)
+        return {};
+
+    const auto noteIndex = static_cast<std::size_t>(midiNote % 12);
+    const auto octave = midiNote / 12 - 2;
+    return std::string(noteNames[noteIndex]) + std::to_string(octave);
+}
+
 namespace
 {
 constexpr std::array instrumentNames{"Kick", "Snare", "HiHat", "Tom", "Ride", "Crash", "Clap", "Rimshot", "Percussion"};

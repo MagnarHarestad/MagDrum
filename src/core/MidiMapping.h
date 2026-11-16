@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 
+// Display pitch names using the Cubase octave convention (MIDI note 36 is C1).
+std::string formatMidiNoteName(int midiNote);
+
 struct MidiNoteMapping
 {
     DrumInstrument instrument;

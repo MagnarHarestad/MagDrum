@@ -12,7 +12,7 @@ Click **Scan installed libraries** to scan audio in detected default Native Inst
 
 ## Drum Machine
 
-The 4×4 pad grid follows the Boss DR-660 layout: crashes and ride sounds on the top row, toms next, side stick/clap/hi-hats on the third row, then Kick, Snare, Pedal HH and Cowbell along the bottom. The bottom-left Kick sends MIDI note 36; Snare sends 38, Closed HH 42, Open HH 46, Pedal HH 44 and Cowbell 56. Click a pad to select it and audition its assigned sound. The panel beside the grid shows the sample waveform, file path and assigned velocity layers. **Load WAV** loads a local audio file directly; **Clear pad** removes all layers from that note. To assign a library sample, select the pad first, then return to **Sample Library** and use **Assign to pad**. Velocity ranges are inclusive, from 1 to 127, and may not overlap.
+The 4×4 pad grid follows the Boss DR-660 layout: crashes and ride sounds on the top row, toms next, side stick/clap/hi-hats on the third row, then Kick, Snare, Pedal HH and Cowbell along the bottom. The updated Windows x64 development build uses Cubase's octave convention for pitch labels: bottom-left Kick is C1 (MIDI note 36), Snare is D1 (38), Closed HH is F#1 (42), Open HH is A#1 (46), Pedal HH is G#1 (44) and Cowbell is G#2 (56). Click a pad to select it and audition its assigned sound. The panel beside the grid shows the sample waveform, file path and assigned velocity layers. **Load WAV** loads a local audio file directly; **Clear pad** removes all layers from that note. To assign a library sample, select the pad first, then return to **Sample Library** and use **Assign to pad**. Velocity ranges are inclusive, from 1 to 127, and may not overlap.
 
 ## Sequencer
 

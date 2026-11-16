@@ -62,8 +62,7 @@ int sequencerLaneForEvent(const DrumEvent& event)
 }
 juce::String noteName(int note)
 {
-    static constexpr const char* names[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
-    return juce::String(names[note % 12]) + juce::String(note / 12 - 1);
+    return juce::String::fromUTF8(formatMidiNoteName(note).c_str());
 }
 magdrum::sequencer::BarMap makeSequencerBarMap(int numerator,int denominator,int bars,
                                                 const std::vector<MidiMetaEvent>& metadata,
