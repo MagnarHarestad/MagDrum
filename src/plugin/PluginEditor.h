@@ -110,6 +110,8 @@ private:
                                      std::vector<PluginConfirmedVelocityLayerRange>,
                                      std::vector<PluginRoundRobinCandidate>,
                                      std::vector<PluginConfirmedRoundRobinGroup>);
+    void finishPortableMetadataArchive(bool, bool, bool, bool, const juce::File&,
+                                       const PortableMetadataMergeResult&);
     void reviewVelocityLayers(const SampleBrowseRecord&,
                               const std::vector<PluginVelocityLayerBoundary>&,
                               const std::vector<PluginConfirmedVelocityLayerRange>&);
@@ -135,6 +137,8 @@ private:
     bool sampleLookupRunning = false;
     juce::ThreadPool sampleReviewWorkers{1};
     bool sampleReviewRunning = false;
+    juce::ThreadPool metadataArchiveWorkers{1};
+    bool metadataArchiveRunning = false;
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
     std::vector<juce::File> defaultMidiPatterns;

@@ -528,6 +528,58 @@ private:
     Completion onComplete;
 };
 
+class PluginMetadataArchiveJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(bool, bool, bool, bool, juce::File,
+                                          PortableMetadataMergeResult)>;
+
+    PluginMetadataArchiveJob(juce::File databaseFile, juce::File archiveFile, bool isExport,
+                             Completion completion)
+        : ThreadPoolJob("MagDrum portable metadata archive"), dbPath(std::move(databaseFile)),
+          file(std::move(archiveFile)), exporting(isExport), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        SampleDatabase archiveDatabase;
+        const bool databaseOpened = archiveDatabase.open(dbPath);
+        bool archiveValid = true;
+        bool fileSaved = false;
+        PortableMetadataMergeResult mergeResult;
+
+        if (databaseOpened && exporting)
+        {
+            const auto json = juce::JSON::toString(archiveDatabase.exportPortableMetadata(), true);
+            if (file.getFileExtension().isEmpty())
+                file = file.withFileExtension(".json");
+            fileSaved = file.replaceWithText(json);
+        }
+        else if (databaseOpened)
+        {
+            const auto archive = juce::JSON::parse(file.loadFileAsString());
+            archiveValid = !archive.isVoid();
+            if (archiveValid)
+                mergeResult = archiveDatabase.mergePortableMetadata(archive);
+        }
+
+        juce::MessageManager::callAsync(
+            [completion = std::move(onComplete), isExport = exporting, databaseOpened,
+             archiveValid, fileSaved, archiveFile = std::move(file),
+             result = std::move(mergeResult)]() mutable
+            {
+                if (completion)
+                    completion(isExport, databaseOpened, archiveValid, fileSaved,
+                               std::move(archiveFile), std::move(result));
+            });
+        return jobHasFinished;
+    }
+
+private:
+    juce::File dbPath, file;
+    bool exporting = false;
+    Completion onComplete;
+};
+
 class VstPluginNoteScanJob final : public juce::ThreadPoolJob
 {
 public:
@@ -1158,7 +1210,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2578,8 +2630,43 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
     }
     if(action==7||action==8)
     {
-        const bool exporting=action==7;chooser=std::make_unique<juce::FileChooser>(magdrum::ui::localisedText(exporting?"Export MagDrum metadata":"Import MagDrum metadata"),juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MagDrum-Metadata.json"),"*.json");juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-        chooser->launchAsync(exporting?(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles):(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles),[safe,exporting](const juce::FileChooser& fc){if(safe==nullptr)return;auto target=fc.getResult();if(target==juce::File())return;if(exporting){const auto json=juce::JSON::toString(safe->database.exportPortableMetadata(),true);if(target.getFileExtension().isEmpty())target=target.withFileExtension(".json");const bool saved=target.replaceWithText(json);safe->status.setText(magdrum::ui::localisedText(saved?"Portable metadata exported.":"Could not write metadata archive."),juce::dontSendNotification);}else{const auto archive=juce::JSON::parse(target.loadFileAsString());if(archive.isVoid()){safe->status.setText(magdrum::ui::localisedText("The metadata archive is not valid JSON."),juce::dontSendNotification);return;}const auto merged=safe->database.mergePortableMetadata(archive);safe->refreshSamples();auto message=magdrum::ui::localisedText(merged.ok?"Metadata imported: {tags} tags added, {profiles} mapping profiles added.":"Metadata import failed: {error}");message=message.replace("{tags}",juce::String(merged.tagsAdded)).replace("{profiles}",juce::String(merged.profilesAdded)).replace("{error}",merged.error);safe->status.setText(message,juce::dontSendNotification);}});return;
+        const bool exporting=action==7;
+        chooser=std::make_unique<juce::FileChooser>(
+            magdrum::ui::localisedText(exporting?"Export MagDrum metadata":"Import MagDrum metadata"),
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MagDrum-Metadata.json"),
+            "*.json");
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        chooser->launchAsync(
+            exporting?(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles)
+                     :(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles),
+            [safe,exporting](const juce::FileChooser& fc)
+            {
+                if(safe==nullptr)return;
+                const auto target=fc.getResult();
+                if(target==juce::File())return;
+                if(safe->metadataArchiveRunning)return;
+                if(!safe->databaseReady||safe->databaseFile==juce::File())
+                {
+                    safe->status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                                         juce::dontSendNotification);
+                    return;
+                }
+
+                safe->metadataArchiveRunning=true;
+                safe->libraryToolsButton.setEnabled(false);
+                safe->status.setText(magdrum::ui::localisedText(
+                    exporting?"Export MagDrum metadata":"Import MagDrum metadata"),juce::dontSendNotification);
+                safe->metadataArchiveWorkers.addJob(new PluginMetadataArchiveJob(
+                    safe->databaseFile,target,exporting,
+                    [safe](bool isExport,bool databaseOpened,bool archiveValid,bool fileSaved,
+                           juce::File archiveFile,PortableMetadataMergeResult result)
+                    {
+                        if(safe!=nullptr)
+                            safe->finishPortableMetadataArchive(isExport,databaseOpened,archiveValid,
+                                                                fileSaved,archiveFile,result);
+                    }),true);
+            });
+        return;
     }
     if(action==9)
     {
@@ -2876,6 +2963,43 @@ void MagDrumAudioProcessorEditor::finishMetadataFolderSync(const PortableMetadat
         report+=magdrum::ui::localisedText("Conflicting local values were not overwritten. No audio files or plugin states were imported.");
         juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Metadata import report"),report,magdrum::ui::localisedText("Close"));
     }
+}
+
+void MagDrumAudioProcessorEditor::finishPortableMetadataArchive(
+    bool exporting, bool databaseOpened, bool archiveValid, bool fileSaved,
+    const juce::File& archiveFile, const PortableMetadataMergeResult& merged)
+{
+    metadataArchiveRunning=false;
+    libraryToolsButton.setEnabled(true);
+    if(!databaseOpened)
+    {
+        status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                       juce::dontSendNotification);
+        return;
+    }
+    if(exporting)
+    {
+        auto message=magdrum::ui::localisedText(fileSaved
+            ?"Portable metadata exported.":"Could not write metadata archive.");
+        if(fileSaved)message+=" "+archiveFile.getFullPathName();
+        status.setText(message,juce::dontSendNotification);
+        return;
+    }
+    if(!archiveValid)
+    {
+        status.setText(magdrum::ui::localisedText("The metadata archive is not valid JSON."),
+                       juce::dontSendNotification);
+        return;
+    }
+
+    refreshSamples();
+    auto message=magdrum::ui::localisedText(merged.ok
+        ?"Metadata imported: {tags} tags added, {profiles} mapping profiles added."
+        :"Metadata import failed: {error}");
+    message=message.replace("{tags}",juce::String(merged.tagsAdded))
+        .replace("{profiles}",juce::String(merged.profilesAdded))
+        .replace("{error}",merged.error);
+    status.setText(message,juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::setPage(int value){page=juce::jlimit(0,highestEditorPage,value);resized();repaint();}
