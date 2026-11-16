@@ -20,7 +20,7 @@ jobs:
           MAGDRUM_BUILD_REVISION: ${{ inputs.build_revision }}
         run: |
           if ($env:MAGDRUM_BUILD_REVISION -notmatch '^\d+$') { throw 'Build revision must be numeric.' }
-          pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1 -Architecture x64 -BuildRevision ([int]$env:MAGDRUM_BUILD_REVISION) -Parallel 8
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1 -Architecture x64 -BuildRevision ([int]$env:MAGDRUM_BUILD_REVISION)
       - uses: actions/upload-artifact@v4
         with:
           name: MagDrum-Windows-x64
