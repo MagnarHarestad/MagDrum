@@ -6,7 +6,10 @@ if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
     throw 'Install-MagDrum.ps1 was not found beside this launcher.'
 }
 
-$powershell = Join-Path $PSHOME 'powershell.exe'
+$powershell = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
+if (-not (Test-Path -LiteralPath $powershell -PathType Leaf)) {
+    throw "Windows PowerShell was not found: $powershell"
+}
 $installerArguments = @(
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',

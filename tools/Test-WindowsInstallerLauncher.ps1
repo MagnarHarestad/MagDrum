@@ -38,6 +38,11 @@ if ((Get-Content -LiteralPath $launcherPath -Raw) -match '(?i)[''"" ]-Force\b') 
     throw 'The launcher must leave the existing-install confirmation enabled.'
 }
 
+$launcherText = Get-Content -LiteralPath $launcherPath -Raw
+if (-not $launcherText.Contains('Join-Path $env:WINDIR ''System32/WindowsPowerShell/v1.0/powershell.exe''')) {
+    throw 'The launcher must use the Windows PowerShell executable, not assume PSHOME contains powershell.exe.'
+}
+
 $cmd = Get-Content -LiteralPath $cmdPath -Raw
 if ($cmd -notmatch 'Launch-Install-MagDrum\.ps1' -or $cmd -notmatch '(?im)^\s*pause\s*$') {
     throw 'The double-click command file must start the UAC launcher and keep failures visible.'
