@@ -25,6 +25,8 @@ try {
         'MagDrum.vst3/Contents/x86_64-win/MagDrum.vst3',
         'MagDrum.vst3/Contents/x86_64-win/MagDrum.exe',
         'Install-MagDrum.ps1',
+        'Launch-Install-MagDrum.ps1',
+        'Install-MagDrum.cmd',
         'MagDrumInstallHelpers.ps1',
         'README.txt',
         'LICENSE',

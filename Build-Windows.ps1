@@ -76,6 +76,7 @@ $buildTesting = if ($SkipTests) { 'OFF' } else { 'ON' }
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerGuard.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerCleanup.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerPrerequisite.ps1')
+& (Join-Path $repoRoot 'tools/Test-WindowsInstallerLauncher.ps1')
 
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmakePath = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
@@ -197,7 +198,7 @@ try {
     New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
     Copy-Item -LiteralPath $app.FullName -Destination $stagingDirectory
     Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $stagingDirectory 'MagDrum.vst3') -Recurse
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/MagDrumInstallHelpers.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Launch-Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Install-MagDrum.cmd'), (Join-Path $repoRoot 'installer/MagDrumInstallHelpers.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingDirectory
     $juceSourceDirectory = Join-Path $dependencyDirectory 'juce-src'
     $thirdPartyLicenses = [ordered]@{
@@ -243,7 +244,9 @@ try {
     if ($SkipTests) {
         Write-Host 'CTest targets were not configured or run. Treat this package as a local iteration build; run the default full build before publishing.'
     }
-    Write-Host 'Publish this archive with gh release create when it is ready for distribution.'
+    $releaseTag = "v0.1.2-test.$BuildRevision"
+    $releaseAsset = "MagDrum-Windows-$Architecture.zip"
+    Write-Host "When ready, publish with: .\Publish-LocalRelease.ps1 -Tag $releaseTag -Asset $releaseAsset"
 }
 finally {
     Pop-Location
