@@ -28,7 +28,7 @@ The completion target is the Windows VST3 inside Cubase Pro 15. Linux, macOS, AR
 
 This ordering puts the playable instrument path first while preserving the requested standalone-to-VST parity goal. Each code change should name the parity row and observable acceptance result it closes.
 
-**State-persistence verification in current source:** editing the sequencer's base tempo now updates the saved editor state immediately. The Windows plugin smoke test round-trips the tempo, two-bar length, semantic hits, mapping profile and tempo/meter metadata through processor state. This checks MagDrum's state payload; saving and reopening a real Cubase project remains part of the manual host pass. This fix is not in the published .174 package yet.
+**State-persistence verification:** editing the sequencer's base tempo updates the saved editor state immediately. The Windows plugin smoke test round-trips the tempo, two-bar length, semantic hits, mapping profile and tempo/meter metadata through processor state. The .175 package includes this fix; saving and reopening a real Cubase project remains part of the manual host pass.
 
 ## Windows development and installation loop
 
