@@ -298,6 +298,20 @@ int main(int argc, char** argv)
             }
         }
     }
+    constexpr const char* containerWarningKey = "Detected %1 Steinberg VST Sound containers and %2 Kontakt NCW files. Use Plugin Scanner to capture sounds from installed instruments.";
+    constexpr const char* containerWarningTitle = "Some installed library sounds need Plugin Scanner";
+    const std::array<Language, 8> allLanguages{
+        Language::english, Language::german, Language::french, Language::spanish,
+        Language::swedish, Language::norwegian, Language::danish, Language::finnish};
+    for (const auto language : allLanguages)
+    {
+        magdrum::ui::setLanguage(language, false);
+        const auto warning = magdrum::ui::localisedText(containerWarningKey);
+        const auto title = magdrum::ui::localisedText(containerWarningTitle);
+        if (!warning.contains("%1") || !warning.contains("%2") || title.isEmpty()
+            || (language != Language::english && (warning == containerWarningKey || title == containerWarningTitle)))
+            return 32;
+    }
     magdrum::ui::setLanguage(Language::english, false);
 
     const std::array<std::pair<Language, const char*>, 7> pluginFolderLabels{{

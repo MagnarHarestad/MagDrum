@@ -187,6 +187,10 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         if (extension == ".wav" || extension == ".wave" || extension == ".aif"
             || extension == ".aiff" || extension == ".flac")
             files.add(file);
+        else if (stats != nullptr && extension == ".vstsound")
+            ++stats->steinbergVstSoundContainers;
+        else if (stats != nullptr && extension == ".ncw")
+            ++stats->kontaktNcwFiles;
     }
     std::sort(files.begin(), files.end(), [](const juce::File& left, const juce::File& right)
     {

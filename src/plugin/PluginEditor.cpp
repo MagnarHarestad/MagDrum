@@ -2624,6 +2624,8 @@ void MagDrumAudioProcessorEditor::scanDefaultLibraryFolders()
     defaultLibraryFolderIndex=0;
     defaultLibraryIndexedCount=0;
     defaultLibraryErrorCount=0;
+    defaultLibraryVstSoundCount=0;
+    defaultLibraryKontaktNcwCount=0;
     defaultMidiPatterns.clear();
     browseMidiButton.setButtonText(magdrum::ui::localisedText("Find drum MIDI"));
     browseMidiButton.setEnabled(false);
@@ -2744,7 +2746,17 @@ void MagDrumAudioProcessorEditor::finishDefaultMidiPatternSearch(std::vector<juc
     browseMidiButton.setEnabled(true);
     refreshSourceKitFilters();
     refreshSamples();
-    status.setText(magdrum::ui::localisedText("Library scan complete")+" | "+juce::String(defaultLibraryIndexedCount)+" "+magdrum::ui::localisedText("audio samples indexed across")+" "+juce::String(folderCount)+" "+magdrum::ui::localisedText("locations")+" | "+juce::String(static_cast<int>(defaultMidiPatterns.size()))+" "+magdrum::ui::localisedText("drum MIDI patterns found")+" | "+juce::String(defaultLibraryErrorCount)+" "+magdrum::ui::localisedText("errors")+".",juce::dontSendNotification);
+    auto completionMessage=magdrum::ui::localisedText("Library scan complete")+" | "+juce::String(defaultLibraryIndexedCount)+" "+magdrum::ui::localisedText("audio samples indexed across")+" "+juce::String(folderCount)+" "+magdrum::ui::localisedText("locations")+" | "+juce::String(static_cast<int>(defaultMidiPatterns.size()))+" "+magdrum::ui::localisedText("drum MIDI patterns found")+" | "+juce::String(defaultLibraryErrorCount)+" "+magdrum::ui::localisedText("errors")+".";
+    if(defaultLibraryVstSoundCount>0||defaultLibraryKontaktNcwCount>0)
+    {
+        const auto containerWarning=magdrum::ui::localisedText("Detected %1 Steinberg VST Sound containers and %2 Kontakt NCW files. Use Plugin Scanner to capture sounds from installed instruments.")
+            .replace("%1",juce::String(defaultLibraryVstSoundCount)).replace("%2",juce::String(defaultLibraryKontaktNcwCount));
+        completionMessage+=" "+containerWarning;
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+            magdrum::ui::localisedText("Some installed library sounds need Plugin Scanner"), containerWarning,
+            magdrum::ui::localisedText("Close"), this);
+    }
+    status.setText(completionMessage,juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::browseDefaultMidiPatterns()
@@ -2788,6 +2800,8 @@ void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stat
     {
         defaultLibraryIndexedCount+=indexed;
         defaultLibraryErrorCount+=stats.errors+(error.isNotEmpty()?1:0);
+        defaultLibraryVstSoundCount+=stats.steinbergVstSoundContainers;
+        defaultLibraryKontaktNcwCount+=stats.kontaktNcwFiles;
         if(stats.cancelled)
         {
             scanningDefaultLibraries=false;
@@ -2802,7 +2816,13 @@ void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stat
         return;
     }
     if(error.isNotEmpty())status.setText(magdrum::ui::localisedText("Sample folder scan failed. Check the selected folder and try again."),juce::dontSendNotification);
-    else status.setText(magdrum::ui::localisedText(stats.cancelled?"Scan cancelled. ":"Scan complete. ")+juce::String(indexed)+" "+magdrum::ui::localisedText("indexed, ")+juce::String(stats.filesSkippedUnchanged)+" "+magdrum::ui::localisedText("unchanged, ")+juce::String(stats.errors)+" "+magdrum::ui::localisedText("errors."),juce::dontSendNotification);
+    else
+    {
+        auto message=magdrum::ui::localisedText(stats.cancelled?"Scan cancelled. ":"Scan complete. ")+juce::String(indexed)+" "+magdrum::ui::localisedText("indexed, ")+juce::String(stats.filesSkippedUnchanged)+" "+magdrum::ui::localisedText("unchanged, ")+juce::String(stats.errors)+" "+magdrum::ui::localisedText("errors.");
+        if(stats.steinbergVstSoundContainers>0||stats.kontaktNcwFiles>0)
+            message+=" "+magdrum::ui::localisedText("Detected %1 Steinberg VST Sound containers and %2 Kontakt NCW files. Use Plugin Scanner to capture sounds from installed instruments.").replace("%1",juce::String(stats.steinbergVstSoundContainers)).replace("%2",juce::String(stats.kontaktNcwFiles));
+        status.setText(message,juce::dontSendNotification);
+    }
 }
 
 void MagDrumAudioProcessorEditor::showLibraryTools()

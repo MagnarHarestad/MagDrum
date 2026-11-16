@@ -51,6 +51,8 @@ public:
         std::int64_t filesSkippedUnchanged = 0;
         std::int64_t filesAnalyzed = 0;
         std::int64_t errors = 0;
+        std::int64_t steinbergVstSoundContainers = 0;
+        std::int64_t kontaktNcwFiles = 0;
         bool cancelled = false;
     };
     juce::Array<ScannedSample> scan(const juce::File& root, ShouldCancel shouldCancel = {},

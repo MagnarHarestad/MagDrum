@@ -1,7 +1,8 @@
 param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Architecture = 'x64',
-    [string] $BuildDirectory,
+    # Keep one warm Release tree across test releases; clean trees rebuild all of JUCE.
+    [string] $BuildDirectory = 'build/local-windows-release-20261116',
     [switch] $SkipTests,
     [ValidateRange(1, 64)]
     [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8),
@@ -90,6 +91,7 @@ if (-not (Test-Path -LiteralPath $ctestPath)) {
 
 Push-Location $repoRoot
 try {
+    $configureTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $configureArguments = @(
         '-S', $repoRoot,
         '-B', $buildDirectory,
@@ -106,6 +108,7 @@ try {
     }
     & $cmakePath @configureArguments
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
+    $configureTimer.Stop()
 
     # JUCE's generated Windows resource command does not depend on its refreshed Info.txt.
     # Recreate the generated .rc files so Windows file/product versions follow PROJECT_VERSION.
@@ -122,12 +125,17 @@ try {
         # excluding unrelated cached targets such as the mobile preview.
         @('MagDrumTests')
     }
+    $compileTimer = [System.Diagnostics.Stopwatch]::StartNew()
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
+    $compileTimer.Stop()
 
+    $testTimer = $null
     if (-not $SkipTests -and $Architecture -eq 'x64') {
+        $testTimer = [System.Diagnostics.Stopwatch]::StartNew()
         & $ctestPath --test-dir $buildDirectory -C Release --output-on-failure
         if ($LASTEXITCODE -ne 0) { throw "CTest failed with exit code $LASTEXITCODE." }
+        $testTimer.Stop()
     }
     elseif (-not $SkipTests) {
         Write-Host 'Windows ARM64 test binaries were cross-compiled but not executed; run CTest on native ARM64 Windows.'
@@ -148,6 +156,7 @@ try {
     $pluginArchitectureDirectory = $pluginModule.Directory.FullName
     Copy-Item -LiteralPath $app.FullName -Destination (Join-Path $pluginArchitectureDirectory 'MagDrum.exe') -Force
 
+    $packageTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $stagingName = 'package-local-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
     $stagingDirectory = Join-Path $buildDirectory $stagingName
     New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
@@ -189,6 +198,10 @@ try {
     Write-Host "Product version: 0.1.2.$BuildRevision"
     Write-Host "Bundled Microsoft Visual C++ $runtimeArchitecture Redistributable: $vcRedistVersion."
     Write-Host "Build parallelism: $Parallel."
+    Write-Host "CMake configure: $($configureTimer.Elapsed.ToString('hh\:mm\:ss')); compile/link: $($compileTimer.Elapsed.ToString('hh\:mm\:ss'))."
+    if ($testTimer) { Write-Host "Tests: $($testTimer.Elapsed.ToString('hh\:mm\:ss'))." }
+    $packageTimer.Stop()
+    Write-Host "Packaging: $($packageTimer.Elapsed.ToString('hh\:mm\:ss'))."
     if ($SkipTests) {
         Write-Host 'CTest targets were not configured or run. Treat this package as a local iteration build; run the default full build before publishing.'
     }

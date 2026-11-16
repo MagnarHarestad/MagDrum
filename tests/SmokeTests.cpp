@@ -380,9 +380,10 @@ int runSmokeTests(int argc,char** argv)
     };
     if(!writeFormatFixture(*aiffFormat,formatRoot.getChildFile("fixture.aiff"))||!writeFormatFixture(*flacFormat,formatRoot.getChildFile("fixture.flac")))return 146;
     juce::WavAudioFormat additionalWavFormat;if(!writeFormatFixture(additionalWavFormat,formatRoot.getChildFile("fixture.wav")))return 146;
+    if(!formatRoot.getChildFile("factory.vstsound").replaceWithText("container fixture")||!formatRoot.getChildFile("kick.ncw").replaceWithText("compressed sample fixture"))return 146;
     WavScanner::Stats formatScanStats;const auto additionalFormatSamples=scanner.scan(formatRoot,{}, {},&formatScanStats);
     juce::StringArray scannedFormats;for(const auto& formatSample:additionalFormatSamples){scannedFormats.addIfNotAlreadyThere(formatSample.format);if(formatSample.channels!=1||formatSample.sampleRate!=44100.0||formatSample.durationSeconds<=0.0||formatSample.peak<0.35||formatSample.acousticFingerprint.length()!=128)return 147;}
-    if(additionalFormatSamples.size()!=3||formatScanStats.filesConsidered!=3||formatScanStats.filesAnalyzed!=3||formatScanStats.errors!=0||!scannedFormats.contains("WAV")||!scannedFormats.contains("AIFF")||!scannedFormats.contains("FLAC"))return 148;
+    if(additionalFormatSamples.size()!=3||formatScanStats.filesConsidered!=3||formatScanStats.filesAnalyzed!=3||formatScanStats.errors!=0||formatScanStats.steinbergVstSoundContainers!=1||formatScanStats.kontaktNcwFiles!=1||!scannedFormats.contains("WAV")||!scannedFormats.contains("AIFF")||!scannedFormats.contains("FLAC"))return 148;
 
     const auto classificationTagRoot=root.getSiblingFile("MagDrumClassificationTagTest");classificationTagRoot.deleteRecursively();if(!classificationTagRoot.createDirectory().wasOk())return 149;
     const auto classifiedFile=classificationTagRoot.getChildFile("808_Open_HiHat_deep.wav");if(!waveFile.copyFileTo(classifiedFile))return 150;

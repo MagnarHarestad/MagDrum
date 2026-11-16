@@ -160,6 +160,8 @@ private:
     size_t defaultLibraryFolderIndex = 0;
     std::int64_t defaultLibraryIndexedCount = 0;
     std::int64_t defaultLibraryErrorCount = 0;
+    std::int64_t defaultLibraryVstSoundCount = 0;
+    std::int64_t defaultLibraryKontaktNcwCount = 0;
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
     juce::ThreadPool metadataSyncWorkers{1};
