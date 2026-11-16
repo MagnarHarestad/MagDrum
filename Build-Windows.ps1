@@ -223,6 +223,9 @@ try {
     Copy-Item -LiteralPath $vcRedistPath -Destination (Join-Path $stagingDirectory "vc_redist.$runtimeArchitecture.exe")
     $zipPath = Join-Path $buildDirectory ($stagingName + "-Windows-$Architecture.zip")
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath
+    if ($Architecture -eq 'x64') {
+        & (Join-Path $repoRoot 'tools/Test-WindowsPackage.ps1') -PackagePath $zipPath -BuildRevision $BuildRevision
+    }
     New-Item -ItemType Directory -Force -Path $latestDirectory | Out-Null
     $latestZipPath = Join-Path $latestDirectory "MagDrum-Windows-$Architecture.zip"
     Copy-Item -LiteralPath $zipPath -Destination $latestZipPath -Force
