@@ -220,7 +220,27 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
-    static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
+    static int checksPluginFolderChooserVisibility(MagDrumAudioProcessorEditor& editor)
+    {
+        if (editor.choosePluginFolderButton.isVisible())
+        {
+            std::cerr << "Plugin-folder chooser is visible outside Plugin Scanner.\n";
+            return 1;
+        }
+        editor.buttonClicked(&editor.pluginScannerTab);
+        if (!editor.choosePluginFolderButton.isVisible())
+        {
+            std::cerr << "Plugin-folder chooser is hidden in Plugin Scanner.\n";
+            return 2;
+        }
+        editor.buttonClicked(&editor.libraryTab);
+        if (editor.choosePluginFolderButton.isVisible())
+        {
+            std::cerr << "Plugin-folder chooser stayed visible after leaving Plugin Scanner.\n";
+            return 3;
+        }
+        return 0;
+    }static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
     {
         auto cancellation = std::make_shared<std::atomic<bool>>(false);
         editor.scanning = false;
@@ -493,6 +513,8 @@ int main(int argc, char** argv)
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
+        const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
+        if (folderButtonCheck != 0) return 44;
         const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);
         if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
         const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor, sample, comparisonSample);
