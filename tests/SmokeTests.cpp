@@ -189,19 +189,28 @@ int runSmokeTests(int argc,char** argv)
     const auto distantMeter=magdrum::sequencer::buildBarMap(4,4,1,{{8.1,5,4}});
     const auto nonFiniteMeter=magdrum::sequencer::buildBarMap(4,4,2,{{std::numeric_limits<double>::quiet_NaN(),5,4}});
     const auto infiniteMeter=magdrum::sequencer::buildBarMap(4,4,2,{{std::numeric_limits<double>::infinity(),5,4}});
+    const auto eighthGrid=magdrum::sequencer::buildBarMap(4,4,1,{},2);
+    const auto thirtySecondGrid=magdrum::sequencer::buildBarMap(4,4,16,{},8);
+    const auto thirtySecondMeter=magdrum::sequencer::buildBarMap(4,4,2,{{0.125,3,4}},8);
     if (magdrum::sequencer::stepsPerBar(3,4) != 12
         || magdrum::sequencer::stepsPerBar(5,4) != 20
         || magdrum::sequencer::stepsPerBar(7,8) != 14
         || magdrum::sequencer::stepsPerBar(12,8) != 24
         || magdrum::sequencer::stepsPerBar(8,4) != 32
+        || magdrum::sequencer::stepsPerBar(4,4,2) != 8
+        || magdrum::sequencer::stepsPerBar(4,4,8) != 32
+        || magdrum::sequencer::stepsPerBar(5,4,8) != 0
         || magdrum::sequencer::stepsPerBar(9,4) != 0
         || magdrum::sequencer::stepsForBars(3,4,4) != 48
         || magdrum::sequencer::stepsForBars(12,8,2) != 48
         || magdrum::sequencer::stepsForBars(8,4,16) != 512
+        || magdrum::sequencer::stepsForBars(4,4,16,8) != 512
         || magdrum::sequencer::stepsForBars(4,4,0) != 0
         || magdrum::sequencer::stepsForBars(4,4,17) != 0
         || magdrum::sequencer::maximumSteps != 512
         || !magdrum::sequencer::isPositionOnGridStep(0.25, 1)
+        || !magdrum::sequencer::isPositionOnGridStep(0.125,1,8)
+        || magdrum::sequencer::isPositionOnGridStep(0.125,1,4)
         || !magdrum::sequencer::isPositionOnGridStep(0.25 + magdrum::sequencer::gridBeatTolerance, 1)
         || magdrum::sequencer::isPositionOnGridStep(0.10, 0)
         || magdrum::sequencer::isPositionOnGridStep(0.25 + 2.0 * magdrum::sequencer::gridBeatTolerance, 1)
@@ -218,7 +227,10 @@ int runSmokeTests(int argc,char** argv)
         || offGridMeter.valid
         || !duplicateMeter.valid || duplicateMeter.bars[1].numerator != 5
         || !distantMeter.valid || distantMeter.lengthBeats != 4.0
-        || nonFiniteMeter.valid || infiniteMeter.valid)
+        || nonFiniteMeter.valid || infiniteMeter.valid
+        || !eighthGrid.valid || eighthGrid.totalSteps!=8 || eighthGrid.subdivisionsPerBeat!=2
+        || !thirtySecondGrid.valid || thirtySecondGrid.totalSteps!=512 || thirtySecondGrid.subdivisionsPerBeat!=8
+        || !thirtySecondMeter.valid || thirtySecondMeter.bars[0].stepCount!=1 || thirtySecondMeter.bars[1].startStep!=1)
         return 230;
     const std::vector<magdrum::sequencer::PlaybackEvent> playbackEvents{{0.0,36,100},{0.25,38,90},{0.5,42,80}};
     std::vector<std::pair<int,int>> scheduledHits;

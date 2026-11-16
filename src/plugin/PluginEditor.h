@@ -63,6 +63,7 @@ private:
     void openMidiEventEditor();
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
+    int gridResolutionSubdivisions() const;
     void updateSequencerGrid();
     void refreshStepTooltips();
     void refreshMappingSummary();
@@ -179,6 +180,7 @@ private:
     juce::ComboBox metadataType;
     juce::TextButton setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};
     juce::Label metadataSummary;
+    juce::Label gridResolutionLabel;
     std::vector<MidiMetaEvent> sequenceMetadata;
     MidiPattern importedMidiBaseline;
     bool hasImportedMidiBaseline = false;
@@ -189,7 +191,8 @@ private:
     std::array<juce::Label, 8> laneLabels;
     std::array<std::array<MagDrumStepButton, 512>, 8> steps;
     std::array<std::array<int, 512>, 8> stepVelocities{};
-    juce::ComboBox barSelect, meterSelect, lengthSelect;
+    juce::ComboBox barSelect, meterSelect, lengthSelect, gridResolutionSelect;
+    int previousGridResolution = 4;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
     std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};

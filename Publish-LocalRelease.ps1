@@ -53,11 +53,19 @@ foreach ($name in $Asset) {
     if ($name -notin $knownAssets) { throw "Unsupported release asset name: $name" }
     $path = Join-Path $publishDirectory $name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release asset not found: $path" }
-    $resolvedPath = (Resolve-Path -LiteralPath $path).Path
+    # Resolve-Path honors -WhatIf and returns no value in a dry run; these names are
+    # allow-listed, so normalize them without suppressing validation in that mode.
+    $resolvedPath = [System.IO.Path]::GetFullPath($path)
     if (-not $resolvedPath.StartsWith($publishDirectory + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Release assets must be inside $publishDirectory."
     }
-    $hash = (Get-FileHash -LiteralPath $resolvedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $stream = [System.IO.File]::OpenRead($resolvedPath)
+    try {
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        try { $hash = [System.BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+        finally { $hasher.Dispose() }
+    }
+    finally { $stream.Dispose() }
     $checksums.Add("$hash  $name")
     $releaseAssets.Add($resolvedPath)
     $includedNames.Add($name)
@@ -67,7 +75,9 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $publishDirectory 'MagDrum-Windows-x64.zip'))
     try {
-        $manifestEntry = $zip.GetEntry('MagDrum.vst3/Contents/Resources/moduleinfo.json')
+        $manifestEntry = $zip.Entries |
+            Where-Object { $_.FullName.Replace([string][char]92, '/') -eq 'MagDrum.vst3/Contents/Resources/moduleinfo.json' } |
+            Select-Object -First 1
         if ($null -eq $manifestEntry) { throw 'The Windows x64 package has no VST3 moduleinfo.json; refusing to publish an unidentifiable test build.' }
         $manifestReader = [System.IO.StreamReader]::new($manifestEntry.Open())
         try {

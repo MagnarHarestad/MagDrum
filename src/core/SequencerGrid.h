@@ -42,30 +42,40 @@ struct BarMap
     std::array<BarSpan, maximumBars> bars{};
     int barCount = 0;
     int totalSteps = 0;
+    int subdivisionsPerBeat = 4;
     double lengthBeats = 0.0;
     bool valid = false;
 };
 
-constexpr int stepsPerBar(int numerator, int denominator) noexcept
+constexpr bool isSupportedSubdivision(int subdivisionsPerBeat) noexcept
 {
-    if (numerator < 1 || (denominator != 2 && denominator != 4 && denominator != 8 && denominator != 16))
-        return 0;
-    const int steps = numerator * 16 / denominator;
-    return numerator * 16 % denominator == 0 && steps <= maximumStepsPerBar ? steps : 0;
+    return subdivisionsPerBeat == 2 || subdivisionsPerBeat == 4 || subdivisionsPerBeat == 8;
 }
 
-constexpr int stepsForBars(int numerator, int denominator, int bars) noexcept
+constexpr int stepsPerBar(int numerator, int denominator, int subdivisionsPerBeat = 4) noexcept
 {
-    const int perBar = stepsPerBar(numerator, denominator);
+    if (numerator < 1 || !isSupportedSubdivision(subdivisionsPerBeat)
+        || (denominator != 2 && denominator != 4 && denominator != 8 && denominator != 16))
+        return 0;
+    const int numeratorSteps = numerator * 4 * subdivisionsPerBeat;
+    const int steps = numeratorSteps / denominator;
+    return numeratorSteps % denominator == 0 && steps <= maximumStepsPerBar ? steps : 0;
+}
+
+constexpr int stepsForBars(int numerator, int denominator, int bars, int subdivisionsPerBeat = 4) noexcept
+{
+    const int perBar = stepsPerBar(numerator, denominator, subdivisionsPerBeat);
     return perBar > 0 && bars >= 1 && bars <= maximumBars ? perBar * bars : 0;
 }
 
 inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars,
-                          const std::vector<MeterChange>& changes)
+                          const std::vector<MeterChange>& changes, int subdivisionsPerBeat = 4)
 {
     BarMap result;
-    if (stepsPerBar(initialNumerator, initialDenominator) == 0 || bars < 1 || bars > maximumBars)
+    if (stepsPerBar(initialNumerator, initialDenominator, subdivisionsPerBeat) == 0
+        || bars < 1 || bars > maximumBars)
         return result;
+    result.subdivisionsPerBeat = subdivisionsPerBeat;
 
     auto ordered = changes;
     for (const auto& change : ordered)
@@ -86,10 +96,11 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
         else
             effectiveChanges.push_back(change);
     }
-    const auto isGridCompatible = [](const MeterChange& change)
+    const auto isGridCompatible = [subdivisionsPerBeat](const MeterChange& change)
     {
-        return stepsPerBar(change.numerator, change.denominator) > 0
-            && std::abs(change.positionBeats * 4.0 - std::round(change.positionBeats * 4.0)) <= gridBeatTolerance;
+        return stepsPerBar(change.numerator, change.denominator, subdivisionsPerBeat) > 0
+            && std::abs(change.positionBeats * subdivisionsPerBeat
+                        - std::round(change.positionBeats * subdivisionsPerBeat)) <= gridBeatTolerance;
     };
 
     int numerator = initialNumerator;
@@ -108,7 +119,7 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
             ++nextChange;
         }
 
-        const auto stepsAtMeter = stepsPerBar(numerator, denominator);
+        const auto stepsAtMeter = stepsPerBar(numerator, denominator, subdivisionsPerBeat);
         if (stepsAtMeter == 0)
             return {};
 
@@ -120,8 +131,8 @@ inline BarMap buildBarMap(int initialNumerator, int initialDenominator, int bars
             endBeat = effectiveChanges[nextChange].positionBeats;
         }
 
-        const auto startStep = static_cast<int>(std::llround(beat * 4.0));
-        const auto endStep = static_cast<int>(std::llround(endBeat * 4.0));
+        const auto startStep = static_cast<int>(std::llround(beat * subdivisionsPerBeat));
+        const auto endStep = static_cast<int>(std::llround(endBeat * subdivisionsPerBeat));
         const auto stepCount = endStep - startStep;
         if (stepCount < 1 || stepCount > maximumStepsPerBar || endStep > maximumSteps)
             return {};
