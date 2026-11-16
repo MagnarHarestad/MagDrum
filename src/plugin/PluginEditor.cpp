@@ -3543,7 +3543,15 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 
 void MagDrumAudioProcessorEditor::timerCallback()
 {
-    if(!sequencerPlaying||processor.isSequencerHostSynchronized())return;
+    if(!sequencerPlaying)return;
+    if(processor.isSequencerHostSynchronized())
+    {
+        // Keep polling while Cubase owns the sequencer clock. Without this,
+        // the one-shot timer expires during host playback and cannot resume
+        // the local preview after the host transport stops.
+        startTimer(100);
+        return;
+    }
     const int step=sequenceStep;
     for(const auto& event:sequenceEvents)
         if(juce::roundToInt(event.positionBeats*gridResolutionSubdivisions())==step)
