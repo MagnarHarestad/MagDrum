@@ -132,6 +132,7 @@ private:
     juce::File selectedSample() const;
 
     magdrum::ui::LookAndFeel theme;
+    juce::TooltipWindow tooltipWindow;
     MagDrumAudioProcessor& processor;
     SampleDatabase database;
     juce::File databaseFile;

@@ -231,7 +231,7 @@ private:
     std::function<void()> closeCallback;
 };
 
-class MagDrumSampleMap final : public juce::Component
+class MagDrumSampleMap final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     std::function<void(int)> onSelect;
@@ -240,26 +240,49 @@ public:
         samples=value;selectedIndex=selected;repaint();
     }
     void setSelected(int selected) { selectedIndex=selected;repaint(); }
+    void mouseMove(const juce::MouseEvent& event) override
+    {
+        const int index=sampleAt(event.position);
+        if(!juce::isPositiveAndBelow(index,samples.size())){setTooltip(juce::String{});return;}
+        const auto& sample=samples.getReference(index);
+        auto details=sample.file.getFileName()+"\n"+magdrum::ui::localisedText(sample.category)
+            +" · "+juce::String(sample.durationSeconds,2)+" s";
+        if(sample.brightnessHz>0.0)
+            details+=" · "+juce::String(sample.brightnessHz,0)+" Hz";
+        if(sample.pluginName.isNotEmpty())
+        {
+            details+="\n"+sample.pluginName;
+            if(sample.kitName.isNotEmpty()) details+=" · "+sample.kitName;
+        }
+        setTooltip(details);
+    }
+    void mouseExit(const juce::MouseEvent&) override { setTooltip(juce::String{}); }
     void paint(juce::Graphics& g) override
     {
         auto bounds=getLocalBounds().toFloat().reduced(14.0f);
         juce::ColourGradient panel(Palette::Surface, bounds.getX(), bounds.getY(),
                                    Palette::Panel, bounds.getRight(), bounds.getBottom(), false);
         g.setGradientFill(panel);g.fillRoundedRectangle(bounds,9.0f);
-        auto plot=bounds.reduced(24.0f,24.0f);plot.removeFromTop(16.0f);plot.removeFromBottom(20.0f);
+        const auto plot=plotBounds();
         g.setColour(Palette::Background.withAlpha(0.8f));g.fillRoundedRectangle(plot,5.0f);
         g.setColour(Palette::Border);g.drawRoundedRectangle(plot,5.0f,1.0f);
         for(int i=1;i<4;++i){const float x=plot.getX()+plot.getWidth()*i/4.0f;const float y=plot.getY()+plot.getHeight()*i/4.0f;g.setColour(Palette::Accent.withAlpha(0.10f));g.drawVerticalLine(static_cast<int>(x),plot.getY(),plot.getBottom());g.drawHorizontalLine(static_cast<int>(y),plot.getX(),plot.getRight());}
-        g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText(magdrum::ui::localisedText("SAMPLE MAP  ·  brightness × duration"),bounds.toNearestInt().removeFromTop(24).reduced(12,0),juce::Justification::centredLeft);
+        g.setColour(Palette::Muted);g.setFont(11.0f);
+        auto heading=bounds.toNearestInt().removeFromTop(24).reduced(12,0);
+        const int legendWidth=juce::jmin(150,heading.getWidth()/2);
+        auto legendArea=heading.removeFromRight(legendWidth);
+        heading.removeFromRight(8);
+        g.drawText(magdrum::ui::localisedText("SAMPLE MAP  ·  brightness × duration"),heading,juce::Justification::centredLeft,true);
+        g.setColour(Palette::Accent.withAlpha(0.9f));
+        g.drawText(magdrum::ui::localisedText("Bright")+" ↑  ·  "+magdrum::ui::localisedText("Dark")+" ↓",
+                   legendArea,juce::Justification::centredRight,true);
         g.drawText(magdrum::ui::localisedText("SHORTER"),static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::left);
         g.drawText(magdrum::ui::localisedText("LONGER"),static_cast<int>(plot.getRight()-80),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::right);
         for(int i=0;i<samples.size();++i)
         {
             const auto& sample=samples.getReference(i);
-            const double duration=juce::jlimit(0.0,1.0,std::log10(juce::jmax(0.01,sample.durationSeconds)+0.01)/2.0);
-            const double brightness=juce::jlimit(0.0,1.0,std::log10(juce::jmax(100.0,sample.brightnessHz)/100.0)/2.5);
-            const auto x=plot.getX()+static_cast<float>(duration)*(plot.getWidth()-12.0f)+6.0f;
-            const auto y=plot.getBottom()-static_cast<float>(brightness)*(plot.getHeight()-12.0f)-6.0f;
+            const auto position=samplePosition(sample,plot);
+            const auto x=position.x, y=position.y;
             const bool selected=i==selectedIndex;const float radius=selected?7.0f:4.2f;
             if(selected){g.setColour(categoryColour(sample.category).withAlpha(0.18f));g.fillEllipse(x-radius-7.0f,y-radius-7.0f,(radius+7.0f)*2,(radius+7.0f)*2);}
             g.setColour(categoryColour(sample.category).withAlpha(selected?1.0f:0.78f));g.fillEllipse(x-radius,y-radius,radius*2,radius*2);
@@ -269,12 +292,45 @@ public:
     }
     void mouseDown(const juce::MouseEvent& event) override
     {
-        if(samples.isEmpty())return;auto plot=getLocalBounds().toFloat().reduced(38.0f);plot.removeFromTop(18.0f);plot.removeFromBottom(20.0f);
-        int closest=-1;float distance=100000.0f;
-        for(int i=0;i<samples.size();++i){const auto& sample=samples.getReference(i);const float x=plot.getX()+static_cast<float>(juce::jlimit(0.0,1.0,std::log10(juce::jmax(0.01,sample.durationSeconds)+0.01)/2.0))*(plot.getWidth()-12.0f)+6.0f;const float y=plot.getBottom()-static_cast<float>(juce::jlimit(0.0,1.0,std::log10(juce::jmax(100.0,sample.brightnessHz)/100.0)/2.5))*(plot.getHeight()-12.0f)-6.0f;const float d=event.position.getDistanceFrom({x,y});if(d<distance){distance=d;closest=i;}}
-        if(closest>=0&&distance<24.0f){selectedIndex=closest;repaint();if(onSelect)onSelect(closest);}
+        const int closest=sampleAt(event.position);
+        if(juce::isPositiveAndBelow(closest,samples.size()))
+        {
+            selectedIndex=closest;
+            repaint();
+            if(onSelect)onSelect(closest);
+        }
     }
 private:
+    juce::Rectangle<float> plotBounds() const
+    {
+        auto plot=getLocalBounds().toFloat().reduced(14.0f).reduced(24.0f,24.0f);
+        plot.removeFromTop(16.0f);
+        plot.removeFromBottom(20.0f);
+        return plot;
+    }
+    static juce::Point<float> samplePosition(const SampleBrowseRecord& sample,
+                                             juce::Rectangle<float> plot)
+    {
+        const double duration=juce::jlimit(0.0,1.0,
+            std::log10(juce::jmax(0.01,sample.durationSeconds)+0.01)/2.0);
+        const double brightness=juce::jlimit(0.0,1.0,
+            std::log10(juce::jmax(100.0,sample.brightnessHz)/100.0)/2.5);
+        return {plot.getX()+static_cast<float>(duration)*(plot.getWidth()-12.0f)+6.0f,
+                plot.getBottom()-static_cast<float>(brightness)*(plot.getHeight()-12.0f)-6.0f};
+    }
+    int sampleAt(juce::Point<float> point) const
+    {
+        const auto plot=plotBounds();
+        if(samples.isEmpty()||!plot.contains(point))return -1;
+        int closest=-1;
+        float distance=24.0f;
+        for(int i=0;i<samples.size();++i)
+        {
+            const float current=point.getDistanceFrom(samplePosition(samples.getReference(i),plot));
+            if(current<distance){distance=current;closest=i;}
+        }
+        return closest;
+    }
     juce::Array<SampleBrowseRecord> samples;int selectedIndex=-1;
 };
 
@@ -1103,7 +1159,7 @@ private:
 };
 
 MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p)
-    : AudioProcessorEditor(p), processor(p), indexedList("Samples",this), sampleMap(std::make_unique<MagDrumSampleMap>()), waveform(std::make_unique<MagDrumWaveform>())
+    : AudioProcessorEditor(p), tooltipWindow(this, 500), processor(p), indexedList("Samples",this), sampleMap(std::make_unique<MagDrumSampleMap>()), waveform(std::make_unique<MagDrumWaveform>())
 {
     magdrum::ui::initialiseMagDrumLocalization();magdrum::ui::languageChangeBroadcaster().addChangeListener(this);processor.addSampleStateListener(this);setLookAndFeel(&theme);setSize(1120,760);setResizable(true,true);setResizeLimits(1000,620,1800,1200);
     languageButton.setTooltip(magdrum::ui::localisedText("Menu"));languageButton.onClick=[this]{magdrum::ui::showApplicationMenu(languageButton);};addAndMakeVisible(languageButton);
