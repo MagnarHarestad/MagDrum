@@ -70,7 +70,12 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
         $manifestEntry = $zip.GetEntry('MagDrum.vst3/Contents/Resources/moduleinfo.json')
         if ($null -eq $manifestEntry) { throw 'The Windows x64 package has no VST3 moduleinfo.json; refusing to publish an unidentifiable test build.' }
         $manifestReader = [System.IO.StreamReader]::new($manifestEntry.Open())
-        try { $moduleInfo = $manifestReader.ReadToEnd() | ConvertFrom-Json }
+        try {
+            # VST3 moduleinfo.json is JSON-like and may include trailing commas;
+            # Windows PowerShell 5.1's ConvertFrom-Json rejects them.
+            $manifestJson = $manifestReader.ReadToEnd() -replace ',(?=\s*[}\]])', ''
+            $moduleInfo = $manifestJson | ConvertFrom-Json
+        }
         finally { $manifestReader.Dispose() }
     }
     finally { $zip.Dispose() }
