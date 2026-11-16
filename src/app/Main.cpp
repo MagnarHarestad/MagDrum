@@ -85,8 +85,8 @@ juce::String describeMidiPatternDiff(const MidiPattern& imported,const MidiPatte
 class WaveformView final : public juce::Component, private juce::ChangeListener
 {
 public:
- WaveformView():thumbnail(512,formats,cache){formats.registerBasicFormats();thumbnail.addChangeListener(this);setOpaque(true);}
- ~WaveformView()override{thumbnail.removeChangeListener(this);}
+ WaveformView():thumbnail(512,formats,cache){formats.registerBasicFormats();thumbnail.addChangeListener(this);magdrum::ui::languageChangeBroadcaster().addChangeListener(this);setOpaque(true);}
+ ~WaveformView()override{thumbnail.removeChangeListener(this);magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);}
  void setSample(const juce::File& file){if(currentFile==file)return;currentFile=file;thumbnail.setSource(file.existsAsFile()?new juce::FileInputSource(file):nullptr);repaint();}
  void paint(juce::Graphics& g)override{g.fillAll(magdrum::ui::Palette::Panel);auto area=getLocalBounds().reduced(8);g.setColour(magdrum::ui::Palette::Selection);g.drawRoundedRectangle(area.toFloat(),4.0f,1.0f);if(thumbnail.getTotalLength()>0.0){g.setColour(magdrum::ui::Palette::Accent);thumbnail.drawChannels(g,area.reduced(5),0.0,thumbnail.getTotalLength(),0.9f);}else{g.setColour(magdrum::ui::Palette::Muted);g.setFont(12.0f);g.drawText(magdrum::ui::localisedText("Select a sample to load its waveform"),area,juce::Justification::centred);}}
 private:
