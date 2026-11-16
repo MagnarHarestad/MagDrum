@@ -240,7 +240,9 @@ public:
             return 3;
         }
         return 0;
-    }static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
+    }
+
+    static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
     {
         auto cancellation = std::make_shared<std::atomic<bool>>(false);
         editor.scanning = false;
