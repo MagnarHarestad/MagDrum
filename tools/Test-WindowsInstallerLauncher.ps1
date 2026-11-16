@@ -3,6 +3,8 @@ Set-StrictMode -Version Latest
 
 $launcherPath = Join-Path $PSScriptRoot '../installer/Launch-Install-MagDrum.ps1'
 $cmdPath = Join-Path $PSScriptRoot '../installer/Install-MagDrum.cmd'
+$userInstallerPath = Join-Path $PSScriptRoot '../installer/Install-MagDrum-User.ps1'
+$userCmdPath = Join-Path $PSScriptRoot '../installer/Install-MagDrum-User.cmd'
 $tokens = $null
 $parseErrors = $null
 $launcherAst = [System.Management.Automation.Language.Parser]::ParseFile(
@@ -48,4 +50,37 @@ if ($cmd -notmatch 'Launch-Install-MagDrum\.ps1' -or $cmd -notmatch '(?im)^\s*pa
     throw 'The double-click command file must start the UAC launcher and keep failures visible.'
 }
 
-Write-Host 'Windows installer launcher passed: UAC is explicit, replacement confirmation remains, and failures stay visible.'
+$userTokens = $null
+$userParseErrors = $null
+$userInstallerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    $userInstallerPath,
+    [ref] $userTokens,
+    [ref] $userParseErrors)
+if ($userParseErrors.Count -gt 0) {
+    throw "Per-user installer syntax is invalid: $($userParseErrors -join '; ')"
+}
+$userInstallerText = Get-Content -LiteralPath $userInstallerPath -Raw
+if ($userInstallerText -match '(?i)Launch-Install-MagDrum\.ps1|Install-MagDrum\.ps1') {
+    throw 'The per-user installer must not invoke the system-wide installer.'
+}
+if ($userInstallerText -notmatch 'LOCALAPPDATA.{0,80}Programs\\Common\\VST3') {
+    throw 'The per-user installer must write its VST3 bundle under LOCALAPPDATA.'
+}
+$userStartCalls = @($userInstallerAst.FindAll({
+    param ($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -eq 'Start-Process'
+}, $true))
+if ($userStartCalls.Count -ne 1 -or $userStartCalls[0].Extent.Text -notmatch '(?i)-Verb\s+RunAs') {
+    throw 'The per-user flow may elevate exactly one child process for one-time legacy cleanup.'
+}
+if ($userInstallerText -notmatch 'Remove-OldMagDrumBundles\.ps1' -or
+    $userInstallerText -notmatch 'SkipSystemCleanup') {
+    throw 'Legacy cleanup must be explicit and optional so later per-user updates run without UAC.'
+}
+$userCmd = Get-Content -LiteralPath $userCmdPath -Raw
+if ($userCmd -notmatch 'Install-MagDrum-User\.ps1' -or $userCmd -match '(?i)runas|Start-Process') {
+    throw 'The no-UAC command file must invoke the per-user installer.'
+}
+
+Write-Host 'Windows installer checks passed: system installs use UAC; per-user updates avoid UAC and isolate the one-time legacy cleanup.'

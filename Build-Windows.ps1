@@ -198,7 +198,7 @@ try {
     New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
     Copy-Item -LiteralPath $app.FullName -Destination $stagingDirectory
     Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $stagingDirectory 'MagDrum.vst3') -Recurse
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Launch-Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Install-MagDrum.cmd'), (Join-Path $repoRoot 'installer/MagDrumInstallHelpers.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'installer/Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Launch-Install-MagDrum.ps1'), (Join-Path $repoRoot 'installer/Install-MagDrum.cmd'), (Join-Path $repoRoot 'installer/Install-MagDrum-User.ps1'), (Join-Path $repoRoot 'installer/Install-MagDrum-User.cmd'), (Join-Path $repoRoot 'installer/Remove-OldMagDrumBundles.ps1'), (Join-Path $repoRoot 'installer/MagDrumInstallHelpers.ps1'), (Join-Path $repoRoot 'installer/README.txt') -Destination $stagingDirectory
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingDirectory
     $juceSourceDirectory = Join-Path $dependencyDirectory 'juce-src'
     $thirdPartyLicenses = [ordered]@{

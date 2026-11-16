@@ -8,19 +8,22 @@ installer asks before replacing MagDrum and keeps the previous bundle in backup.
 If UAC is cancelled or installation fails, the command window remains open with
 the error. You can also run Launch-Install-MagDrum.ps1 from PowerShell.
 
-For a per-user install, run Install-MagDrum.ps1 from PowerShell. It installs to:
-%LOCALAPPDATA%\Programs\Common\VST3. The plug-in copy does not need administrator
-access; Windows may request UAC if the required Visual C++ runtime is missing or
-older than this build.
-If a system-wide MagDrum VST3 already exists, a per-user installation stops
-instead of creating a duplicate. To replace the system-wide copy, open
-PowerShell as administrator and run Install-MagDrum.ps1 -AllUsers. The script
-asks before replacing the existing copy. Pass -Force only when that replacement
-is authorized. Previous bundles are preserved outside VST3 scan folders under
-%LOCALAPPDATA%\MagDrum\VST3-backups for a per-user install or
-%ProgramData%\MagDrum\VST3-backups for an all-users install. After installation,
-the installer also moves other MagDrum bundles from both standard Windows VST3
-scan folders to that backup location; other vendors' plugins are left alone.
+For a no-UAC per-user install, double-click Install-MagDrum-User.cmd. It installs
+to %LOCALAPPDATA%\Programs\Common\VST3 and keeps the previous user copy in
+%LOCALAPPDATA%\MagDrum\VST3-backups. VST3 hosts prioritize this user location
+before the global Program Files location. If a system-wide MagDrum copy exists,
+the script requests one UAC approval to move older MagDrum bundles to
+%ProgramData%\MagDrum\VST3-backups. Future per-user updates need no UAC once the
+system-wide copy is removed. Use -SkipSystemCleanup to install per-user without
+requesting that one-time cleanup. The no-UAC path requires the matching Visual
+C++ runtime to already be installed; it stops with an explanation if it is not.
+
+For the system-wide VST3, double-click Install-MagDrum.cmd. It uses standard
+Windows UAC and asks before replacing the existing plug-in. The previous bundle
+is preserved in %ProgramData%\MagDrum\VST3-backups. You can also run
+Install-MagDrum.ps1 -AllUsers from elevated PowerShell; use -Force only when the
+replacement has been explicitly authorized. Both installers leave other
+vendors' plugins untouched.
 
 Then open Cubase 15 and choose Studio > VST Plug-in Manager > Rescan All.
 Add MagDrum as an instrument track and route a MIDI track to it. The plugin
