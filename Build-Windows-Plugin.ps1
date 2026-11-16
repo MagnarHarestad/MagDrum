@@ -93,13 +93,13 @@ try {
     $appNeedsBuild = -not (Test-Path -LiteralPath $app -PathType Leaf)
     if (-not $appNeedsBuild) {
         $appTimestamp = (Get-Item -LiteralPath $app).LastWriteTimeUtc
-        foreach ($input in $appInputs) {
-            if (Test-Path -LiteralPath $input -PathType Leaf) {
-                $item = Get-Item -LiteralPath $input
+        foreach ($appInputPath in $appInputs) {
+            if (Test-Path -LiteralPath $appInputPath -PathType Leaf) {
+                $item = Get-Item -LiteralPath $appInputPath
                 if ($item.LastWriteTimeUtc -gt $appTimestamp) { $appNeedsBuild = $true; break }
             }
-            elseif (Test-Path -LiteralPath $input -PathType Container) {
-                $newerInput = Get-ChildItem -LiteralPath $input -Recurse -File -ErrorAction SilentlyContinue |
+            elseif (Test-Path -LiteralPath $appInputPath -PathType Container) {
+                $newerInput = Get-ChildItem -LiteralPath $appInputPath -Recurse -File -ErrorAction SilentlyContinue |
                     Where-Object { $_.LastWriteTimeUtc -gt $appTimestamp } |
                     Select-Object -First 1
                 if ($null -ne $newerInput) { $appNeedsBuild = $true; break }
