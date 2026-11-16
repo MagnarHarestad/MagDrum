@@ -79,7 +79,8 @@ try {
         '-G', $generator,
         '-A', $Architecture,
         "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
-        "-DBUILD_TESTING=$buildTesting"
+        "-DBUILD_TESTING=$buildTesting",
+        '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'
     $sqliteSource = Join-Path $dependencyDirectory 'sqlite-src'

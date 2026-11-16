@@ -76,7 +76,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR MAGDRUM_BUILD_MOBILE_PREVIEW)
   target_compile_definitions(MagDrumPluginTests PRIVATE MAGDRUM_MOBILE_PLUGIN_UI=1)
  endif()
- target_link_libraries(MagDrumPluginTests PRIVATE MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags ${CMAKE_DL_LIBS})
+ target_link_libraries(MagDrumPluginTests PRIVATE MagDrumUiAssets sqlite3 juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_cryptography juce::juce_data_structures juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_warning_flags ${CMAKE_DL_LIBS})
  add_test(NAME MagDrumPluginTests COMMAND MagDrumPluginTests)
 
  add_dependencies(MagDrumTests MagDrum MagDrumPlugin_VST3 MagDrumPluginTests)

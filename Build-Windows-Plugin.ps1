@@ -47,7 +47,8 @@ $newBuildTree = -not (Test-Path -LiteralPath $cachePath -PathType Leaf)
 if (-not $newBuildTree) {
     $cache = Get-Content -LiteralPath $cachePath -Raw
     if ($cache -notmatch '(?m)^CMAKE_GENERATOR_PLATFORM:INTERNAL=x64\s*$' -or
-        $cache -notmatch '(?m)^CMAKE_GENERATOR:INTERNAL=Visual Studio') {
+        $cache -notmatch '(?m)^CMAKE_GENERATOR:INTERNAL=Visual Studio' -or
+        $cache -notmatch '(?m)^MAGDRUM_BUILD_MOBILE_PREVIEW:BOOL=OFF\s*$') {
         throw 'The development build tree must be a Windows x64 Visual Studio build.'
     }
 }
@@ -61,7 +62,8 @@ try {
             '-G', $generator,
             '-A', 'x64',
             '-DBUILD_TESTING=OFF',
-            '-DMAGDRUM_BUILD_REVISION=0'
+            '-DMAGDRUM_BUILD_REVISION=0',
+            '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
         )
         $dependencyDirectory = Join-Path $repoRoot 'build/_deps'
         $juceSource = Join-Path $dependencyDirectory 'juce-src'
