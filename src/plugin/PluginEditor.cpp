@@ -306,25 +306,32 @@ private:
 class MagDrumSampleComparison final : public juce::Component
 {
 public:
-    MagDrumSampleComparison(const juce::File& first,const juce::File& second)
+    using PreviewCallback = std::function<void(const juce::File&)>;
+
+    MagDrumSampleComparison(const juce::File& first,const juce::File& second, PreviewCallback preview)
+        : firstSample(first), secondSample(second), previewSample(std::move(preview))
     {
         for(auto* label:{&leftTitle,&rightTitle}){label->setJustificationType(juce::Justification::centredLeft);label->setColour(juce::Label::textColourId,Palette::Accent);addAndMakeVisible(*label);}
         leftTitle.setText(first.getFileName(),juce::dontSendNotification);rightTitle.setText(second.getFileName(),juce::dontSendNotification);leftWave.setFile(first);rightWave.setFile(second);addAndMakeVisible(leftWave);addAndMakeVisible(rightWave);
+        leftPreview.setButtonText(magdrum::ui::localisedText("Preview"));rightPreview.setButtonText(magdrum::ui::localisedText("Preview"));
+        leftPreview.onClick=[this]{if(previewSample)previewSample(firstSample);};rightPreview.onClick=[this]{if(previewSample)previewSample(secondSample);};
+        addAndMakeVisible(leftPreview);addAndMakeVisible(rightPreview);
     }
     void resized() override
     {
-        auto area=getLocalBounds().reduced(12);const int column=area.getWidth()/2;auto a=area.removeFromLeft(column).reduced(6);auto b=area.reduced(6);leftTitle.setBounds(a.removeFromTop(30));a.removeFromTop(6);leftWave.setBounds(a);rightTitle.setBounds(b.removeFromTop(30));b.removeFromTop(6);rightWave.setBounds(b);
+        auto area=getLocalBounds().reduced(12);const int column=area.getWidth()/2;auto a=area.removeFromLeft(column).reduced(6);auto b=area.reduced(6);leftTitle.setBounds(a.removeFromTop(30));leftPreview.setBounds(a.removeFromTop(30));a.removeFromTop(6);leftWave.setBounds(a);rightTitle.setBounds(b.removeFromTop(30));rightPreview.setBounds(b.removeFromTop(30));b.removeFromTop(6);rightWave.setBounds(b);
     }
 private:
-    juce::Label leftTitle,rightTitle;MagDrumWaveform leftWave,rightWave;
+    juce::File firstSample,secondSample;PreviewCallback previewSample;juce::Label leftTitle,rightTitle;juce::TextButton leftPreview,rightPreview;MagDrumWaveform leftWave,rightWave;
 };
 
 class MagDrumSampleComparisonWindow final : public juce::DocumentWindow
 {
 public:
-    MagDrumSampleComparisonWindow(const juce::File& first,const juce::File& second)
+    MagDrumSampleComparisonWindow(const juce::File& first,const juce::File& second,
+                                  MagDrumSampleComparison::PreviewCallback preview)
         :juce::DocumentWindow(magdrum::ui::localisedText("Compare drum samples"),Palette::Panel,juce::DocumentWindow::closeButton)
-    {setUsingNativeTitleBar(true);setContentOwned(new MagDrumSampleComparison(first,second),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}
+    {setUsingNativeTitleBar(true);setContentOwned(new MagDrumSampleComparison(first,second,std::move(preview)),true);setResizable(true,true);centreWithSize(900,420);setVisible(true);}
     void closeButtonPressed() override {setVisible(false);}
 };
 
@@ -2796,7 +2803,7 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
     }
     if(action==5)
     {
-        const auto selected=indexedList.getSelectedRows();if(selected.size()!=2){status.setText(magdrum::ui::localisedText("Ctrl-click exactly two samples in the list to compare their waveforms."),juce::dontSendNotification);return;}const auto first=juce::isPositiveAndBelow(selected[0],samples.size())?samples.getReference(selected[0]).file:juce::File();const auto second=juce::isPositiveAndBelow(selected[1],samples.size())?samples.getReference(selected[1]).file:juce::File();if(first==juce::File()||second==juce::File())return;comparisonWindow=std::make_unique<MagDrumSampleComparisonWindow>(first,second);return;
+        const auto selected=indexedList.getSelectedRows();if(selected.size()!=2){status.setText(magdrum::ui::localisedText("Ctrl-click exactly two samples in the list to compare their waveforms."),juce::dontSendNotification);return;}const auto first=juce::isPositiveAndBelow(selected[0],samples.size())?samples.getReference(selected[0]).file:juce::File();const auto second=juce::isPositiveAndBelow(selected[1],samples.size())?samples.getReference(selected[1]).file:juce::File();if(first==juce::File()||second==juce::File())return;comparisonWindow=std::make_unique<MagDrumSampleComparisonWindow>(first,second,[this](const juce::File& file){previewSampleAsync(file);});return;
     }
     if(action==6)
     {

@@ -6,6 +6,8 @@ The Windows VST3 editor is organized into five views. Open MagDrum on an instrum
 
 VST sample previews are decoded on a cancellable background worker, so large files do not block Cubase's editor thread. If you request another preview while one is loading, the older request is cancelled and the newer selection takes priority.
 
+To audition a pair while comparing them, Ctrl-click exactly two sample rows and choose **Sample tools > Compare two selected waveforms**. Use the **Preview** button under either waveform to hear that sample through the instrument output; choosing the other button replaces the previous comparison preview.
+
 In **Plugin Scanner**, **Scan plugin folders** checks the standard VST3 locations. Use **Choose VST3 folder** to include a user-selected directory. Discovery runs in the separate MagDrum helper, outside Cubase.
 
 On Windows, Native Access places its default content location at `C:\Users\Public\Documents`. MagDrum scans this shared root as well as detected vendor locations, so libraries installed directly beneath it are included. Nested known vendor folders are collapsed under the root to avoid scanning the same files twice.
