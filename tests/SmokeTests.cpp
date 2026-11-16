@@ -684,6 +684,27 @@ int runSmokeTests(int argc,char** argv)
     if(gm.toMidi(unsupported,false).note)return 21;
     auto fallback=gm.toMidi(unsupported,true);
     if(!fallback.note||!fallback.usedFallback||fallback.mappedArticulation!=DrumArticulation::Closed)return 22;
+    const auto closedHatOnly = MidiMappingProfile({{DrumInstrument::HiHat, DrumArticulation::Closed, 42}});
+    const DrumEvent pedalHat{DrumInstrument::HiHat, DrumArticulation::Pedal, 80, 0.0, 0.1};
+    if (closedHatOnly.toMidi(pedalHat, MidiFallbackPolicy::disabled).note
+        || closedHatOnly.toMidi(pedalHat, MidiFallbackPolicy::defaultArticulation).note)
+        return 247;
+    const auto anyHatFallback = closedHatOnly.toMidi(pedalHat, MidiFallbackPolicy::anyArticulation);
+    if (!anyHatFallback.note || *anyHatFallback.note != 42 || !anyHatFallback.usedFallback
+        || anyHatFallback.mappedArticulation != DrumArticulation::Closed)
+        return 248;
+    MidiPattern policyPattern;policyPattern.events.push_back(pedalHat);
+    const auto defaultOnlyMidi=root.getChildFile("default-articulation-only.mid");
+    const auto anyArticulationMidi=root.getChildFile("any-same-instrument-articulation.mid");
+    std::vector<DrumEvent> policyOmitted;std::vector<MidiFallbackUse> policyFallbacks;
+    if(!MidiPatternIO{}.write(defaultOnlyMidi,policyPattern,closedHatOnly,
+            MidiFallbackPolicy::defaultArticulation,&policyOmitted,&policyFallbacks)
+        ||policyOmitted.size()!=1||!policyFallbacks.empty())return 249;
+    policyOmitted.clear();policyFallbacks.clear();
+    if(!MidiPatternIO{}.write(anyArticulationMidi,policyPattern,closedHatOnly,
+            MidiFallbackPolicy::anyArticulation,&policyOmitted,&policyFallbacks)
+        ||!policyOmitted.empty()||policyFallbacks.size()!=1||policyFallbacks.front().midiNote!=42
+        ||policyFallbacks.front().mappedArticulation!=DrumArticulation::Closed)return 250;
     MidiPattern fallbackExportPattern;fallbackExportPattern.events.push_back(unsupported);
     const auto strictMidi=root.getChildFile("strict-articulation-export.mid");
     const auto fallbackMidi=root.getChildFile("fallback-articulation-export.mid");

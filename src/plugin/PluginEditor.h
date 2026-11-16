@@ -189,7 +189,7 @@ private:
     juce::TextEditor velocityRange;
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load sample"};
     juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
-    juce::ToggleButton midiFallback;
+    juce::ComboBox midiFallbackPolicy;
     juce::TextEditor tempoEditor, metadataBeat, metadataValue;
     juce::ComboBox metadataType;
     juce::TextButton setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};

@@ -2,7 +2,7 @@
 
 MagDrum represents a drum event with a semantic instrument and articulation, velocity, beat position and duration. MIDI note numbers are applied only at profile boundaries.
 
-The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride, crash, clap, rimshot and percussion. Conversion to a target profile returns both the note and whether an articulation fallback was used. MIDI export defaults to leaving unsupported articulations unmapped. The desktop and mobile export controls let users explicitly enable fallback, report each substitution, and list any events that remain unmapped.
+The current core has a General MIDI profile for kick, snare, hi-hat, toms, ride, crash, clap, rimshot and percussion. Conversion to a target profile returns both the note and whether an articulation fallback was used. MIDI export defaults to leaving unsupported articulations unmapped. The VST, desktop and mobile export controls offer three explicit policies: no fallback, use only the same instrument's default articulation, or use any mapped articulation from the same instrument. Each substitution is reported after export; events that remain unmapped are listed as omitted. Plug-in projects saved with the former on/off setting remain compatible: enabled maps to the broad same-instrument policy.
 
 `MidiMappingProfile` also accepts a custom entry list, and named profiles can be saved to and loaded from SQLite. `MidiPatternIO` imports/exports Standard MIDI Files using PPQ timing, tracks note-on/off pairs, preserves tempo and time-signature metadata, reports unmapped notes and notes with multiple semantic mappings, and emits unsupported events from export when no mapping is available. Duplicate identical mapping rows do not create a false ambiguity.
 

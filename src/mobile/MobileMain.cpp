@@ -47,7 +47,7 @@ public:
         stop.addListener(this); addAndMakeVisible(stop);
         importMidi.addListener(this); addAndMakeVisible(importMidi);
         exportMidi.addListener(this); addAndMakeVisible(exportMidi);
-        addAndMakeVisible(midiFallback);
+        midiFallbackPolicy.addItem(magdrum::ui::localisedText("None"),1);midiFallbackPolicy.addItem(magdrum::ui::localisedText("Default articulation only"),2);midiFallbackPolicy.addItem(magdrum::ui::localisedText("Any same-instrument articulation"),3);midiFallbackPolicy.setSelectedId(1,juce::dontSendNotification);midiFallbackPolicy.setTooltip(magdrum::ui::localisedText("Choose how unsupported articulations map during MIDI export. Every substitution is listed after export."));addAndMakeVisible(midiFallbackPolicy);
         profileName.setText("General MIDI"); addAndMakeVisible(profileName);
         savedProfiles.onChange = [this] { loadMappingProfile(); }; addAndMakeVisible(savedProfiles);
         loadProfile.addListener(this); addAndMakeVisible(loadProfile);
@@ -120,7 +120,7 @@ public:
             play.setBounds(row.removeFromLeft((row.getWidth() - 6) * 3 / 4)); row.removeFromLeft(6); stop.setBounds(row);
             area.removeFromTop(6); row = area.removeFromTop(44);
             importMidi.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); exportMidi.setBounds(row);
-            area.removeFromTop(6); row = area.removeFromTop(36); midiFallback.setBounds(row);
+            area.removeFromTop(6); row = area.removeFromTop(36); midiFallbackPolicy.setBounds(row);
             area.removeFromTop(8); row = area.removeFromTop(44);
             search.setBounds(row.removeFromLeft((row.getWidth() - 6) / 2)); row.removeFromLeft(6); category.setBounds(row);
             area.removeFromTop(6); row = area.removeFromTop(44);
@@ -140,7 +140,7 @@ public:
             cancelImport.setBounds(row.removeFromLeft(90)); row.removeFromLeft(6);
             play.setBounds(row.removeFromLeft(125)); row.removeFromLeft(6); stop.setBounds(row.removeFromLeft(75));
             area.removeFromTop(6); row = area.removeFromTop(42);
-            importMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(6); exportMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(8); midiFallback.setBounds(row.removeFromLeft(280));
+            importMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(6); exportMidi.setBounds(row.removeFromLeft(140)); row.removeFromLeft(8); midiFallbackPolicy.setBounds(row.removeFromLeft(280));
             area.removeFromTop(8); row = area.removeFromTop(42);
             search.setBounds(row.removeFromLeft(400)); row.removeFromLeft(8); category.setBounds(row.removeFromLeft(180));
             area.removeFromTop(6); row = area.removeFromTop(42);
@@ -167,8 +167,7 @@ private:
         stop.setButtonText(localisedText("Stop"));
         importMidi.setButtonText(localisedText("Import MIDI"));
         exportMidi.setButtonText(localisedText("Export MIDI"));
-        midiFallback.setButtonText(localisedText("Allow articulation fallback"));
-        midiFallback.setTooltip(localisedText("When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export."));
+        const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());midiFallbackPolicy.clear(juce::dontSendNotification);midiFallbackPolicy.addItem(localisedText("None"),1);midiFallbackPolicy.addItem(localisedText("Default articulation only"),2);midiFallbackPolicy.addItem(localisedText("Any same-instrument articulation"),3);midiFallbackPolicy.setSelectedId(fallbackPolicyId,juce::dontSendNotification);midiFallbackPolicy.setTooltip(localisedText("Choose how unsupported articulations map during MIDI export. Every substitution is listed after export."));
         profileName.setTextToShowWhenEmpty(localisedText("Mapping profile name"), magdrum::ui::Palette::Muted);
         savedProfiles.setTextWhenNothingSelected(localisedText("Saved profiles"));
         loadProfile.setButtonText(localisedText("Load profile"));
@@ -604,7 +603,7 @@ private:
                 std::vector<MidiFallbackUse> fallbacks;
                 juce::String copyError;
                 const bool written = MidiPatternIO{}.write(exportTemp, safe->pattern, safe->mappingProfile,
-                    safe->midiFallback.getToggleState(), &unsupported, &fallbacks);
+                    static_cast<MidiFallbackPolicy>(juce::jlimit(0,2,safe->midiFallbackPolicy.getSelectedId()-1)), &unsupported, &fallbacks);
                 const bool copied = written && MagDrumFiles::copyFileToURL(exportTemp, destination, copyError);
                 exportTemp.deleteFile();
                 if (!copied)
@@ -649,7 +648,7 @@ private:
     static constexpr int samplePageSize = 250;
     juce::Label title, status;
     juce::TextButton languageButton, importFolder, cancelImport, play, stop, importMidi, exportMidi, loadMore;
-    juce::ToggleButton midiFallback;
+    juce::ComboBox midiFallbackPolicy;
     juce::TextButton loadProfile, saveProfile, setMapping, removeMapping;
     juce::TextEditor search, profileName, mappingNote;
     juce::ComboBox category, savedProfiles, mappingInstrument, mappingArticulation;

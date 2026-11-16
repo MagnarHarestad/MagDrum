@@ -50,11 +50,20 @@ MidiMappingProfile MidiMappingProfile::generalMidi()
 
 MidiMappingResult MidiMappingProfile::toMidi(const DrumEvent& event,bool allowFallback) const
 {
+    return toMidi(event, allowFallback ? MidiFallbackPolicy::anyArticulation : MidiFallbackPolicy::disabled);
+}
+
+MidiMappingResult MidiMappingProfile::toMidi(const DrumEvent& event, MidiFallbackPolicy fallbackPolicy) const
+{
     const auto exact=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==event.instrument&&m.articulation==event.articulation;});
     if(exact!=mappings.end())return{exact->note,false,exact->articulation};
-    if(!allowFallback)return{};
+    if(fallbackPolicy == MidiFallbackPolicy::disabled)return{};
+    if (fallbackPolicy != MidiFallbackPolicy::defaultArticulation
+        && fallbackPolicy != MidiFallbackPolicy::anyArticulation)
+        return {};
     const auto fallback=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==event.instrument&&m.articulation==DrumArticulation::Default;});
     if(fallback!=mappings.end())return{fallback->note,true,fallback->articulation};
+    if(fallbackPolicy == MidiFallbackPolicy::defaultArticulation)return{};
     const auto first=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==event.instrument;});
     if(first!=mappings.end())return{first->note,true,first->articulation};
     return{};

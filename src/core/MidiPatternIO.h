@@ -62,4 +62,7 @@ public:
     bool write(const juce::File&, const MidiPattern&, const MidiMappingProfile&,
                bool allowFallback, std::vector<DrumEvent>* unsupported = nullptr,
                std::vector<MidiFallbackUse>* fallbacks = nullptr) const;
+    bool write(const juce::File&, const MidiPattern&, const MidiMappingProfile&,
+               MidiFallbackPolicy fallbackPolicy, std::vector<DrumEvent>* unsupported = nullptr,
+               std::vector<MidiFallbackUse>* fallbacks = nullptr) const;
 };

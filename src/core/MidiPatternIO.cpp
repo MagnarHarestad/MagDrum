@@ -193,6 +193,15 @@ bool MidiPatternIO::write(const juce::File& file,const MidiPattern& pattern,cons
                           bool allowFallback,std::vector<DrumEvent>* unsupported,
                           std::vector<MidiFallbackUse>* fallbacks) const
 {
+    return write(file, pattern, profile,
+        allowFallback ? MidiFallbackPolicy::anyArticulation : MidiFallbackPolicy::disabled,
+        unsupported, fallbacks);
+}
+
+bool MidiPatternIO::write(const juce::File& file, const MidiPattern& pattern, const MidiMappingProfile& profile,
+                          MidiFallbackPolicy fallbackPolicy, std::vector<DrumEvent>* unsupported,
+                          std::vector<MidiFallbackUse>* fallbacks) const
+{
     constexpr int ppq=960;juce::MidiFile midi;midi.setTicksPerQuarterNote(ppq);juce::MidiMessageSequence sequence;
     auto metadata=pattern.tempoAndSignature;
     if(std::none_of(metadata.begin(),metadata.end(),[](const auto&m){return m.message.isTempoMetaEvent();}))metadata.push_back({0.0,juce::MidiMessage::tempoMetaEvent(500000)});
@@ -201,7 +210,7 @@ bool MidiPatternIO::write(const juce::File& file,const MidiPattern& pattern,cons
     for(const auto& meta:metadata)if(meta.positionBeats>=0.0&&(meta.message.isTempoMetaEvent()||meta.message.isTimeSignatureMetaEvent())){sequence.addEvent(meta.message,meta.positionBeats*ppq);lengthBeats=juce::jmax(lengthBeats,meta.positionBeats);}
     for(const auto& event:pattern.events)
     {
-        const auto mapped=profile.toMidi(event,allowFallback);
+        const auto mapped=profile.toMidi(event,fallbackPolicy);
         if(!mapped.note){if(unsupported)unsupported->push_back(event);continue;}
         if(mapped.usedFallback&&fallbacks)fallbacks->push_back({event,*mapped.note,mapped.mappedArticulation});
         const auto note=*mapped.note;const int velocity=juce::jlimit(1,127,static_cast<int>(event.velocity));

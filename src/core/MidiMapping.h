@@ -21,12 +21,20 @@ struct MidiMappingResult
     DrumArticulation mappedArticulation = DrumArticulation::Default;
 };
 
+enum class MidiFallbackPolicy
+{
+    disabled,
+    defaultArticulation,
+    anyArticulation
+};
+
 class MidiMappingProfile
 {
 public:
     explicit MidiMappingProfile(std::vector<MidiNoteMapping> mappings = {});
     static MidiMappingProfile generalMidi();
     MidiMappingResult toMidi(const DrumEvent&, bool allowFallback) const;
+    MidiMappingResult toMidi(const DrumEvent&, MidiFallbackPolicy) const;
     bool setMapping(MidiNoteMapping);
     bool removeMapping(DrumInstrument, DrumArticulation);
     std::vector<MidiNoteMapping> mappingsForMidiNote(std::uint8_t note) const;
