@@ -13,7 +13,7 @@
 
 ## Completion criteria
 
-**Localization verification update:** Windows plugin smoke coverage now checks representative drum-machine, sample-library and sorting labels in all eight language choices, including correct UTF-8 French accents. Full screen-by-screen language review remains pending.
+**Localization verification update:** Windows plugin smoke coverage checks representative drum-machine, sample-library and sorting labels in all eight language choices, including correct UTF-8 French accents. The live VST editor test now switches 14 controls across all five views through all eight languages and confirms that each visible label updates. Full visual review in Cubase remains pending.
 
 `tools/Validate-Localization.ps1` checks that all 565 translatable string literals passed to `localisedText` appear in each of the seven non-English catalogs; it passes on the current source tree. Windows plugin smoke coverage checks off-grid preservation and host-synchronized sequencer notices in all eight language choices. The Windows core smoke test now verifies two-device metadata folder sync, including round-trip user-tag transfer, propagated removals, concurrent re-adds, malformed cross-tag-reference rejection with rollback, distinct persistent device IDs, path exclusion, conflict preservation and repeat-sync idempotency; Windows plugin and core smoke tests pass in the current working tree.
 

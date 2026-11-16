@@ -220,6 +220,48 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksLiveLanguageSwitching(MagDrumAudioProcessorEditor& editor)
+    {
+        using magdrum::ui::Language;
+        const std::array<Language, 8> languages{
+            Language::english, Language::german, Language::french, Language::spanish,
+            Language::swedish, Language::norwegian, Language::danish, Language::finnish};
+        struct LabelCheck { const char* name; juce::String visible, expected; };
+        for (const auto language : languages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            const std::array<LabelCheck, 14> checks{{
+                {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
+                {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
+                {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
+                {"MIDI-maps tab", editor.mapsTab.getButtonText(), magdrum::ui::localisedText("MIDI MAPS")},
+                {"plugin-scanner tab", editor.pluginScannerTab.getButtonText(), magdrum::ui::localisedText("PLUGIN SCANNER")},
+                {"sample search placeholder", editor.sampleSearch.getTextToShowWhenEmpty(), magdrum::ui::localisedText("Search indexed samples")},
+                {"sample scan button", editor.scanButton.getButtonText(), magdrum::ui::localisedText("Add sample folder")},
+                {"sample load button", editor.loadButton.getButtonText(), magdrum::ui::localisedText("Load sample")},
+                {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},
+                {"MIDI import button", editor.importMidiButton.getButtonText(), magdrum::ui::localisedText("Import MIDI")},
+                {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
+                {"plugin-folder button", editor.choosePluginFolderButton.getButtonText(), magdrum::ui::localisedText("Choose VST3 folder")},
+                {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All sounds")},
+                {"sample sort filter", editor.sortFilter.getText(), magdrum::ui::localisedText("Name A-Z")}
+            }};
+            for (const auto& check : checks)
+            {
+                if (check.visible != check.expected)
+                {
+                    std::cerr << "Live localization failed for " << magdrum::ui::languageName(language)
+                              << " " << check.name << ": expected '" << check.expected
+                              << "', got '" << check.visible << "'.\n";
+                    magdrum::ui::setLanguage(Language::english, false);
+                    return 1;
+                }
+            }
+        }
+        magdrum::ui::setLanguage(Language::english, false);
+        return 0;
+    }
+
     static int checksVirtualizedSequencerBar(MagDrumAudioProcessorEditor& editor,
                                               MagDrumAudioProcessor& processor)
     {
@@ -378,6 +420,8 @@ int main(int argc, char** argv)
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
         const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);
         if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
+        const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor);
+        if(languageCheck!=0)return 42;
     }
 #endif
 
