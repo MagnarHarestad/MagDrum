@@ -1195,7 +1195,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     sampleMap->onSelect=[this](int index){if(juce::isPositiveAndBelow(index,samples.size()))indexedList.selectRow(index);};addAndMakeVisible(*sampleMap);
     for(size_t i=0;i<pads.size();++i){auto& pad=pads[i];pad.setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));pad.setColour(juce::TextButton::buttonColourId,Palette::Surface);pad.setColour(juce::TextButton::buttonOnColourId,categoryColour(padNames[i]));pad.setClickingTogglesState(false);pad.addListener(this);addAndMakeVisible(pad);}
     selectedPadTitle.setFont(juce::Font(juce::FontOptions(22.0f,juce::Font::bold)));selectedPadTitle.setColour(juce::Label::textColourId,Palette::Accent);addAndMakeVisible(selectedPadTitle);
-    layerSummary.setColour(juce::Label::textColourId,Palette::Text);layerSummary.setJustificationType(juce::Justification::topLeft);layerSummary.setMinimumHorizontalScale(0.8f);addAndMakeVisible(layerSummary);
+    layerSummary.setColour(juce::Label::textColourId,Palette::Text);layerSummary.setJustificationType(juce::Justification::topLeft);layerSummary.setMinimumHorizontalScale(0.8f);layerSummary.setTooltip(magdrum::ui::localisedText("Samples assigned to the same velocity range play in round-robin order."));addAndMakeVisible(layerSummary);
     sampleDetails.setColour(juce::Label::textColourId,Palette::Muted);sampleDetails.setJustificationType(juce::Justification::topLeft);sampleDetails.setMinimumHorizontalScale(0.8f);addAndMakeVisible(sampleDetails);
     const auto configurePadControl = [this](juce::Slider& slider, juce::Label& label, const juce::String& name,
                                             double minimum, double maximum, double interval, const juce::String& suffix)
@@ -2018,6 +2018,9 @@ void MagDrumAudioProcessorEditor::refreshSampleAssignmentLabels()
             if (label.isNotEmpty()) label += " · ";
             label += noteName(assignment.midiNote) + " " + juce::String(assignment.minimumVelocity)
                 + "–" + juce::String(assignment.maximumVelocity);
+            if (assignment.roundRobinCount > 1)
+                label += " · RR " + juce::String(assignment.roundRobinIndex) + "/"
+                    + juce::String(assignment.roundRobinCount);
         }
         ++count;
     }
@@ -3543,7 +3546,7 @@ void MagDrumAudioProcessorEditor::updateLayerSummary()
 {
     const auto layers=processor.getSampleLayersForNote(selectedNote);juce::String text;
     if(layers.empty())text=magdrum::ui::localisedText("No sample loaded")+"\n"+magdrum::ui::localisedText("Load sample");
-    else for(size_t i=0;i<layers.size();++i){if(i>0)text+="\n";text+=magdrum::ui::localisedText("Velocity")+" "+juce::String(layers[i].minimumVelocity)+"–"+juce::String(layers[i].maximumVelocity)+"\n"+juce::File(layers[i].path).getFileName();}
+    else for(size_t i=0;i<layers.size();++i){if(i>0)text+="\n";text+=magdrum::ui::localisedText("Velocity")+" "+juce::String(layers[i].minimumVelocity)+"–"+juce::String(layers[i].maximumVelocity);if(layers[i].roundRobinCount>1)text+=" · RR "+juce::String(layers[i].roundRobinIndex)+"/"+juce::String(layers[i].roundRobinCount);text+="\n"+juce::File(layers[i].path).getFileName();}
     layerSummary.setText(text,juce::dontSendNotification);
     sampleDetails.setText(magdrum::ui::localisedText("PAD SAMPLE")+(layers.empty()?"\n"+magdrum::ui::localisedText("No sample loaded"):"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path),juce::dontSendNotification);
     waveform->setFile(layers.empty()?juce::File():juce::File(layers.front().path));

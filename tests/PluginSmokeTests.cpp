@@ -196,6 +196,12 @@ public:
     {
         return processor.sampleLock;
     }
+
+    static void stopVoices(MagDrumAudioProcessor& processor)
+    {
+        for (auto& voice : processor.voices)
+            voice.active = false;
+    }
 };
 
 namespace
@@ -772,6 +778,39 @@ int main(int argc, char** argv)
     if (softPeak <= 0.0 || hardPeak <= softPeak * 3.0) return 18;
     if (!restoredLayers.clearSamplesForNote(36) || restoredLayers.clearSamplesForNote(36)
         || restoredLayers.getSamplePathForNote(36).isNotEmpty() || renderPeak(restoredLayers, 36, 96) != 0.0) return 19;
+
+    const auto roundRobinFirstFile = root.getChildFile("kick-round-robin-1.wav");
+    const auto roundRobinSecondFile = root.getChildFile("kick-round-robin-2.wav");
+    if (!writeFixture(roundRobinFirstFile, 0.10f) || !writeFixture(roundRobinSecondFile, 0.22f)) return 38;
+    auto& roundRobin = makeTestProcessor();
+    if (!roundRobin.loadSampleForVelocityRange(36, 1, 127, roundRobinFirstFile)
+        || !roundRobin.loadSampleForVelocityRange(36, 1, 127, roundRobinSecondFile)) return 38;
+    const auto roundRobinLayers = roundRobin.getSampleLayersForNote(36);
+    if (roundRobinLayers.size() != 2 || roundRobinLayers[0].roundRobinIndex != 1
+        || roundRobinLayers[0].roundRobinCount != 2 || roundRobinLayers[1].roundRobinIndex != 2
+        || roundRobinLayers[1].roundRobinCount != 2) return 39;
+    roundRobin.prepareToPlay(44100.0, 128);
+    const double firstRoundRobinPeak = renderPeak(roundRobin, 36, 100);
+    MagDrumAudioProcessorTestAccess::stopVoices(roundRobin);
+    const double secondRoundRobinPeak = renderPeak(roundRobin, 36, 100);
+    MagDrumAudioProcessorTestAccess::stopVoices(roundRobin);
+    const double thirdRoundRobinPeak = renderPeak(roundRobin, 36, 100);
+    if (firstRoundRobinPeak <= 0.0 || secondRoundRobinPeak < firstRoundRobinPeak * 1.8
+        || std::abs(thirdRoundRobinPeak - firstRoundRobinPeak) > 0.0001) return 40;
+
+    juce::MemoryBlock roundRobinState;
+    roundRobin.getStateInformation(roundRobinState);
+    auto& restoredRoundRobin = makeTestProcessor();
+    restoredRoundRobin.setStateInformation(roundRobinState.getData(), static_cast<int>(roundRobinState.getSize()));
+    if (!waitForSampleLayerCount(restoredRoundRobin, 36, 2)) return 41;
+    const auto restoredRoundRobinLayers = restoredRoundRobin.getSampleLayersForNote(36);
+    if (restoredRoundRobinLayers.size() != 2 || restoredRoundRobinLayers[0].roundRobinCount != 2
+        || restoredRoundRobinLayers[1].roundRobinCount != 2) return 42;
+    restoredRoundRobin.prepareToPlay(44100.0, 128);
+    const double restoredFirstPeak = renderPeak(restoredRoundRobin, 36, 100);
+    MagDrumAudioProcessorTestAccess::stopVoices(restoredRoundRobin);
+    const double restoredSecondPeak = renderPeak(restoredRoundRobin, 36, 100);
+    if (restoredFirstPeak <= 0.0 || restoredSecondPeak < restoredFirstPeak * 1.8) return 43;
 
     auto& concurrentSwaps = makeTestProcessor();
     if (!concurrentSwaps.loadSampleForNote(36, sample)) return 20;

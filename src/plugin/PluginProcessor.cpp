@@ -40,6 +40,8 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
     for (auto& noteSlots : sampleSlots)
         for (auto& slot : noteSlots)
             slot.store(nullptr);
+    for (auto& counter : roundRobinCounters)
+        counter.store(0, std::memory_order_relaxed);
 }
 
 MagDrumAudioProcessor::~MagDrumAudioProcessor()
@@ -126,8 +128,9 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
                 && existing->maximumVelocity == maximumVelocity;
             if (sameRange)
             {
-                targetLayer = layer;
-                break;
+                if (samplePaths[static_cast<size_t>(note)][static_cast<size_t>(layer)] == file.getFullPathName())
+                    return true;
+                continue;
             }
             const bool overlaps = minimumVelocity <= existing->maximumVelocity
                 && maximumVelocity >= existing->minimumVelocity;
@@ -150,7 +153,7 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
         for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
         {
             if (it->note == note && it->minimumVelocity == minimumVelocity
-                && it->maximumVelocity == maximumVelocity)
+                && it->maximumVelocity == maximumVelocity && it->path == file.getFullPathName())
             {
                 if (it->cancellation != nullptr)
                     it->cancellation->store(false, std::memory_order_release);
@@ -187,6 +190,7 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     }
     for (auto& path : samplePaths[static_cast<size_t>(note)])
         path.clear();
+    roundRobinCounters[static_cast<size_t>(note)].store(0, std::memory_order_relaxed);
     for (auto it = pendingSampleLoads.begin(); it != pendingSampleLoads.end();)
     {
         if (it->note == note)
@@ -339,11 +343,19 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
 {
     const int clampedVelocity = juce::jlimit(1, 127, velocity);
     const SampleData* sample = nullptr;
+    std::array<const SampleData*, maxVelocityLayers> matchingSamples{};
+    int matchingCount = 0;
     for (const auto& slot : sampleSlots[static_cast<size_t>(note)])
     {
         const auto* candidate = slot.load(std::memory_order_acquire);
         if (candidate != nullptr && clampedVelocity >= candidate->minimumVelocity && clampedVelocity <= candidate->maximumVelocity)
-        { sample = candidate; break; }
+            matchingSamples[static_cast<size_t>(matchingCount++)] = candidate;
+    }
+    if (matchingCount > 0)
+    {
+        const auto roundRobinIndex = roundRobinCounters[static_cast<size_t>(note)].fetch_add(1, std::memory_order_relaxed)
+            % static_cast<std::uint32_t>(matchingCount);
+        sample = matchingSamples[static_cast<size_t>(roundRobinIndex)];
     }
     if (sample != nullptr && sample->audio.getNumSamples() > 0)
     {
@@ -387,10 +399,28 @@ std::vector<MagDrumAudioProcessor::SampleLayerInfo> MagDrumAudioProcessor::getSa
         if (samplePaths[noteIndex][layerIndex].isEmpty() || ownedSamples[noteIndex][layerIndex] == nullptr)
             continue;
         const auto& sample = ownedSamples[noteIndex][layerIndex];
-        layers.push_back({sample->minimumVelocity, sample->maximumVelocity, samplePaths[noteIndex][layerIndex]});
+        layers.push_back({sample->minimumVelocity, sample->maximumVelocity, samplePaths[noteIndex][layerIndex], 1, 1});
     }
-    std::sort(layers.begin(), layers.end(), [](const auto& left, const auto& right)
-        { return left.minimumVelocity < right.minimumVelocity; });
+    std::stable_sort(layers.begin(), layers.end(), [](const auto& left, const auto& right)
+    {
+        if (left.minimumVelocity != right.minimumVelocity)
+            return left.minimumVelocity < right.minimumVelocity;
+        return left.maximumVelocity < right.maximumVelocity;
+    });
+    for (size_t first = 0; first < layers.size();)
+    {
+        size_t end = first + 1;
+        while (end < layers.size() && layers[end].minimumVelocity == layers[first].minimumVelocity
+            && layers[end].maximumVelocity == layers[first].maximumVelocity)
+            ++end;
+        const int groupSize = static_cast<int>(end - first);
+        for (size_t index = first; index < end; ++index)
+        {
+            layers[index].roundRobinIndex = static_cast<int>(index - first) + 1;
+            layers[index].roundRobinCount = groupSize;
+        }
+        first = end;
+    }
     return layers;
 }
 
@@ -405,11 +435,31 @@ std::vector<MagDrumAudioProcessor::SampleAssignmentInfo> MagDrumAudioProcessor::
             const auto layerIndex = static_cast<size_t>(layer);
             const auto& path = samplePaths[noteIndex][layerIndex];
             if (path.isNotEmpty())
-                assignments.push_back({note, ownedSamples[noteIndex][layerIndex]->minimumVelocity,
+            assignments.push_back({note, ownedSamples[noteIndex][layerIndex]->minimumVelocity,
                     ownedSamples[noteIndex][layerIndex]->maximumVelocity, path});
         }
     for (const auto& pending : pendingSampleLoads)
         assignments.push_back({pending.note, pending.minimumVelocity, pending.maximumVelocity, pending.path});
+    for (size_t index = 0; index < assignments.size(); ++index)
+    {
+        auto& assignment = assignments[index];
+        int groupCount = 0;
+        int groupIndex = 0;
+        for (size_t candidate = 0; candidate < assignments.size(); ++candidate)
+        {
+            const auto& other = assignments[candidate];
+            if (other.midiNote == assignment.midiNote
+                && other.minimumVelocity == assignment.minimumVelocity
+                && other.maximumVelocity == assignment.maximumVelocity)
+            {
+                ++groupCount;
+                if (candidate < index)
+                    ++groupIndex;
+            }
+        }
+        assignment.roundRobinIndex = groupIndex + 1;
+        assignment.roundRobinCount = groupCount;
+    }
     return assignments;
 }
 
@@ -695,6 +745,7 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                 ownedSamples[noteIndex][layerIndex].reset();
                 samplePaths[noteIndex][layerIndex].clear();
             }
+            roundRobinCounters[noteIndex].store(0, std::memory_order_relaxed);
             for (const auto& layer : savedLayers[noteIndex])
             {
                 auto cancellation = std::make_shared<std::atomic<bool>>(true);

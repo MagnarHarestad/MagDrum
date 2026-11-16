@@ -6,6 +6,7 @@
 #include "DeferredNoteTriggers.h"
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -20,6 +21,8 @@ public:
         int minimumVelocity = 1;
         int maximumVelocity = 127;
         juce::String path;
+        int roundRobinIndex = 1;
+        int roundRobinCount = 1;
     };
 
     struct SampleAssignmentInfo
@@ -28,6 +31,8 @@ public:
         int minimumVelocity = 1;
         int maximumVelocity = 127;
         juce::String path;
+        int roundRobinIndex = 1;
+        int roundRobinCount = 1;
     };
 
     struct NoteParameters
@@ -131,6 +136,7 @@ private:
     std::array<std::array<std::atomic<const SampleData*>, maxVelocityLayers>, 128> sampleSlots{};
     std::array<std::array<juce::String, maxVelocityLayers>, 128> samplePaths{};
     std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> ownedSamples{};
+    std::array<std::atomic<std::uint32_t>, 128> roundRobinCounters{};
     std::vector<PendingSampleLoad> pendingSampleLoads;
     std::array<std::atomic<float>, 128> noteGainDb{};
     std::array<std::atomic<float>, 128> notePan{};
