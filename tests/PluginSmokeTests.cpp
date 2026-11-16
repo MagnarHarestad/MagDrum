@@ -1,4 +1,5 @@
 #include "plugin/PluginProcessor.h"
+#include "plugin/PluginEditor.h"
 #include "plugin/DrumPadLayout.h"
 #include "core/PluginScanProcess.h"
 #include "core/ScopedFileAccess.h"
@@ -210,6 +211,34 @@ MagDrumAudioProcessor& makeTestProcessor()
 }
 }
 
+class MagDrumAudioProcessorEditorTestAccess
+{
+public:
+    static int checksVirtualizedSequencerBar(MagDrumAudioProcessorEditor& editor,
+                                              MagDrumAudioProcessor& processor)
+    {
+        if (editor.steps.size() != 8 || editor.steps.front().size() != 32) return 1;
+        if (editor.getNumChildComponents() >= 512) return 2;
+
+        editor.lengthSelect.setSelectedId(2);
+        editor.barSelect.setSelectedId(2);
+        editor.setPage(2);
+        if (editor.visibleStepIndex(0) != 16 || !editor.steps[0][0].isVisible()) return 3;
+
+        editor.steps[0][0].setToggleState(true, juce::dontSendNotification);
+        editor.buttonClicked(&editor.steps[0][0]);
+        if (!editor.sequenceStepActive[0][16]) return 4;
+
+        const auto state = processor.getPluginEditorState();
+        if (state == nullptr) return 5;
+        for (auto* child = state->getFirstChildElement(); child != nullptr; child = child->getNextElement())
+            if (child->hasTagName("STEP") && child->getIntAttribute("lane", -1) == 0
+                && child->getIntAttribute("step", -1) == 16)
+                return 0;
+        return 6;
+    }
+};
+
 int main(int argc, char** argv)
 {
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-plugin-scan-worker") == 0)
@@ -333,6 +362,18 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+
+#if JUCE_WINDOWS
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        MagDrumAudioProcessor editorProcessor;
+        const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
+        MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
+        if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
+        const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);
+        if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
+    }
+#endif
 
     auto previewProcessor = std::make_unique<MagDrumAudioProcessor>();
     if (previewProcessor->previewSample(sample, [] { return true; })) return 250;

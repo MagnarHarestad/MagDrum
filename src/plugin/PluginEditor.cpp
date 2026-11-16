@@ -1158,7 +1158,7 @@ private:
     Completion onComplete;
 };
 
-MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p)
+MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p, juce::File databaseFileOverride)
     : AudioProcessorEditor(p), tooltipWindow(this, 500), processor(p), indexedList("Samples",this), sampleMap(std::make_unique<MagDrumSampleMap>()), waveform(std::make_unique<MagDrumWaveform>())
 {
     magdrum::ui::initialiseMagDrumLocalization();magdrum::ui::languageChangeBroadcaster().addChangeListener(this);processor.addSampleStateListener(this);setLookAndFeel(&theme);setSize(1120,760);setResizable(true,true);setResizeLimits(1000,620,1800,1200);
@@ -1246,15 +1246,17 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     for(size_t row=0;row<laneLabels.size();++row)
     {
         laneLabels[row].setText(magdrum::ui::localisedText(laneDisplayNames[row]),juce::dontSendNotification);laneLabels[row].setColour(juce::Label::textColourId,categoryColour(laneNames[row]));laneLabels[row].setFont(juce::Font(juce::FontOptions(12.0f,juce::Font::bold)));addAndMakeVisible(laneLabels[row]);
-        for(size_t step=0;step<512;++step)
+        for(size_t localStep=0;localStep<stepButtonCount;++localStep)
         {
-            auto& cell=steps[row][step];cell.setClickingTogglesState(true);cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(stepVelocities[row][step])/127.0f));
-            cell.onRightClick=[this,row,step]
+            auto& cell=steps[row][localStep];cell.setClickingTogglesState(true);cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(100.0f/127.0f));
+            cell.onRightClick=[this,row,localStep]
             {
+                const int globalStep=visibleStepIndex(static_cast<int>(localStep));
+                if(globalStep<0)return;
                 juce::PopupMenu menu;for(int velocity:{50,70,85,100,115,127})menu.addItem(velocity,magdrum::ui::localisedText("Velocity")+" "+juce::String(velocity));juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-                menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&steps[row][step]),[safe,row,step](int value)
+                menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&steps[row][localStep]),[safe,row,localStep,globalStep](int value)
                 {
-                    if(safe==nullptr||value<1)return;safe->stepVelocities[row][step]=value;auto& target=safe->steps[row][step];target.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(value)/127.0f));safe->refreshStepTooltips();if(safe->syncSequenceEventForCell(static_cast<int>(row),static_cast<int>(step)))safe->status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);safe->savePluginEditorState();
+                    if(safe==nullptr||value<1)return;safe->stepVelocities[row][static_cast<size_t>(globalStep)]=value;auto& target=safe->steps[row][localStep];target.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(value)/127.0f));safe->refreshStepTooltips();if(safe->syncSequenceEventForCell(static_cast<int>(row),globalStep))safe->status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);safe->savePluginEditorState();
                 });
             };
             cell.addListener(this);addAndMakeVisible(cell);
@@ -1271,8 +1273,8 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     lengthSelect.onChange=[this]{
         const int requested=lengthSelect.getSelectedId();
         const int newStepCount=patternStepCount();
-        for(const auto& row:steps)for(size_t index=static_cast<size_t>(newStepCount);index<row.size();++index)
-            if(row[index].getToggleState()){
+        for(const auto& row:sequenceStepActive)for(size_t index=static_cast<size_t>(newStepCount);index<row.size();++index)
+            if(row[index]){
                 lengthSelect.setSelectedId(previousPatternBars,juce::dontSendNotification);
                 status.setText(magdrum::ui::localisedText("That pattern length would hide existing hits. Move or clear those hits first."),juce::dontSendNotification);
                 return;
@@ -1293,8 +1295,8 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         if(!setPatternTimeSignature(edited,timeSignatureNumerator(),timeSignatureDenominator()))return;
         const auto map=makeSequencerBarMap(timeSignatureNumerator(),timeSignatureDenominator(),previousPatternBars,edited.tempoAndSignature,gridResolutionSubdivisions());
         if(!map.valid){meterSelect.setSelectedId(previousMeterId,juce::dontSendNotification);status.setText(magdrum::ui::localisedText("That opening time signature is not available in the sequencer grid."),juce::dontSendNotification);return;}
-        for(const auto& row:steps)for(size_t index=static_cast<size_t>(map.totalSteps);index<row.size();++index)
-            if(row[index].getToggleState()){
+        for(const auto& row:sequenceStepActive)for(size_t index=static_cast<size_t>(map.totalSteps);index<row.size();++index)
+            if(row[index]){
                 meterSelect.setSelectedId(previousMeterId,juce::dontSendNotification);
                 status.setText(magdrum::ui::localisedText("That meter would hide existing hits in the selected pattern length. Move or clear those hits first."),juce::dontSendNotification);
                 return;
@@ -1374,8 +1376,8 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     pluginScanProgress.setColour(juce::Label::textColourId,Palette::Accent);pluginScanProgress.setJustificationType(juce::Justification::centredLeft);addAndMakeVisible(pluginScanProgress);
     pluginScanInfo.setColour(juce::Label::textColourId,Palette::Muted);pluginScanInfo.setJustificationType(juce::Justification::topLeft);pluginScanInfo.setText(magdrum::ui::localisedText("Select a discovered instrument, import a preset as a kit, then scan its MIDI notes."),juce::dontSendNotification);addAndMakeVisible(pluginScanInfo);
     status.setColour(juce::Label::textColourId,Palette::Muted);status.setJustificationType(juce::Justification::centredLeft);addAndMakeVisible(status);
-    const auto dataDirectory=getMagDrumDataDirectory();
-    if(dataDirectory!=juce::File()&&(dataDirectory.createDirectory().wasOk()||dataDirectory.isDirectory())){databaseFile=dataDirectory.getChildFile("samples.sqlite3");databaseReady=database.open(databaseFile);}
+    const auto dataDirectory=databaseFileOverride!=juce::File()?databaseFileOverride.getParentDirectory():getMagDrumDataDirectory();
+    if(dataDirectory!=juce::File()&&(dataDirectory.createDirectory().wasOk()||dataDirectory.isDirectory())){databaseFile=databaseFileOverride!=juce::File()?databaseFileOverride:dataDirectory.getChildFile("samples.sqlite3");databaseReady=database.open(databaseFile);}
     if(!databaseReady)status.setText(magdrum::ui::localisedText("Sample index unavailable. Choose an audio file or scan a folder here."),juce::dontSendNotification);
     else{refreshSourceKitFilters();refreshSamples();for(const auto& name:database.getMappingProfileNames())if(name!="General MIDI")profileSelect.addItem(name,profileSelect.getNumItems()+1);if(const auto stored=database.loadMappingProfile("General MIDI"))mappingProfile=*stored;}
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();
@@ -1407,10 +1409,17 @@ void MagDrumAudioProcessorEditor::resized()
     const int selectedBar=juce::jlimit(1,barMap.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
     const auto& visibleBar=barMap.bars[static_cast<size_t>(selectedBar-1)];
     for(auto& label:laneLabels)label.setVisible(page==2);
-    for(auto& row:steps)
-        for(size_t index=0;index<row.size();++index)
-            row[index].setVisible(page==2&&index>=static_cast<size_t>(visibleBar.startStep)
-                &&index<static_cast<size_t>(visibleBar.startStep+visibleBar.stepCount));
+    for(size_t rowIndex=0;rowIndex<steps.size();++rowIndex)
+        for(size_t localStep=0;localStep<steps[rowIndex].size();++localStep)
+        {
+            const bool active=page==2&&localStep<static_cast<size_t>(visibleBar.stepCount);
+            auto& cell=steps[rowIndex][localStep];
+            cell.setVisible(active);
+            if(!active)continue;
+            const auto globalStep=static_cast<size_t>(visibleBar.startStep)+localStep;
+            cell.setToggleState(sequenceStepActive[rowIndex][globalStep],juce::dontSendNotification);
+            cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[rowIndex]).withAlpha(static_cast<float>(stepVelocities[rowIndex][globalStep])/127.0f));
+        }
     playSequenceButton.setVisible(page==2);clearSequenceButton.setVisible(page==2);exportSequenceButton.setVisible(page==2);importMidiButton.setVisible(page==2);browseMidiButton.setVisible(page==2);editMidiEventsButton.setVisible(page==2);reviewMidiButton.setVisible(page==2);midiFallbackPolicy.setVisible(page==2);tempoEditor.setVisible(page==2);barSelect.setVisible(page==2);meterSelect.setVisible(page==2);lengthSelect.setVisible(page==2);gridResolutionLabel.setVisible(page==2);gridResolutionSelect.setVisible(page==2);metadataType.setVisible(page==2);metadataBeat.setVisible(page==2);metadataValue.setVisible(page==2);setMetadataButton.setVisible(page==2);removeMetadataButton.setVisible(page==2);metadataSummary.setVisible(page==2);
     profileSelect.setVisible(page==3);profileName.setVisible(page==3);mappingInstrument.setVisible(page==3);mappingArticulation.setVisible(page==3);mappingNote.setVisible(page==3);mappingSummary.setVisible(page==3);loadProfileButton.setVisible(page==3);saveProfileButton.setVisible(page==3);importCsvButton.setVisible(page==3);exportCsvButton.setVisible(page==3);setMappingButton.setVisible(page==3);removeMappingButton.setVisible(page==3);
     for(auto* control:{static_cast<juce::Component*>(&pluginInstrumentSelect),static_cast<juce::Component*>(&pluginKitSelect),static_cast<juce::Component*>(&pluginRenderMode),static_cast<juce::Component*>(&pluginPresetKitName),static_cast<juce::Component*>(&pluginProgramSelect),static_cast<juce::Component*>(&pluginVelocities),static_cast<juce::Component*>(&pluginNoteDuration),static_cast<juce::Component*>(&pluginRelease),static_cast<juce::Component*>(&pluginCaptureLength),static_cast<juce::Component*>(&pluginRepeatCount),static_cast<juce::Component*>(&pluginScanProgress),static_cast<juce::Component*>(&pluginScanInfo),static_cast<juce::Component*>(&pluginVelocityLabel),static_cast<juce::Component*>(&pluginNoteDurationLabel),static_cast<juce::Component*>(&pluginReleaseLabel),static_cast<juce::Component*>(&pluginCaptureLabel),static_cast<juce::Component*>(&pluginRepeatLabel)})control->setVisible(hasPluginScannerPage&&page==4);
@@ -1474,14 +1483,13 @@ void MagDrumAudioProcessorEditor::resized()
         const auto& span=map.bars[static_cast<size_t>(selectedGridBar-1)];
         const int activeSteps=span.stepCount;
         const int cellWidth=juce::jmax(16,(bounds.getWidth()-labelWidth-(activeSteps-1)*4)/activeSteps);
-        const int firstStep=span.startStep;
         for(int row=0;row<8;++row)
         {
             auto line=bounds.removeFromTop(juce::jmax(36,bounds.getHeight()/8));
             laneLabels[static_cast<size_t>(row)].setBounds(line.removeFromLeft(labelWidth));line.removeFromLeft(6);
             for(int step=0;step<activeSteps;++step)
             {
-                steps[static_cast<size_t>(row)][static_cast<size_t>(firstStep+step)].setBounds(line.removeFromLeft(cellWidth));
+                steps[static_cast<size_t>(row)][static_cast<size_t>(step)].setBounds(line.removeFromLeft(cellWidth));
                 line.removeFromLeft(4);
             }
         }
@@ -1703,8 +1711,8 @@ bool MagDrumAudioProcessorEditor::editSequenceMetadata(bool remove)
     {
         const auto proposedMap=makeSequencerBarMap(openingNumerator,openingDenominator,previousPatternBars,edited.tempoAndSignature,gridResolutionSubdivisions());
         if(!proposedMap.valid){status.setText(magdrum::ui::localisedText("This step grid cannot represent the current pattern."),juce::dontSendNotification);return false;}
-        for(const auto& row:steps)for(size_t index=static_cast<size_t>(proposedMap.totalSteps);index<row.size();++index)
-            if(row[index].getToggleState()){status.setText(magdrum::ui::localisedText("That meter would hide existing hits in the selected pattern length. Move or clear those hits first."),juce::dontSendNotification);return false;}
+        for(const auto& row:sequenceStepActive)for(size_t index=static_cast<size_t>(proposedMap.totalSteps);index<row.size();++index)
+            if(row[index]){status.setText(magdrum::ui::localisedText("That meter would hide existing hits in the selected pattern length. Move or clear those hits first."),juce::dontSendNotification);return false;}
         for(const auto& event:sequenceEvents)
             if(event.positionBeats>=proposedMap.lengthBeats-magdrum::sequencer::gridBeatTolerance){status.setText(magdrum::ui::localisedText("That meter would hide existing hits in the selected pattern length. Move or clear those hits first."),juce::dontSendNotification);return false;}
         if(!remove&&std::abs(beat)<1.0e-9){
@@ -1739,7 +1747,7 @@ void MagDrumAudioProcessorEditor::syncSequenceEventsFromGrid()
     sequenceEvents.clear();
     for(int row=0;row<8;++row)
         for(int step=0;step<patternStepCount();++step)
-            if(steps[static_cast<size_t>(row)][static_cast<size_t>(step)].getToggleState())
+            if(sequenceStepActive[static_cast<size_t>(row)][static_cast<size_t>(step)])
                 sequenceEvents.push_back({laneInstruments[static_cast<size_t>(row)],laneArticulations[static_cast<size_t>(row)],static_cast<std::uint8_t>(stepVelocities[static_cast<size_t>(row)][static_cast<size_t>(step)]),static_cast<double>(step)/gridResolutionSubdivisions(),0.12});
     sequenceEventsInitialised=true;
 }
@@ -1762,7 +1770,7 @@ bool MagDrumAudioProcessorEditor::syncSequenceEventForCell(int lane,int step)
             && magdrum::sequencer::isPositionOnGridStep(event.positionBeats, step, subdivisions);
     };
     sequenceEvents.erase(std::remove_if(sequenceEvents.begin(),sequenceEvents.end(),mapsToCell),sequenceEvents.end());
-    if(steps[static_cast<size_t>(lane)][static_cast<size_t>(step)].getToggleState())
+    if(sequenceStepActive[static_cast<size_t>(lane)][static_cast<size_t>(step)])
         sequenceEvents.push_back({laneInstruments[static_cast<size_t>(lane)],laneArticulations[static_cast<size_t>(lane)],static_cast<std::uint8_t>(stepVelocities[static_cast<size_t>(lane)][static_cast<size_t>(step)]),static_cast<double>(step)/subdivisions,0.12});
     std::stable_sort(sequenceEvents.begin(),sequenceEvents.end(),[](const auto& left,const auto& right){return left.positionBeats<right.positionBeats;});
     sequenceEventsInitialised=true;
@@ -1771,20 +1779,16 @@ bool MagDrumAudioProcessorEditor::syncSequenceEventForCell(int lane,int step)
 
 void MagDrumAudioProcessorEditor::syncSequencerGridFromEvents()
 {
-    for(size_t row=0;row<steps.size();++row)
-        for(size_t step=0;step<steps[row].size();++step)
-        {
-            stepVelocities[row][step]=100;steps[row][step].setToggleState(false,juce::dontSendNotification);
-            steps[row][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(100.0f/127.0f));
-        }
+    for(auto& row:sequenceStepActive)row.fill(false);
+    for(auto& row:stepVelocities)row.fill(100);
     for(const auto& event:sequenceEvents)
     {
         const int lane = sequencerLaneForEvent(event);
         const int step=juce::roundToInt(event.positionBeats*gridResolutionSubdivisions());
         if(!juce::isPositiveAndBelow(lane,8)||!juce::isPositiveAndBelow(step,patternStepCount()))continue;
-        const auto row=static_cast<size_t>(lane),column=static_cast<size_t>(step);stepVelocities[row][column]=event.velocity;steps[row][column].setToggleState(true,juce::dontSendNotification);steps[row][column].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(event.velocity)/127.0f));
+        const auto row=static_cast<size_t>(lane),column=static_cast<size_t>(step);sequenceStepActive[row][column]=true;stepVelocities[row][column]=event.velocity;
     }
-    resized();repaint();
+    refreshStepTooltips();resized();repaint();
 }
 
 void MagDrumAudioProcessorEditor::openMidiEventEditor()
@@ -1837,22 +1841,32 @@ void MagDrumAudioProcessorEditor::updateSequencerGrid()
     repaint();
 }
 
+int MagDrumAudioProcessorEditor::visibleStepIndex(int localStep) const
+{
+    const auto map=currentBarMap();
+    const int selectedBar=juce::jlimit(1,map.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
+    const auto& span=map.bars[static_cast<size_t>(selectedBar-1)];
+    if(localStep<0||localStep>=span.stepCount)return -1;
+    return span.startStep+localStep;
+}
+
 void MagDrumAudioProcessorEditor::refreshStepTooltips()
 {
     const auto map=currentBarMap();
+    const int selectedBar=juce::jlimit(1,map.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
+    const auto& span=map.bars[static_cast<size_t>(selectedBar-1)];
     for(size_t lane=0;lane<steps.size();++lane)
-        for(size_t step=0;step<steps[lane].size();++step)
+        for(size_t localStep=0;localStep<steps[lane].size();++localStep)
         {
-            int barNumber=0,localStep=0;
-            for(int bar=0;bar<map.barCount;++bar)
-            {
-                const auto& span=map.bars[static_cast<size_t>(bar)];
-                if(static_cast<int>(step)>=span.startStep&&static_cast<int>(step)<span.startStep+span.stepCount)
-                {barNumber=bar+1;localStep=static_cast<int>(step)-span.startStep+1;break;}
-            }
+            auto& cell=steps[lane][localStep];
+            if(localStep>=static_cast<size_t>(span.stepCount)){cell.setVisible(false);continue;}
+            const auto globalStep=static_cast<size_t>(span.startStep)+localStep;
+            cell.setVisible(page==2);
+            cell.setToggleState(sequenceStepActive[lane][globalStep],juce::dontSendNotification);
+            cell.setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(static_cast<float>(stepVelocities[lane][globalStep])/127.0f));
             const auto midiNoteText=mappedLaneNotes[lane]>=0?"MIDI "+juce::String(mappedLaneNotes[lane]):magdrum::ui::localisedText("No MIDI mapping");
-            const auto tooltip=magdrum::ui::localisedText(laneDisplayNames[lane])+" · "+midiNoteText+" · "+magdrum::ui::localisedText("bar")+" "+juce::String(barNumber)+" · "+magdrum::ui::localisedText("step")+" "+juce::String(localStep)+" · "+magdrum::ui::localisedText("Velocity")+" "+juce::String(stepVelocities[lane][step])+" ("+magdrum::ui::localisedText("Right-click to edit")+")";
-            steps[lane][step].setTooltip(tooltip);
+            const auto tooltip=magdrum::ui::localisedText(laneDisplayNames[lane])+" · "+midiNoteText+" · "+magdrum::ui::localisedText("bar")+" "+juce::String(selectedBar)+" · "+magdrum::ui::localisedText("step")+" "+juce::String(localStep+1)+" · "+magdrum::ui::localisedText("Velocity")+" "+juce::String(stepVelocities[lane][globalStep])+" ("+magdrum::ui::localisedText("Right-click to edit")+")";
+            cell.setTooltip(tooltip);
         }
 }
 
@@ -3371,7 +3385,7 @@ void MagDrumAudioProcessorEditor::savePluginEditorState()
     const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());
     saved.setAttribute("fallbackPolicy",fallbackPolicyId-1);
     saved.setAttribute("allowArticulationFallback",fallbackPolicyId>1);
-    for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step)if(steps[lane][step].getToggleState()){auto* cell=saved.createNewChildElement("STEP");cell->setAttribute("lane",static_cast<int>(lane));cell->setAttribute("step",static_cast<int>(step));cell->setAttribute("velocity",stepVelocities[lane][step]);}
+    for(size_t lane=0;lane<sequenceStepActive.size();++lane)for(size_t step=0;step<sequenceStepActive[lane].size();++step)if(sequenceStepActive[lane][step]){auto* cell=saved.createNewChildElement("STEP");cell->setAttribute("lane",static_cast<int>(lane));cell->setAttribute("step",static_cast<int>(step));cell->setAttribute("velocity",stepVelocities[lane][step]);}
     for(const auto& meta:sequenceMetadata){
         auto* child=saved.createNewChildElement("META");child->setAttribute("beat",meta.positionBeats);
         if(meta.message.isTempoMetaEvent()){child->setAttribute("kind","tempo");child->setAttribute("microsecondsPerQuarterNote",juce::roundToInt(meta.message.getTempoSecondsPerQuarterNote()*1000000.0));}
@@ -3396,8 +3410,10 @@ void MagDrumAudioProcessorEditor::restorePluginEditorState()
     const auto meter=saved->getStringAttribute("meter");const int slash=meter.indexOfChar('/');if(slash>0){const int id=meter.substring(0,slash).getIntValue()*100+meter.substring(slash+1).getIntValue();if(meterSelect.indexOfItemId(id)>=0)meterSelect.setSelectedId(id,juce::dontSendNotification);}previousMeterId=meterSelect.getSelectedId();
     const int savedBars=juce::jlimit(1,magdrum::sequencer::maximumBars,saved->getIntAttribute("bars",magdrum::sequencer::maximumBars));lengthSelect.setSelectedId(savedBars,juce::dontSendNotification);previousPatternBars=savedBars;
     sequenceMetadata.clear();sequenceEvents.clear();sequenceEventsInitialised=saved->getIntAttribute("eventModel",0)==1;
+    for(auto& row:sequenceStepActive)row.fill(false);
+    for(auto& row:stepVelocities)row.fill(100);
     for(auto* child=saved->getFirstChildElement();child!=nullptr;child=child->getNextElement()){
-        if(child->hasTagName("STEP")){const int lane=child->getIntAttribute("lane",-1),step=child->getIntAttribute("step",-1);if(juce::isPositiveAndBelow(lane,static_cast<int>(steps.size()))&&juce::isPositiveAndBelow(step,512)){const auto r=static_cast<size_t>(lane),s=static_cast<size_t>(step);steps[r][s].setToggleState(true,juce::dontSendNotification);stepVelocities[r][s]=juce::jlimit(1,127,child->getIntAttribute("velocity",100));steps[r][s].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[r]).withAlpha(static_cast<float>(stepVelocities[r][s])/127.0f));}}
+        if(child->hasTagName("STEP")){const int lane=child->getIntAttribute("lane",-1),step=child->getIntAttribute("step",-1);if(juce::isPositiveAndBelow(lane,static_cast<int>(sequenceStepActive.size()))&&juce::isPositiveAndBelow(step,512)){const auto r=static_cast<size_t>(lane),s=static_cast<size_t>(step);sequenceStepActive[r][s]=true;stepVelocities[r][s]=juce::jlimit(1,127,child->getIntAttribute("velocity",100));}}
         else if(child->hasTagName("META")){const double beat=child->getDoubleAttribute("beat",-1.0);if(!std::isfinite(beat)||beat<0.0)continue;const auto kind=child->getStringAttribute("kind");if(kind=="tempo"){const int microseconds=child->getIntAttribute("microsecondsPerQuarterNote",0);if(microseconds>0&&microseconds<=0x00ffffff)sequenceMetadata.push_back({beat,juce::MidiMessage::tempoMetaEvent(microseconds)});}else if(kind=="meter"){MidiPattern checked;if(setPatternTimeSignature(checked,child->getIntAttribute("numerator",0),child->getIntAttribute("denominator",0),beat)&&!checked.tempoAndSignature.empty())sequenceMetadata.push_back(checked.tempoAndSignature.front());}}
         else if(child->hasTagName("EVENT")){const int instrument=child->getIntAttribute("instrument",-1),articulation=child->getIntAttribute("articulation",-1),velocity=child->getIntAttribute("velocity",0);const double beat=child->getDoubleAttribute("beat",-1.0),duration=child->getDoubleAttribute("duration",0.0);if(juce::isPositiveAndBelow(instrument,9)&&juce::isPositiveAndBelow(articulation,13)&&velocity>=1&&velocity<=127&&std::isfinite(beat)&&beat>=0.0&&std::isfinite(duration)&&duration>0.0)sequenceEvents.push_back({static_cast<DrumInstrument>(instrument),static_cast<DrumArticulation>(articulation),static_cast<std::uint8_t>(velocity),beat,duration});}
     }
@@ -3476,7 +3492,8 @@ void MagDrumAudioProcessorEditor::loadMidiPatternFile(const juce::File& file)
     }
     lengthSelect.setSelectedId(importedBars,juce::dontSendNotification);previousPatternBars=importedBars;
     updateSequencerGrid();
-    for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step){steps[lane][step].setToggleState(false,juce::dontSendNotification);stepVelocities[lane][step]=100;steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}
+    for(auto& row:sequenceStepActive)row.fill(false);
+    for(auto& row:stepVelocities)row.fill(100);
     int imported=0,outside=0;
     for(const auto& event:pattern.events)
     {
@@ -3485,11 +3502,11 @@ void MagDrumAudioProcessorEditor::loadMidiPatternFile(const juce::File& file)
         const int step=juce::roundToInt(event.positionBeats*gridResolutionSubdivisions());
         if(lane<0||step<0||step>=patternStepCount()){++outside;continue;}
         const auto row=static_cast<size_t>(lane),column=static_cast<size_t>(step);
-        steps[row][column].setToggleState(true,juce::dontSendNotification);
+        sequenceStepActive[row][column]=true;
         stepVelocities[row][column]=event.velocity;
-        steps[row][column].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[row]).withAlpha(static_cast<float>(event.velocity)/127.0f));
         ++imported;
     }
+    refreshStepTooltips();
     for(const auto& meta:pattern.tempoAndSignature)if(std::abs(meta.positionBeats)<1.0e-9&&meta.message.isTempoMetaEvent()){const double seconds=meta.message.getTempoSecondsPerQuarterNote();if(seconds>0.0)tempoEditor.setText(juce::String(juce::roundToInt(60.0/seconds)),juce::dontSendNotification);break;}
     sequenceEvents=pattern.events;sequenceEventsInitialised=true;importedMidiBaseline=currentSequencePattern();hasImportedMidiBaseline=true;reviewMidiButton.setEnabled(true);editMidiEventsButton.setEnabled(true);
     savePluginEditorState();
@@ -3509,7 +3526,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 {
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}if(hasPluginScannerPage&&button==&pluginScannerTab){setPage(4);return;}
     if(button==&refreshPluginInventoryButton){refreshPluginInventory();return;}if(button==&scanPluginInventoryButton){startPluginInventoryScan();return;}if(button==&choosePluginFolderButton){choosePluginFolder();return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){choosePluginPreset();return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}
-    for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step)if(button==&steps[lane][step]){const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),static_cast<int>(step));if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
+     for(size_t lane=0;lane<steps.size();++lane)for(size_t localStep=0;localStep<steps[lane].size();++localStep)if(button==&steps[lane][localStep]){const int globalStep=visibleStepIndex(static_cast<int>(localStep));if(globalStep<0)return;sequenceStepActive[lane][static_cast<size_t>(globalStep)]=steps[lane][localStep].getToggleState();const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),globalStep);if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
     if(button==&scanButton){chooseSampleFolder();return;}if(button==&scanDefaultsButton){scanDefaultLibraryFolders();return;}if(button==&instrumentScannerButton){launchInstrumentScanner();return;}if(button==&openSourceKitButton){openSourceKitForSelectedSample();return;}
     if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples&&!sampleBrowseQueryPending)loadSamplePage(false);return;}
     if(button==&previewButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample to preview."),juce::dontSendNotification);return;}previewSampleAsync(file);return;}
@@ -3524,7 +3541,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&importCsvButton){chooseMappingCsv(false);return;}if(button==&exportCsvButton){chooseMappingCsv(true);return;}if(button==&importMidiButton){importMidiPattern();return;}if(button==&browseMidiButton){browseDefaultMidiPatterns();return;}if(button==&editMidiEventsButton){openMidiEventEditor();return;}if(button==&reviewMidiButton){reviewMidiChanges();return;}
     if(button==&setMetadataButton){editSequenceMetadata(false);return;}if(button==&removeMetadataButton){editSequenceMetadata(true);return;}
     if(button==&playSequenceButton){if(sequencerPlaying){sequencerPlaying=false;processor.setSequencerPlaybackEnabled(false);stopTimer();playSequenceButton.setButtonText(magdrum::ui::localisedText("Play"));}else{const int bpm=sequenceTempoAtBeat(0.0);if(bpm<20||bpm>300){status.setText(magdrum::ui::localisedText("Tempo must be between 20 and 300 BPM."),juce::dontSendNotification);return;}savePluginEditorState();sequenceTempo=bpm;sequenceStep=0;sequencerPlaying=true;processor.setSequencerPlaybackEnabled(true);playSequenceButton.setButtonText(magdrum::ui::localisedText("Stop"));const int unmapped=processor.getSequencerUnmappedEventCount();if(unmapped>0)status.setText(magdrum::ui::localisedText("Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.").replace("{count}",juce::String(unmapped)),juce::dontSendNotification);startTimer(juce::jmax(1,juce::roundToInt(60000.0/(sequenceTempo*gridResolutionSubdivisions()))));}return;}
-    if(button==&clearSequenceButton){for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step){steps[lane][step].setToggleState(false,juce::dontSendNotification);stepVelocities[lane][step]=100;steps[lane][step].setColour(juce::TextButton::buttonOnColourId,categoryColour(laneNames[lane]).withAlpha(100.0f/127.0f));}syncSequenceEventsFromGrid();savePluginEditorState();status.setText(magdrum::ui::localisedText("Pattern cleared."),juce::dontSendNotification);return;}
+    if(button==&clearSequenceButton){for(auto& row:sequenceStepActive)row.fill(false);for(auto& row:stepVelocities)row.fill(100);refreshStepTooltips();syncSequenceEventsFromGrid();savePluginEditorState();status.setText(magdrum::ui::localisedText("Pattern cleared."),juce::dontSendNotification);return;}
     if(button==&exportSequenceButton)
     {
         const int bpm=tempoEditor.getText().getIntValue();

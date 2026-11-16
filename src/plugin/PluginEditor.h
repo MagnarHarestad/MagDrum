@@ -35,7 +35,7 @@ class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Timer
 {
 public:
-    explicit MagDrumAudioProcessorEditor(MagDrumAudioProcessor&);
+    explicit MagDrumAudioProcessorEditor(MagDrumAudioProcessor&, juce::File databaseFileOverride = {});
     ~MagDrumAudioProcessorEditor() override;
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -45,6 +45,7 @@ public:
     void listBoxItemDoubleClicked(int, const juce::MouseEvent&) override;
 
 private:
+    friend class MagDrumAudioProcessorEditorTestAccess;
     void buttonClicked(juce::Button*) override;
     void timerCallback() override;
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
@@ -73,6 +74,7 @@ private:
     int timeSignatureDenominator() const;
     int gridResolutionSubdivisions() const;
     void updateSequencerGrid();
+    int visibleStepIndex(int localStep) const;
     void refreshStepTooltips();
     void refreshMappingSummary();
     void savePluginEditorState();
@@ -205,7 +207,9 @@ private:
     bool sequenceEventsInitialised = false;
     MidiPattern midiEventEditingPattern;
     std::array<juce::Label, 8> laneLabels;
-    std::array<std::array<MagDrumStepButton, 512>, 8> steps;
+    static constexpr size_t stepButtonCount = 32;
+    std::array<std::array<MagDrumStepButton, stepButtonCount>, 8> steps;
+    std::array<std::array<bool, 512>, 8> sequenceStepActive{};
     std::array<std::array<int, 512>, 8> stepVelocities{};
     juce::ComboBox barSelect, meterSelect, lengthSelect, gridResolutionSelect;
     int previousGridResolution = 4;

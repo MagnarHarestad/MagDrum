@@ -116,13 +116,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
     $configureTimer.Stop()
 
-    # JUCE's generated Windows resource command does not depend on its refreshed Info.txt.
-    # Recreate the generated .rc files so Windows file/product versions follow PROJECT_VERSION.
-    foreach ($target in @('MagDrum', 'MagDrumPlugin')) {
-        $resourceFile = Join-Path $buildDirectory "$target`_artefacts/JuceLibraryCode/${target}_resources.rc"
-        if (Test-Path -LiteralPath $resourceFile) { Remove-Item -LiteralPath $resourceFile -Force }
-    }
-
     $buildTargets = if ($SkipTests) {
         @('MagDrum', 'MagDrumPlugin_VST3')
     } else {
