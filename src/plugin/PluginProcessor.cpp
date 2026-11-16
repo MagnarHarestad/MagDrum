@@ -557,6 +557,10 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
 {
     juce::XmlElement state("MAGDRUM_STATE");
+    {
+        const juce::ScopedLock lock(programNameLock);
+        state.setAttribute("programName", programName);
+    }
     if (auto savedEditorState = getPluginEditorState())
         state.addChildElement(savedEditorState.release());
     {
@@ -617,6 +621,11 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
 {
     auto state = getXmlFromBinary(data, size);
     if (!state || !state->hasTagName("MAGDRUM_STATE")) return;
+    {
+        const auto restoredName = state->getStringAttribute("programName").trim();
+        const juce::ScopedLock lock(programNameLock);
+        programName = restoredName.isNotEmpty() ? restoredName : "Default Kit";
+    }
     if (const auto* savedEditorState = state->getChildByName("PLUGIN_EDITOR_STATE"))
         setPluginEditorState(*savedEditorState);
     struct SavedLayer { int minimumVelocity = 1; int maximumVelocity = 127; juce::String path; };
@@ -728,6 +737,30 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
             if (sampleStateLoadGeneration.load(std::memory_order_acquire) == generation)
                 sendChangeMessage();
         }), true);
+}
+
+const juce::String MagDrumAudioProcessor::getProgramName(int index)
+{
+    if (index != 0)
+        return {};
+    const juce::ScopedLock lock(programNameLock);
+    return programName;
+}
+
+void MagDrumAudioProcessor::changeProgramName(int index, const juce::String& newName)
+{
+    if (index != 0)
+        return;
+    const auto trimmedName = newName.trim();
+    if (trimmedName.isEmpty())
+        return;
+    {
+        const juce::ScopedLock lock(programNameLock);
+        if (programName == trimmedName)
+            return;
+        programName = trimmedName;
+    }
+    updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
 }
 
 void MagDrumAudioProcessor::setPluginEditorState(const juce::XmlElement& value)

@@ -53,8 +53,8 @@ public:
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
+    const juce::String getProgramName(int) override;
+    void changeProgramName(int, const juce::String&) override;
     void getStateInformation(juce::MemoryBlock&) override;
     void setStateInformation(const void*, int) override;
 
@@ -138,6 +138,8 @@ private:
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
+    juce::CriticalSection programNameLock;
+    juce::String programName{"Default Kit"};
     std::unique_ptr<juce::ThreadPool> sampleStateLoadWorkers;
     juce::CriticalSection sampleStateLoadWorkerLock;
     std::atomic<std::uint64_t> sampleStateLoadGeneration{0};

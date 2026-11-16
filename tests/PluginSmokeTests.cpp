@@ -458,6 +458,8 @@ int main(int argc, char** argv)
         || !filesMatch(sourceBytes, roundTripBytes)) return 8;
 
     auto& processor = makeTestProcessor();
+    if (processor.getNumPrograms() != 1 || processor.getCurrentProgram() != 0
+        || processor.getProgramName(0) != "Default Kit") return 254;
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
     const auto sampleAssignments = processor.getAllSampleAssignments();
     if (sampleAssignments.size() != 1 || sampleAssignments.front().midiNote != 36
@@ -511,12 +513,15 @@ int main(int argc, char** argv)
         || processor.loadSampleForNote(37, root.getChildFile("missing.wav"))) return 9;
     if (processor.getSamplePathForNote(37).isNotEmpty()) return 10;
 
+    processor.changeProgramName(0, "  Studio Kit  ");
+    if (processor.getProgramName(0) != "Studio Kit") return 255;
     juce::MemoryBlock state;
     processor.getStateInformation(state);
     if (state.isEmpty()) return 11;
 
     auto& restored = makeTestProcessor();
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    if (restored.getProgramName(0) != "Studio Kit") return 256;
     juce::MemoryBlock stateSavedWhileRestoring;
     restored.getStateInformation(stateSavedWhileRestoring);
     auto& restoredAgain = makeTestProcessor();
