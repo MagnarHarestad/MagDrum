@@ -129,6 +129,28 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
         || stateWriter.getExitCode() != 0 || !stateFile.existsAsFile())
     { std::cerr << "Could not create a host-format VST3 state fixture.\n"; return false; }
 
+    juce::String pluginLoadError;
+    auto loadedPlugin = formatManager.createPluginInstance(*descriptions[0], 44100.0, 512, pluginLoadError);
+    if (loadedPlugin == nullptr)
+    { std::cerr << "Could not instantiate the built VST3 for its tail-length check: " << pluginLoadError << "\n"; return false; }
+    if (loadedPlugin->getTailLengthSeconds() != 0.0)
+    { std::cerr << "A fresh MagDrum VST3 reported a sample tail before any sample was restored.\n"; return false; }
+    juce::MemoryBlock hostState;
+    if (!stateFile.loadFileAsData(hostState) || hostState.isEmpty())
+    { std::cerr << "Could not read the host-format VST3 state fixture.\n"; return false; }
+    loadedPlugin->setStateInformation(hostState.getData(), static_cast<int>(hostState.getSize()));
+    constexpr double expectedTailSeconds = 4096.0 / 44100.0;
+    const auto tailDeadline = juce::Time::getMillisecondCounter() + 5000u;
+    while (std::abs(loadedPlugin->getTailLengthSeconds() - expectedTailSeconds) > 0.0001
+        && juce::Time::getMillisecondCounter() < tailDeadline)
+        juce::Thread::sleep(1);
+    if (std::abs(loadedPlugin->getTailLengthSeconds() - expectedTailSeconds) > 0.0001)
+    {
+        std::cerr << "The built VST3 did not report the restored sample's tail duration: "
+                  << loadedPlugin->getTailLengthSeconds() << " seconds.\n";
+        return false;
+    }
+
     auto* request = new juce::DynamicObject();
     request->setProperty("descriptionFile", descriptionFile.getFullPathName());
     request->setProperty("stateFile", stateFile.getFullPathName());
