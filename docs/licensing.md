@@ -24,11 +24,12 @@ their package license files are inventoried in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). Package scripts fail if
 any required upstream license file is missing.
 
-The Windows x64 release `v0.1.2-test.188` was audited from the actual ZIP:
+The Windows x64 release `v0.1.2-test.200` was audited from the actual ZIP:
 the app, VST3 and matching helper, installer scripts, project and third-party
 license texts, and Microsoft runtime were present. The packaged app and VST3
-both report product version `0.1.2.188`; the runtime signature is valid.
+both report product version `0.1.2.200`; the runtime signature is valid.
 `tools/Test-WindowsPackage.ps1` now repeats these checks for each x64 package.
+Package SHA-256: `0a91a77db05d56cf0d0c8b54bcf6785d2c0ef79ae4850bdaaf3352012846276a`.
 
 MSVC-built Windows x64 and ARM64 packages include the matching Microsoft Visual
 C++ v14 Redistributable (vc_redist.x64.exe or vc_redist.arm64.exe). The
