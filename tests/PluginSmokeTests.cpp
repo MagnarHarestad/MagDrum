@@ -6,8 +6,87 @@
 #include <cstring>
 #include <iostream>
 #include <atomic>
+#include <cstdlib>
 #include <limits>
+#include <new>
 #include <thread>
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
+
+namespace
+{
+thread_local bool countRealtimeAllocations = false;
+thread_local int realtimeAllocationCount = 0;
+
+void recordRealtimeAllocation() noexcept
+{
+    if (countRealtimeAllocations)
+        ++realtimeAllocationCount;
+}
+}
+
+void* operator new(std::size_t size)
+{
+    recordRealtimeAllocation();
+    if (auto* memory = std::malloc(size == 0 ? 1 : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size)
+{
+    return ::operator new(size);
+}
+
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { ::operator delete(memory); }
+void operator delete(void* memory, std::size_t) noexcept { ::operator delete(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { ::operator delete(memory); }
+
+void* operator new(std::size_t size, std::align_val_t alignment)
+{
+    recordRealtimeAllocation();
+    const auto alignedSize = ((size == 0 ? 1 : size) + static_cast<std::size_t>(alignment) - 1)
+        / static_cast<std::size_t>(alignment) * static_cast<std::size_t>(alignment);
+#if defined(_MSC_VER)
+    if (auto* memory = _aligned_malloc(alignedSize, static_cast<std::size_t>(alignment)))
+        return memory;
+#else
+    if (auto* memory = std::aligned_alloc(static_cast<std::size_t>(alignment), alignedSize))
+        return memory;
+#endif
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size, std::align_val_t alignment)
+{
+    return ::operator new(size, alignment);
+}
+
+void operator delete(void* memory, std::align_val_t) noexcept
+{
+#if defined(_MSC_VER)
+    _aligned_free(memory);
+#else
+    std::free(memory);
+#endif
+}
+
+void operator delete[](void* memory, std::align_val_t alignment) noexcept
+{
+    ::operator delete(memory, alignment);
+}
+
+void operator delete(void* memory, std::size_t, std::align_val_t alignment) noexcept
+{
+    ::operator delete(memory, alignment);
+}
+
+void operator delete[](void* memory, std::size_t, std::align_val_t alignment) noexcept
+{
+    ::operator delete(memory, alignment);
+}
 
 namespace
 {
@@ -387,6 +466,18 @@ int main(int argc, char** argv)
                   << hostSyncedSequencer.isSequencerHostSynchronized()
                   << ", pre-hit peak=" << preHitPeak << ", post-hit peak=" << postHitPeak << '\n';
         return 37;
+    }
+
+    realtimeAllocationCount = 0;
+    countRealtimeAllocations = true;
+    hostSyncedSequencer.processBlock(hostAudio, hostMidi);
+    countRealtimeAllocations = false;
+    const auto audioThreadAllocations = realtimeAllocationCount;
+    if (audioThreadAllocations != 0)
+    {
+        std::cerr << "Audio callback allocated " << audioThreadAllocations
+                  << " time(s) while host-synced sequencer playback was active.\n";
+        return 39;
     }
 
     hostPlayHead.position.setIsPlaying(false);
