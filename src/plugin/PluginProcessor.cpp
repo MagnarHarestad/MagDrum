@@ -233,6 +233,20 @@ bool MagDrumAudioProcessor::previewSample(const juce::File& file, const std::fun
     return true;
 }
 
+void MagDrumAudioProcessor::stopSamplePreview()
+{
+    std::unique_ptr<SampleData> retiredPreview;
+    const juce::ScopedLock lock(sampleLock);
+    if (previewData == nullptr)
+        return;
+
+    const auto* preview = previewData.get();
+    for (auto& voice : voices)
+        if (voice.sample == preview)
+            voice = {};
+    retiredPreview = std::move(previewData);
+}
+
 void MagDrumAudioProcessor::triggerNote(int note, int velocity)
 {
     if (note < 0 || note > 127)

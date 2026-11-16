@@ -55,6 +55,7 @@ public:
                                     const std::function<bool()>& shouldCancel = {});
     bool clearSamplesForNote(int midiNote);
     bool previewSample(const juce::File&, const std::function<bool()>& shouldCancel = {});
+    void stopSamplePreview();
     // UI-thread pad/sequencer triggers are queued for the next audio block.
     // The queue is bounded so this call never blocks the host's audio thread.
     void triggerNote(int midiNote, int velocity = 100);

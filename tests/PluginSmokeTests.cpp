@@ -336,6 +336,15 @@ int main(int argc, char** argv)
             quieterPreviewPeak = juce::jmax(quieterPreviewPeak,
                 std::abs(static_cast<double>(previewAudio.getSample(channel, sampleIndex))));
     if (quieterPreviewPeak <= 0.005 || quieterPreviewPeak >= previewPeak * 0.5) return 254;
+    previewProcessor->stopSamplePreview();
+    previewAudio.clear();
+    previewProcessor->processBlock(previewAudio, previewMidi);
+    double stoppedPreviewPeak = 0.0;
+    for (int channel = 0; channel < previewAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < previewAudio.getNumSamples(); ++sampleIndex)
+            stoppedPreviewPeak = juce::jmax(stoppedPreviewPeak,
+                std::abs(static_cast<double>(previewAudio.getSample(channel, sampleIndex))));
+    if (stoppedPreviewPeak > 0.00001) return 255;
 
     auto& contendedSampleUpdate = makeTestProcessor();
     if (!contendedSampleUpdate.loadSampleForNote(36, sample)) return 208;
