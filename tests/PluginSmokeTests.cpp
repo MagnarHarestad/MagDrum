@@ -392,8 +392,9 @@ int main(int argc, char** argv)
     juce::XmlElement sequencerState("PLUGIN_EDITOR_STATE");
     sequencerState.setAttribute("eventModel",1);
     sequencerState.setAttribute("profileCsv",juce::String::fromUTF8(generalMidi.toCsv().c_str()));
+    sequencerState.setAttribute("tempo","137");
     sequencerState.setAttribute("meter","4/4");
-    sequencerState.setAttribute("bars",1);
+    sequencerState.setAttribute("bars",2);
     sequencerState.setAttribute("gridResolution",8);
     auto* sequencerEvent=sequencerState.createNewChildElement("EVENT");
     sequencerEvent->setAttribute("instrument",static_cast<int>(DrumInstrument::Kick));
@@ -401,6 +402,21 @@ int main(int argc, char** argv)
     sequencerEvent->setAttribute("velocity",100);
     sequencerEvent->setAttribute("beat",0.0);
     sequencerEvent->setAttribute("duration",0.1);
+    auto* laterKickEvent=sequencerState.createNewChildElement("EVENT");
+    laterKickEvent->setAttribute("instrument",static_cast<int>(DrumInstrument::Kick));
+    laterKickEvent->setAttribute("articulation",static_cast<int>(DrumArticulation::Default));
+    laterKickEvent->setAttribute("velocity",88);
+    laterKickEvent->setAttribute("beat",4.5);
+    laterKickEvent->setAttribute("duration",0.1);
+    auto* tempoMetadata=sequencerState.createNewChildElement("META");
+    tempoMetadata->setAttribute("kind","tempo");
+    tempoMetadata->setAttribute("beat",1.5);
+    tempoMetadata->setAttribute("microsecondsPerQuarterNote",500000);
+    auto* meterMetadata=sequencerState.createNewChildElement("META");
+    meterMetadata->setAttribute("kind","meter");
+    meterMetadata->setAttribute("beat",4.0);
+    meterMetadata->setAttribute("numerator",3);
+    meterMetadata->setAttribute("denominator",4);
     processor.setPluginEditorState(sequencerState);
     if (processor.getSequencerUnmappedEventCount()!=0) return 35;
     auto* missingMappedEvent=sequencerState.createNewChildElement("EVENT");
@@ -423,7 +439,16 @@ int main(int argc, char** argv)
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
     if (restored.getSamplePathForNote(36) != sample.getFullPathName()) return 12;
     const auto restoredEditorState=restored.getPluginEditorState();
-    if(!restoredEditorState||restoredEditorState->getIntAttribute("gridResolution",4)!=8)return 37;
+    if(!restoredEditorState||restoredEditorState->getIntAttribute("gridResolution",4)!=8
+        ||restoredEditorState->getStringAttribute("tempo")!="137"
+        ||restored.getSequencerUnmappedEventCount()!=1)return 37;
+    int restoredEventCount=0,restoredMetadataCount=0;
+    for(auto* child=restoredEditorState->getFirstChildElement();child!=nullptr;child=child->getNextElement())
+    {
+        if(child->hasTagName("EVENT"))++restoredEventCount;
+        else if(child->hasTagName("META"))++restoredMetadataCount;
+    }
+    if(restoredEditorState->getIntAttribute("bars",0)!=2||restoredEventCount!=3||restoredMetadataCount!=2)return 40;
     restored.prepareToPlay(44100.0, 128);
     const double fullVelocityPeak = renderPeak(restored, 36, 127);
     MagDrumAudioProcessor lowVelocity;
