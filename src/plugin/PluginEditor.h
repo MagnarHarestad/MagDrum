@@ -103,6 +103,8 @@ private:
     void finishPluginNoteScan(int saved, int sounding, int silent, int failures, bool cancelled, const juce::String& error, const juce::String& summary);
     void showLibraryTools();
     void handleLibraryTool(int);
+    void reviewVelocityLayers(const SampleBrowseRecord&);
+    void reviewRoundRobinGroups(const SampleBrowseRecord&);
     void finishMetadataFolderSync(const PortableMetadataSyncResult&);
     void applyLanguage();
     juce::File selectedSample() const;

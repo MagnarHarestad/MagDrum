@@ -2370,6 +2370,13 @@ void MagDrumAudioProcessorEditor::showLibraryTools()
     juce::PopupMenu menu;menu.addItem(1,magdrum::ui::localisedText("Edit sample tags…"));
     juce::PopupMenu categories;const char* names[]{"Unknown","Kick","Snare","Closed hi-hat","Open hi-hat","Pedal hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};for(int i=0;i<12;++i)categories.addItem(100+i,magdrum::ui::localisedText(names[i]));menu.addSubMenu(magdrum::ui::localisedText("Set drum category"),categories);
     menu.addSeparator();menu.addItem(2,magdrum::ui::localisedText("Find similar samples"));menu.addItem(3,magdrum::ui::localisedText("Find exact duplicates"));menu.addItem(4,magdrum::ui::localisedText("Find near duplicates"));menu.addItem(5,magdrum::ui::localisedText("Compare two selected waveforms"));menu.addSeparator();menu.addItem(6,magdrum::ui::localisedText("Scan history"));menu.addItem(7,magdrum::ui::localisedText("Export portable metadata…"));menu.addItem(8,magdrum::ui::localisedText("Import portable metadata…"));menu.addItem(9,magdrum::ui::localisedText("Sync metadata"));
+    const int selectedRow = indexedList.getSelectedRow();
+    const bool hasPluginKit = juce::isPositiveAndBelow(selectedRow, samples.size())
+        && samples.getReference(selectedRow).pluginIdentifier.isNotEmpty()
+        && samples.getReference(selectedRow).kitName.isNotEmpty();
+    menu.addSeparator();
+    menu.addItem(10, magdrum::ui::localisedText("View layer candidates"), hasPluginKit);
+    menu.addItem(11, magdrum::ui::localisedText("View round-robin candidates"), hasPluginKit);
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&libraryToolsButton),[safe](int result){if(safe!=nullptr)safe->handleLibraryTool(result);});
 }
 
@@ -2382,6 +2389,27 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
         if(database.setUserCategory(file,categories[action-100])){refreshSamples();status.setText(magdrum::ui::localisedText("Category saved as ")+magdrum::ui::localisedText(categories[action-100])+".",juce::dontSendNotification);}else status.setText(magdrum::ui::localisedText("Could not save the sample category."),juce::dontSendNotification);return;
     }
     if(action==0)return;
+    if(action==10||action==11)
+    {
+        const int row = indexedList.getSelectedRow();
+        if (!juce::isPositiveAndBelow(row, samples.size()))
+        {
+            status.setText(magdrum::ui::localisedText("Select a sample first."), juce::dontSendNotification);
+            return;
+        }
+        const auto sample = samples.getReference(row);
+        if (sample.pluginIdentifier.isEmpty() || sample.kitName.isEmpty())
+        {
+            status.setText(magdrum::ui::localisedText("The selected sample has no saved plugin source kit."),
+                           juce::dontSendNotification);
+            return;
+        }
+        if (action == 10)
+            reviewVelocityLayers(sample);
+        else
+            reviewRoundRobinGroups(sample);
+        return;
+    }
     if(action==1)
     {
         const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample before editing its tags."),juce::dontSendNotification);return;}
@@ -2435,6 +2463,192 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
         });
         return;
     }
+}
+
+void MagDrumAudioProcessorEditor::reviewVelocityLayers(const SampleBrowseRecord& sample)
+{
+    const auto candidates = database.getPluginVelocityLayerCandidates(sample.pluginIdentifier, sample.kitName);
+    const auto confirmed = database.getConfirmedPluginVelocityLayers(sample.pluginIdentifier, sample.kitName);
+    if (candidates.empty() && confirmed.empty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+            magdrum::ui::localisedText("Velocity layer candidates"),
+            magdrum::ui::localisedText("No candidates or confirmed ranges are saved for this kit. Scan the same MIDI notes at two or more velocity levels first."));
+        return;
+    }
+
+    auto report = magdrum::ui::localisedText("%1 heuristic boundary candidate(s). Listen to the captures before recording confirmed ranges. These ranges describe your review, not a claim about the plugin's internal sample zones.\n\nCandidates:\n")
+        .replace("%1", juce::String(candidates.size()));
+    const int shown = juce::jmin(48, static_cast<int>(candidates.size()));
+    for (int index = 0; index < shown; ++index)
+    {
+        const auto& candidate = candidates[static_cast<size_t>(index)];
+        report += magdrum::ui::localisedText("MIDI note %1: velocity %2 to %3 (distance %4)\n")
+            .replace("%1", juce::String(candidate.midiNote))
+            .replace("%2", juce::String(candidate.lowerVelocity))
+            .replace("%3", juce::String(candidate.upperVelocity))
+            .replace("%4", juce::String(candidate.spectralDistance, 2));
+    }
+    if (candidates.size() > static_cast<size_t>(shown))
+        report += magdrum::ui::localisedText("Showing the first %1 candidates.\n").replace("%1", juce::String(shown));
+    report += magdrum::ui::localisedText("\nUser-confirmed ranges:\n");
+
+    juce::String serialized;
+    for (const auto& range : confirmed)
+    {
+        report += magdrum::ui::localisedText("MIDI note %1: velocity %2 to %3\n")
+            .replace("%1", juce::String(range.midiNote))
+            .replace("%2", juce::String(range.minimumVelocity))
+            .replace("%3", juce::String(range.maximumVelocity));
+        if (serialized.isNotEmpty()) serialized += "; ";
+        serialized += juce::String(range.midiNote) + ":" + juce::String(range.minimumVelocity)
+            + "-" + juce::String(range.maximumVelocity);
+    }
+    if (confirmed.empty()) report += magdrum::ui::localisedText("None\n");
+
+    auto* dialog = new juce::AlertWindow(
+        magdrum::ui::localisedText("Review velocity layers — %1").replace("%1", sample.kitName),
+        report, juce::AlertWindow::InfoIcon);
+    dialog->addTextEditor("ranges", serialized, magdrum::ui::localisedText("Confirmed ranges (note:min-max; ...)"));
+    dialog->addButton(magdrum::ui::localisedText("Save confirmed ranges"), 1,
+                      juce::KeyPress(juce::KeyPress::returnKey));
+    dialog->addButton(magdrum::ui::localisedText("Close"), 0,
+                      juce::KeyPress(juce::KeyPress::escapeKey));
+    dialog->setSize(660, 480);
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    juce::Component::SafePointer<juce::AlertWindow> safeDialog(dialog);
+    const auto pluginIdentifier = sample.pluginIdentifier;
+    const auto kitName = sample.kitName;
+    dialog->enterModalState(true, juce::ModalCallbackFunction::create(
+        [safe, safeDialog, pluginIdentifier, kitName](int result)
+        {
+            const auto input = result == 1 && safeDialog != nullptr
+                ? safeDialog->getTextEditorContents("ranges") : juce::String();
+            if (safeDialog != nullptr) delete safeDialog.getComponent();
+            if (result != 1 || safe == nullptr) return;
+
+            juce::StringArray entries;
+            entries.addTokens(input, "; ,", "");
+            std::vector<PluginConfirmedVelocityLayerRange> ranges;
+            for (const auto& entry : entries)
+            {
+                const auto item = entry.trim();
+                if (item.isEmpty()) continue;
+                const auto noteText = item.upToFirstOccurrenceOf(":", false, false).trim();
+                const auto rangeText = item.fromFirstOccurrenceOf(":", false, false).trim();
+                const auto minimumText = rangeText.upToFirstOccurrenceOf("-", false, false).trim();
+                const auto maximumText = rangeText.fromFirstOccurrenceOf("-", false, false).trim();
+                if (noteText.isEmpty() || rangeText == item || minimumText.isEmpty() || maximumText.isEmpty()
+                    || !noteText.containsOnly("0123456789") || !minimumText.containsOnly("0123456789")
+                    || !maximumText.containsOnly("0123456789"))
+                {
+                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                        magdrum::ui::localisedText("Invalid velocity ranges"),
+                        magdrum::ui::localisedText("Use entries such as 36:1-48; 36:49-127."));
+                    return;
+                }
+                ranges.push_back({noteText.getIntValue(), minimumText.getIntValue(), maximumText.getIntValue()});
+            }
+
+            const auto kitId = safe->database.getPluginKitId(pluginIdentifier, kitName);
+            if (!kitId || !safe->database.replaceConfirmedPluginVelocityLayers(*kitId, ranges))
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                    magdrum::ui::localisedText("Could not save velocity ranges"),
+                    magdrum::ui::localisedText("Check that note numbers are 0–127, velocities are 1–127, and ranges for each note do not overlap."));
+            else
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+                    magdrum::ui::localisedText("Velocity ranges saved"),
+                    magdrum::ui::localisedText("The user-confirmed ranges are stored with this kit."));
+        }), false);
+}
+
+void MagDrumAudioProcessorEditor::reviewRoundRobinGroups(const SampleBrowseRecord& sample)
+{
+    const auto candidates = database.getPluginRoundRobinCandidates(sample.pluginIdentifier, sample.kitName);
+    const auto confirmed = database.getConfirmedPluginRoundRobinGroups(sample.pluginIdentifier, sample.kitName);
+    if (candidates.empty())
+    {
+        auto report = magdrum::ui::localisedText("No repeated-trigger variation candidates are saved. Scan with 2–8 repeats, then listen to the extra takes in the sample browser.");
+        for (const auto& group : confirmed)
+        {
+            juce::String takes;
+            for (const int take : group.takeIndices)
+            {
+                if (takes.isNotEmpty()) takes += " ";
+                takes += juce::String(take);
+            }
+            report += "\n" + magdrum::ui::localisedText("Confirmed MIDI note %1, velocity %2, takes %3\n")
+                .replace("%1", juce::String(group.midiNote))
+                .replace("%2", juce::String(group.velocity))
+                .replace("%3", takes);
+        }
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+            magdrum::ui::localisedText("Round-robin groups — %1").replace("%1", sample.kitName), report);
+        return;
+    }
+
+    auto report = magdrum::ui::localisedText("%1 heuristic variation candidate(s). Listen to the indexed takes; only confirm a group after reviewing its audio.\n\n")
+        .replace("%1", juce::String(candidates.size()));
+    juce::StringArray choices;
+    for (const auto& candidate : candidates)
+    {
+        const auto isConfirmed = std::any_of(confirmed.begin(), confirmed.end(), [&](const auto& group)
+        {
+            return group.midiNote == candidate.midiNote && group.velocity == candidate.velocity;
+        });
+        const auto confirmation = isConfirmed ? magdrum::ui::localisedText(" (confirmed)") : juce::String();
+        const auto label = magdrum::ui::localisedText("MIDI note %1, velocity %2 — %3 variants / %4 takes%5")
+            .replace("%1", juce::String(candidate.midiNote))
+            .replace("%2", juce::String(candidate.velocity))
+            .replace("%3", juce::String(candidate.distinctVariants))
+            .replace("%4", juce::String(candidate.takeCount))
+            .replace("%5", confirmation);
+        choices.add(label);
+        report += label + "\n";
+    }
+
+    auto* dialog = new juce::AlertWindow(
+        magdrum::ui::localisedText("Review round-robin groups — %1").replace("%1", sample.kitName),
+        report, juce::AlertWindow::InfoIcon);
+    dialog->addComboBox("group", choices, magdrum::ui::localisedText("Candidate"));
+    dialog->addButton(magdrum::ui::localisedText("Toggle confirmation"), 1,
+                      juce::KeyPress(juce::KeyPress::returnKey));
+    dialog->addButton(magdrum::ui::localisedText("Close"), 0,
+                      juce::KeyPress(juce::KeyPress::escapeKey));
+    dialog->setSize(660, 480);
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    juce::Component::SafePointer<juce::AlertWindow> safeDialog(dialog);
+    const auto pluginIdentifier = sample.pluginIdentifier;
+    const auto kitName = sample.kitName;
+    dialog->enterModalState(true, juce::ModalCallbackFunction::create(
+        [safe, safeDialog, candidates, confirmed, pluginIdentifier, kitName](int result)
+        {
+            const auto* selection = safeDialog != nullptr ? safeDialog->getComboBoxComponent("group") : nullptr;
+            const int index = selection != nullptr ? selection->getSelectedItemIndex() : -1;
+            if (safeDialog != nullptr) delete safeDialog.getComponent();
+            if (result != 1 || safe == nullptr || !juce::isPositiveAndBelow(index, static_cast<int>(candidates.size())))
+                return;
+
+            const auto& candidate = candidates[static_cast<size_t>(index)];
+            const auto isConfirmed = std::any_of(confirmed.begin(), confirmed.end(), [&](const auto& group)
+            {
+                return group.midiNote == candidate.midiNote && group.velocity == candidate.velocity;
+            });
+            const auto kitId = safe->database.getPluginKitId(pluginIdentifier, kitName);
+            const bool saved = kitId && (isConfirmed
+                ? safe->database.removeConfirmedPluginRoundRobinGroup(*kitId, candidate.midiNote, candidate.velocity)
+                : safe->database.confirmPluginRoundRobinGroup(*kitId, candidate.midiNote, candidate.velocity));
+            const auto title = saved
+                ? (isConfirmed ? magdrum::ui::localisedText("Confirmation removed")
+                               : magdrum::ui::localisedText("Round-robin group confirmed"))
+                : magdrum::ui::localisedText("Could not update group");
+            const auto message = saved
+                ? (isConfirmed ? magdrum::ui::localisedText("The group is no longer marked as confirmed.")
+                               : magdrum::ui::localisedText("The exact audible take indices are saved as a user-confirmed group."))
+                : magdrum::ui::localisedText("This candidate no longer has at least two indexed, audible takes.");
+            juce::AlertWindow::showMessageBoxAsync(saved ? juce::AlertWindow::InfoIcon : juce::AlertWindow::WarningIcon,
+                title, message);
+        }), false);
 }
 
 void MagDrumAudioProcessorEditor::finishMetadataFolderSync(const PortableMetadataSyncResult& result)
