@@ -105,8 +105,17 @@ private:
     void handleLibraryTool(int);
     void finishSampleLookup(int, bool, juce::Array<juce::File>,
                             std::vector<PerceptualDuplicateMatch>);
-    void reviewVelocityLayers(const SampleBrowseRecord&);
-    void reviewRoundRobinGroups(const SampleBrowseRecord&);
+    void finishSampleCandidateReview(int, bool, SampleBrowseRecord,
+                                     std::vector<PluginVelocityLayerBoundary>,
+                                     std::vector<PluginConfirmedVelocityLayerRange>,
+                                     std::vector<PluginRoundRobinCandidate>,
+                                     std::vector<PluginConfirmedRoundRobinGroup>);
+    void reviewVelocityLayers(const SampleBrowseRecord&,
+                              const std::vector<PluginVelocityLayerBoundary>&,
+                              const std::vector<PluginConfirmedVelocityLayerRange>&);
+    void reviewRoundRobinGroups(const SampleBrowseRecord&,
+                                const std::vector<PluginRoundRobinCandidate>&,
+                                const std::vector<PluginConfirmedRoundRobinGroup>&);
     void finishMetadataFolderSync(const PortableMetadataSyncResult&);
     void applyLanguage();
     juce::File selectedSample() const;
@@ -124,6 +133,8 @@ private:
     juce::ThreadPool sampleBrowseWorkers{1};
     juce::ThreadPool sampleLookupWorkers{1};
     bool sampleLookupRunning = false;
+    juce::ThreadPool sampleReviewWorkers{1};
+    bool sampleReviewRunning = false;
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
     std::vector<juce::File> defaultMidiPatterns;

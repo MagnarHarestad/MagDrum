@@ -445,6 +445,61 @@ private:
     Completion onComplete;
 };
 
+class PluginSampleCandidateReviewJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(int, bool, SampleBrowseRecord,
+        std::vector<PluginVelocityLayerBoundary>,
+        std::vector<PluginConfirmedVelocityLayerRange>,
+        std::vector<PluginRoundRobinCandidate>,
+        std::vector<PluginConfirmedRoundRobinGroup>)>;
+
+    PluginSampleCandidateReviewJob(juce::File databaseFile, SampleBrowseRecord sampleRecord,
+                                   int reviewAction, Completion completion)
+        : ThreadPoolJob("MagDrum VST sample candidate review"), dbPath(std::move(databaseFile)),
+          sample(std::move(sampleRecord)), action(reviewAction), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        SampleDatabase queryDatabase;
+        const bool opened = queryDatabase.open(dbPath);
+        std::vector<PluginVelocityLayerBoundary> layerCandidates;
+        std::vector<PluginConfirmedVelocityLayerRange> confirmedLayers;
+        std::vector<PluginRoundRobinCandidate> roundRobinCandidates;
+        std::vector<PluginConfirmedRoundRobinGroup> confirmedGroups;
+        if (opened && action == 10)
+        {
+            layerCandidates = queryDatabase.getPluginVelocityLayerCandidates(sample.pluginIdentifier, sample.kitName);
+            confirmedLayers = queryDatabase.getConfirmedPluginVelocityLayers(sample.pluginIdentifier, sample.kitName);
+        }
+        else if (opened && action == 11)
+        {
+            roundRobinCandidates = queryDatabase.getPluginRoundRobinCandidates(sample.pluginIdentifier, sample.kitName);
+            confirmedGroups = queryDatabase.getConfirmedPluginRoundRobinGroups(sample.pluginIdentifier, sample.kitName);
+        }
+
+        juce::MessageManager::callAsync(
+            [completion = std::move(onComplete), reviewAction = action, opened,
+             sampleRecord = std::move(sample), layerCandidates = std::move(layerCandidates),
+             confirmedLayers = std::move(confirmedLayers),
+             roundRobinCandidates = std::move(roundRobinCandidates),
+             confirmedGroups = std::move(confirmedGroups)]() mutable
+            {
+                if (completion)
+                    completion(reviewAction, opened, std::move(sampleRecord), std::move(layerCandidates),
+                               std::move(confirmedLayers), std::move(roundRobinCandidates),
+                               std::move(confirmedGroups));
+            });
+        return jobHasFinished;
+    }
+
+private:
+    juce::File dbPath;
+    SampleBrowseRecord sample;
+    int action = 0;
+    Completion onComplete;
+};
+
 class PluginMetadataFolderSyncJob final : public juce::ThreadPoolJob
 {
 public:
@@ -1103,7 +1158,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2447,10 +2502,33 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
                            juce::dontSendNotification);
             return;
         }
-        if (action == 10)
-            reviewVelocityLayers(sample);
-        else
-            reviewRoundRobinGroups(sample);
+        if (sampleReviewRunning)
+            return;
+        if (!databaseReady || databaseFile == juce::File())
+        {
+            status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                           juce::dontSendNotification);
+            return;
+        }
+
+        sampleReviewRunning = true;
+        libraryToolsButton.setEnabled(false);
+        status.setText(magdrum::ui::localisedText(action == 10 ? "View layer candidates"
+                                                               : "View round-robin candidates"),
+                       juce::dontSendNotification);
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        sampleReviewWorkers.addJob(new PluginSampleCandidateReviewJob(databaseFile, sample, action,
+            [safe](int reviewAction, bool opened, SampleBrowseRecord sampleRecord,
+                   std::vector<PluginVelocityLayerBoundary> layerCandidates,
+                   std::vector<PluginConfirmedVelocityLayerRange> confirmedLayers,
+                   std::vector<PluginRoundRobinCandidate> roundRobinCandidates,
+                   std::vector<PluginConfirmedRoundRobinGroup> confirmedGroups) mutable
+            {
+                if (safe != nullptr)
+                    safe->finishSampleCandidateReview(reviewAction, opened, std::move(sampleRecord),
+                        std::move(layerCandidates), std::move(confirmedLayers),
+                        std::move(roundRobinCandidates), std::move(confirmedGroups));
+            }), true);
         return;
     }
     if(action==1)
@@ -2566,10 +2644,33 @@ void MagDrumAudioProcessorEditor::finishSampleLookup(
                                             magdrum::ui::localisedText("Close"));
 }
 
-void MagDrumAudioProcessorEditor::reviewVelocityLayers(const SampleBrowseRecord& sample)
+void MagDrumAudioProcessorEditor::finishSampleCandidateReview(
+    int action, bool opened, SampleBrowseRecord sample,
+    std::vector<PluginVelocityLayerBoundary> layerCandidates,
+    std::vector<PluginConfirmedVelocityLayerRange> confirmedLayers,
+    std::vector<PluginRoundRobinCandidate> roundRobinCandidates,
+    std::vector<PluginConfirmedRoundRobinGroup> confirmedGroups)
 {
-    const auto candidates = database.getPluginVelocityLayerCandidates(sample.pluginIdentifier, sample.kitName);
-    const auto confirmed = database.getConfirmedPluginVelocityLayers(sample.pluginIdentifier, sample.kitName);
+    sampleReviewRunning = false;
+    libraryToolsButton.setEnabled(true);
+    if (!opened)
+    {
+        status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                       juce::dontSendNotification);
+        return;
+    }
+
+    if (action == 10)
+        reviewVelocityLayers(sample, layerCandidates, confirmedLayers);
+    else if (action == 11)
+        reviewRoundRobinGroups(sample, roundRobinCandidates, confirmedGroups);
+}
+
+void MagDrumAudioProcessorEditor::reviewVelocityLayers(
+    const SampleBrowseRecord& sample,
+    const std::vector<PluginVelocityLayerBoundary>& candidates,
+    const std::vector<PluginConfirmedVelocityLayerRange>& confirmed)
+{
     if (candidates.empty() && confirmed.empty())
     {
         juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
@@ -2663,10 +2764,11 @@ void MagDrumAudioProcessorEditor::reviewVelocityLayers(const SampleBrowseRecord&
         }), false);
 }
 
-void MagDrumAudioProcessorEditor::reviewRoundRobinGroups(const SampleBrowseRecord& sample)
+void MagDrumAudioProcessorEditor::reviewRoundRobinGroups(
+    const SampleBrowseRecord& sample,
+    const std::vector<PluginRoundRobinCandidate>& candidates,
+    const std::vector<PluginConfirmedRoundRobinGroup>& confirmed)
 {
-    const auto candidates = database.getPluginRoundRobinCandidates(sample.pluginIdentifier, sample.kitName);
-    const auto confirmed = database.getConfirmedPluginRoundRobinGroups(sample.pluginIdentifier, sample.kitName);
     if (candidates.empty())
     {
         auto report = magdrum::ui::localisedText("No repeated-trigger variation candidates are saved. Scan with 2–8 repeats, then listen to the extra takes in the sample browser.");
