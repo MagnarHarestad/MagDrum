@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string] $BuildDirectory = 'build/local-windows-dev-x64-20261116',
+    [string] $BuildDirectory = 'build/local-windows-dev-x64',
     [ValidateRange(1, 64)]
     [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8)
 )
