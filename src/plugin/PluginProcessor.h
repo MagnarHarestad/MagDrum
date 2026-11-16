@@ -6,6 +6,7 @@
 #include "DeferredNoteTriggers.h"
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -51,7 +52,7 @@ public:
     bool loadSampleForNote(int midiNote, const juce::File&);
     bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&);
     bool clearSamplesForNote(int midiNote);
-    bool previewSample(const juce::File&);
+    bool previewSample(const juce::File&, const std::function<bool()>& shouldCancel = {});
     // UI-thread pad/sequencer triggers are queued for the next audio block.
     // The queue is bounded so this call never blocks the host's audio thread.
     void triggerNote(int midiNote, int velocity = 100);

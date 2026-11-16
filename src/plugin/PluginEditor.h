@@ -5,6 +5,7 @@
 #include "../core/SequencerGrid.h"
 #include "../core/WavScanner.h"
 #include "../ui/MagDrumLookAndFeel.h"
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -47,6 +48,7 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void refreshSamples();
+    void previewSampleAsync(const juce::File&);
     void setPage(int);
     void setNote(int);
     void updateDrumNotes();
@@ -134,6 +136,8 @@ private:
     bool sampleBrowseQueryPending = false;
     std::uint64_t sampleBrowseGeneration = 0;
     juce::ThreadPool sampleBrowseWorkers{1};
+    std::atomic<std::uint64_t> samplePreviewGeneration{0};
+    juce::ThreadPool samplePreviewWorkers{1};
     juce::ThreadPool sampleLookupWorkers{1};
     bool sampleLookupRunning = false;
     juce::ThreadPool sampleReviewWorkers{1};

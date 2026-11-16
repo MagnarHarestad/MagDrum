@@ -138,19 +138,28 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     return removedAny;
 }
 
-bool MagDrumAudioProcessor::previewSample(const juce::File& file)
+bool MagDrumAudioProcessor::previewSample(const juce::File& file, const std::function<bool()>& shouldCancel)
 {
-    if (!file.existsAsFile()) return false;
-    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if ((shouldCancel && shouldCancel()) || !file.existsAsFile()) return false;
+    juce::AudioFormatManager previewFormats;
+    previewFormats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader(previewFormats.createReaderFor(file));
     if (!reader || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0
         || reader->lengthInSamples > reader->sampleRate * 600.0
         || reader->lengthInSamples > std::numeric_limits<int>::max()) return false;
     auto sample = std::make_unique<SampleData>();
     sample->sampleRate = reader->sampleRate;
     sample->audio.setSize(static_cast<int>(juce::jmin(2u, reader->numChannels)), static_cast<int>(reader->lengthInSamples));
-    if (!reader->read(sample->audio.getArrayOfWritePointers(), sample->audio.getNumChannels(), 0, sample->audio.getNumSamples())) return false;
+    constexpr int previewChunkSize = 16384;
+    for (int offset = 0; offset < sample->audio.getNumSamples(); offset += previewChunkSize)
+    {
+        if (shouldCancel && shouldCancel()) return false;
+        const int count = juce::jmin(previewChunkSize, sample->audio.getNumSamples() - offset);
+        if (!reader->read(&sample->audio, offset, count, offset, true, true)) return false;
+    }
     std::unique_ptr<SampleData> retiredPreview;
     const juce::ScopedLock lock(sampleLock);
+    if (shouldCancel && shouldCancel()) return false;
     const auto* old = previewData.get();
     if (old != nullptr)
         for (auto& voice : voices) if (voice.sample == old) voice = {};

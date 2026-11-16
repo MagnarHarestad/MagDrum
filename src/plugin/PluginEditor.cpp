@@ -446,6 +446,42 @@ private:
     Completion onComplete;
 };
 
+class PluginSamplePreviewJob final : public juce::ThreadPoolJob
+{
+public:
+    using Completion = std::function<void(bool)>;
+
+    PluginSamplePreviewJob(MagDrumAudioProcessor& audioProcessor, juce::File sampleFile,
+                           const std::atomic<std::uint64_t>& currentGeneration,
+                           std::uint64_t requestGeneration, Completion completion)
+        : ThreadPoolJob("MagDrum VST sample preview"), processor(audioProcessor),
+          file(std::move(sampleFile)), activeGeneration(currentGeneration),
+          generation(requestGeneration), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        const auto cancelled = [this]
+        {
+            return shouldExit() || activeGeneration.load(std::memory_order_acquire) != generation;
+        };
+        if (cancelled()) return jobHasFinished;
+        const bool previewed = processor.previewSample(file, cancelled);
+        if (cancelled()) return jobHasFinished;
+        juce::MessageManager::callAsync([completion = std::move(onComplete), previewed]() mutable
+        {
+            if (completion) completion(previewed);
+        });
+        return jobHasFinished;
+    }
+
+private:
+    MagDrumAudioProcessor& processor;
+    juce::File file;
+    const std::atomic<std::uint64_t>& activeGeneration;
+    std::uint64_t generation = 0;
+    Completion onComplete;
+};
+
 class PluginSampleCandidateReviewJob final : public juce::ThreadPoolJob
 {
 public:
@@ -1232,7 +1268,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();savePluginEditorState();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -1732,7 +1768,28 @@ void MagDrumAudioProcessorEditor::selectedRowsChanged(int row)
     }
     sampleDetails.setText(details,juce::dontSendNotification);
 }
-void MagDrumAudioProcessorEditor::listBoxItemDoubleClicked(int row,const juce::MouseEvent&){if(juce::isPositiveAndBelow(row,samples.size())){if(processor.previewSample(samples.getReference(row).file))status.setText(magdrum::ui::localisedText("Previewing ")+samples.getReference(row).file.getFileName(),juce::dontSendNotification);}}
+void MagDrumAudioProcessorEditor::listBoxItemDoubleClicked(int row,const juce::MouseEvent&){if(juce::isPositiveAndBelow(row,samples.size()))previewSampleAsync(samples.getReference(row).file);}
+
+void MagDrumAudioProcessorEditor::previewSampleAsync(const juce::File& file)
+{
+    if (!file.existsAsFile())
+    {
+        status.setText(magdrum::ui::localisedText("Could not read this audio file."), juce::dontSendNotification);
+        return;
+    }
+
+    const auto generation = samplePreviewGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
+    status.setText(magdrum::ui::localisedText("Previewing ") + file.getFileName(), juce::dontSendNotification);
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    samplePreviewWorkers.addJob(new PluginSamplePreviewJob(processor, file, samplePreviewGeneration, generation,
+        [safe, generation](bool previewed)
+        {
+            if (safe == nullptr || safe->samplePreviewGeneration.load(std::memory_order_acquire) != generation)
+                return;
+            if (!previewed)
+                safe->status.setText(magdrum::ui::localisedText("Could not read this audio file."), juce::dontSendNotification);
+        }), true);
+}
 
 void MagDrumAudioProcessorEditor::refreshSamples()
 {
@@ -3229,7 +3286,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     for(size_t lane=0;lane<steps.size();++lane)for(size_t step=0;step<steps[lane].size();++step)if(button==&steps[lane][step]){const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),static_cast<int>(step));if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
     if(button==&scanButton){chooseSampleFolder();return;}if(button==&scanDefaultsButton){scanDefaultLibraryFolders();return;}if(button==&instrumentScannerButton){launchInstrumentScanner();return;}if(button==&openSourceKitButton){openSourceKitForSelectedSample();return;}
     if(button==&searchButton){refreshSamples();return;}if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples&&!sampleBrowseQueryPending)loadSamplePage(false);return;}
-    if(button==&previewButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample to preview."),juce::dontSendNotification);return;}status.setText(processor.previewSample(file)?magdrum::ui::localisedText("Previewing ")+file.getFileName():magdrum::ui::localisedText("Could not read this audio file."),juce::dontSendNotification);return;}
+    if(button==&previewButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample to preview."),juce::dontSendNotification);return;}previewSampleAsync(file);return;}
     if(button==&assignButton){const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample first."),juce::dontSendNotification);return;}if(processor.loadSampleForVelocityRange(selectedNote,velocityMinimum(velocityRange.getText()),velocityMaximum(velocityRange.getText()),file)){updateLayerSummary();const auto padIndex=static_cast<size_t>(std::max(0,static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin())));status.setText(magdrum::ui::localisedText("Assigned ")+file.getFileName()+magdrum::ui::localisedText(" to ")+localizedPadName(padIndex)+".",juce::dontSendNotification);}else status.setText(magdrum::ui::localisedText("Assignment failed. Check velocity ranges and the eight-layer limit."),juce::dontSendNotification);return;}
     for(size_t i=0;i<pads.size();++i)if(button==&pads[i]){setNote(mappedPadNotes[i]);processor.triggerNote(selectedNote);status.setText(processor.getSampleLayersForNote(selectedNote).empty()?magdrum::ui::localisedText("Pad selected · no sample assigned yet."):magdrum::ui::localisedText("Played ")+localizedPadName(i),juce::dontSendNotification);return;}
     if(button==&clearPadButton){status.setText(processor.clearSamplesForNote(selectedNote)?magdrum::ui::localisedText("Pad cleared."):magdrum::ui::localisedText("Pad is already empty."),juce::dontSendNotification);updateLayerSummary();return;}

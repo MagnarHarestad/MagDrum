@@ -272,6 +272,20 @@ int main(int argc, char** argv)
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
 
+    auto previewProcessor = std::make_unique<MagDrumAudioProcessor>();
+    if (previewProcessor->previewSample(sample, [] { return true; })) return 250;
+    previewProcessor->prepareToPlay(44100.0, 128);
+    if (!previewProcessor->previewSample(sample)) return 251;
+    juce::AudioBuffer<float> previewAudio(2, 128);
+    juce::MidiBuffer previewMidi;
+    previewProcessor->processBlock(previewAudio, previewMidi);
+    double previewPeak = 0.0;
+    for (int channel = 0; channel < previewAudio.getNumChannels(); ++channel)
+        for (int sampleIndex = 0; sampleIndex < previewAudio.getNumSamples(); ++sampleIndex)
+            previewPeak = juce::jmax(previewPeak,
+                std::abs(static_cast<double>(previewAudio.getSample(channel, sampleIndex))));
+    if (previewPeak <= 0.05) return 252;
+
     MagDrumAudioProcessor contendedSampleUpdate;
     if (!contendedSampleUpdate.loadSampleForNote(36, sample)) return 208;
     contendedSampleUpdate.prepareToPlay(48000.0, 128);
@@ -656,6 +670,7 @@ int main(int argc, char** argv)
     rightPan.releaseResources();
     octaveUp.releaseResources();
     emptyNote.releaseResources();
+    previewProcessor->releaseResources();
     root.deleteRecursively();
     std::cout << "Scoped file copy, cancellation, MIDI playback, velocity, pad gain/pan/tune, state restoration and empty-note checks passed.\n";
     return 0;

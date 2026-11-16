@@ -131,6 +131,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'Sample similarity, exact and perceptual duplicate, velocity-layer, round-robin candidate, and portable metadata archive lookups run on background workers in the VST editor.',
         'Sequencer Play follows host PPQ and BPM during DAW playback, schedules exact MIDI mappings in the audio callback, and reports hits that have no exact mapping. When the host is stopped, the plugin tempo preview remains available.',
         'Sequencer base-tempo edits, pattern bars, semantic hits, MIDI mapping and tempo/meter metadata are preserved in the host plugin state.',
+        'Sample preview audio decodes in a cancellable background worker; newer preview requests supersede older ones. Pad and MIDI-map note labels use the Cubase octave convention (MIDI 36 = C1).',
         'MIDI export defaults to exact articulation mappings. The VST sequencer can save an explicit fallback preference and reports each fallback or omitted event after export.',
         'The installed-library scan includes Native Instruments shared Public Documents content, Steinberg shared and per-user Roaming AppData content, Cubase 15 Media and VST Sound locations, and detected Spectrasonics locations.',
         'The manual-example classifier selects an acoustic fingerprint weight using category-stratified validation with query filenames hidden. It remains a local, low-confidence review aid; the current folder-labeled collections do not demonstrate reliable audio-only or cross-kit classification.',
