@@ -252,6 +252,23 @@ int main(int argc, char** argv)
     }
     magdrum::ui::setLanguage(Language::english, false);
 
+    const std::array<std::pair<Language, const char*>, 7> pluginFolderLabels{{
+        {Language::german, "VST3-Ordner wählen"},
+        {Language::french, "Choisir un dossier VST3"},
+        {Language::spanish, "Elegir carpeta VST3"},
+        {Language::swedish, "Välj VST3-mapp"},
+        {Language::norwegian, "Velg VST3-mappe"},
+        {Language::danish, "Vælg VST3-mappe"},
+        {Language::finnish, "Valitse VST3-kansio"}
+    }};
+    for (const auto& [language, expected] : pluginFolderLabels)
+    {
+        magdrum::ui::setLanguage(language, false);
+        if (magdrum::ui::localisedText("Choose VST3 folder") != expected)
+            return 38;
+    }
+    magdrum::ui::setLanguage(Language::english, false);
+
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
 

@@ -1374,6 +1374,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     midiFallback.setButtonText(magdrum::ui::localisedText("Allow articulation fallback"));midiFallback.setTooltip(magdrum::ui::localisedText("When enabled, unsupported articulations use a mapping for the same drum instrument. Every substitution is listed after export."));
     refreshPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Refresh instruments"));
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText(pluginInventoryScanRunning ? "Cancel instrument scan" : "Scan plugin folders"));
+    choosePluginFolderButton.setButtonText(magdrum::ui::localisedText("Choose VST3 folder"));
     openPluginManagerButton.setButtonText(magdrum::ui::localisedText("Open instrument manager"));
     choosePluginPresetButton.setButtonText(magdrum::ui::localisedText("Choose VST3 preset"));
     importPluginPresetButton.setButtonText(magdrum::ui::localisedText(pluginPresetImportRunning && ! pluginPresetImportFromProgram ? "Cancel preset import" : "Import preset as kit"));
