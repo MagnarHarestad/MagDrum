@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <set>
+#include <vector>
 
 namespace
 {
@@ -27,6 +28,308 @@ bool decodeAcousticFingerprint(const juce::String& text, std::array<std::uint8_t
         if (high < 0 || low < 0) return false;
         values[index] = static_cast<std::uint8_t>((high << 4) | low);
     }
+    return true;
+}
+
+struct MetadataTagOperation
+{
+    juce::String operationId, sampleHash, tag;
+    std::int64_t sampleSize = 0;
+    bool isRemoval = false;
+    juce::StringArray observedAddIds;
+};
+
+bool validMetadataTagOperationId(const juce::String& value)
+{
+    return value.isNotEmpty() && value.length() <= 2048
+        && value.containsOnly("0123456789abcdefghijklmnopqrstuvwxyz:");
+}
+
+bool parseMetadataTagOperations(const juce::var& value, std::vector<MetadataTagOperation>& operations,
+                                juce::String& error)
+{
+    const auto* array = value.getArray();
+    if (array == nullptr || array->size() > 1000000)
+    {
+        error = "A synchronized device archive has an invalid tag-operation list.";
+        return false;
+    }
+
+    std::set<std::string> operationIds;
+    operations.clear();
+    operations.reserve(static_cast<size_t>(array->size()));
+    for (const auto& item : *array)
+    {
+        if (!item.isObject())
+        {
+            error = "A synchronized tag operation is invalid.";
+            return false;
+        }
+        MetadataTagOperation operation;
+        const auto idValue = item.getProperty("operation_id", {});
+        const auto hashValue = item.getProperty("sha256", {});
+        const auto sizeValue = item.getProperty("size_bytes", {});
+        const auto tagValue = item.getProperty("tag", {});
+        const auto typeValue = item.getProperty("type", {});
+        const auto observedValue = item.getProperty("observed_add_ids", {});
+        const auto* observed = observedValue.getArray();
+        if (!idValue.isString() || !hashValue.isString() || (!sizeValue.isInt() && !sizeValue.isInt64())
+            || !tagValue.isString() || !typeValue.isString() || observed == nullptr || observed->size() > 100000
+            || !validMetadataTagOperationId(idValue.toString()))
+        {
+            error = "A synchronized tag operation has invalid fields.";
+            return false;
+        }
+        operation.operationId = idValue.toString();
+        operation.sampleHash = hashValue.toString().toLowerCase();
+        operation.sampleSize = static_cast<juce::int64>(sizeValue);
+        operation.tag = tagValue.toString().trim();
+        const auto operationType = typeValue.toString();
+        operation.isRemoval = operationType == "remove";
+        if (operation.sampleHash.length() != 64 || !operation.sampleHash.containsOnly("0123456789abcdef")
+            || operation.sampleSize < 0 || operation.tag.isEmpty() || operation.tag.length() > 256
+            || (!operation.isRemoval && operationType != "add") || (!operation.isRemoval && !observed->isEmpty())
+            || !operationIds.insert(operation.operationId.toStdString()).second)
+        {
+            error = "A synchronized tag operation is duplicated or invalid.";
+            return false;
+        }
+        std::set<std::string> observedIds;
+        for (const auto& observedId : *observed)
+        {
+            if (!observedId.isString() || !validMetadataTagOperationId(observedId.toString())
+                || !observedIds.insert(observedId.toString().toStdString()).second)
+            {
+                error = "A synchronized tag removal has invalid observed-add references.";
+                return false;
+            }
+            operation.observedAddIds.add(observedId.toString());
+        }
+        operations.push_back(std::move(operation));
+    }
+    return true;
+}
+
+juce::var exportMetadataTagOperations(sqlite3* connection)
+{
+    juce::Array<juce::var> output;
+    sqlite3_stmt* query = nullptr;
+    const char* sql = "SELECT o.operation_id,o.sample_sha256,o.sample_size_bytes,o.tag,o.operation,r.add_operation_id FROM metadata_tag_operations o LEFT JOIN metadata_tag_observed_adds r ON r.remove_operation_id=o.operation_id ORDER BY o.operation_id,r.add_operation_id";
+    if (sqlite3_prepare_v2(connection, sql, -1, &query, nullptr) != SQLITE_OK)
+        return {};
+
+    juce::var current;
+    juce::String currentId;
+    juce::Array<juce::var> observedIds;
+    const auto finishCurrent = [&]
+    {
+        if (current.isObject())
+        {
+            current.getDynamicObject()->setProperty("observed_add_ids", juce::var(observedIds));
+            output.add(current);
+        }
+    };
+    int step = SQLITE_OK;
+    while ((step = sqlite3_step(query)) == SQLITE_ROW)
+    {
+        const auto* idValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+        const auto* hashValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 1));
+        const auto* tagValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 3));
+        const auto* typeValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 4));
+        if (idValue == nullptr || hashValue == nullptr || tagValue == nullptr || typeValue == nullptr)
+        {
+            sqlite3_finalize(query);
+            return {};
+        }
+        const juce::String operationId = juce::String::fromUTF8(idValue);
+        if (operationId != currentId)
+        {
+            finishCurrent();
+            currentId = operationId;
+            observedIds.clear();
+            current = juce::var(new juce::DynamicObject());
+            auto* object = current.getDynamicObject();
+            object->setProperty("operation_id", operationId);
+            object->setProperty("sha256", juce::String::fromUTF8(hashValue));
+            object->setProperty("size_bytes", juce::var(static_cast<juce::int64>(sqlite3_column_int64(query, 2))));
+            object->setProperty("tag", juce::String::fromUTF8(tagValue));
+            object->setProperty("type", juce::String::fromUTF8(typeValue));
+        }
+        const auto* observedValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 5));
+        if (observedValue != nullptr)
+            observedIds.add(juce::String::fromUTF8(observedValue));
+    }
+    sqlite3_finalize(query);
+    if (step != SQLITE_DONE)
+        return {};
+    finishCurrent();
+    if (output.size() > 1000000)
+        return {};
+    return juce::var(output);
+}
+
+bool mergeMetadataTagOperations(sqlite3* connection, const std::vector<MetadataTagOperation>& operations,
+                                std::set<std::pair<std::string, std::int64_t>>& touchedIdentities,
+                                juce::String& error)
+{
+    for (const auto& operation : operations)
+    {
+        sqlite3_stmt* find = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "SELECT sample_sha256,sample_size_bytes,tag,operation FROM metadata_tag_operations WHERE operation_id=?",
+                -1, &find, nullptr) != SQLITE_OK)
+        { error = "Could not inspect a synchronized tag operation."; return false; }
+        sqlite3_bind_text(find, 1, operation.operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        const int findResult = sqlite3_step(find);
+        const bool exists = findResult == SQLITE_ROW;
+        bool sameOperation = false;
+        if (exists)
+        {
+            const auto* hashValue = reinterpret_cast<const char*>(sqlite3_column_text(find, 0));
+            const auto* tagValue = reinterpret_cast<const char*>(sqlite3_column_text(find, 2));
+            const auto* typeValue = reinterpret_cast<const char*>(sqlite3_column_text(find, 3));
+            sameOperation = hashValue != nullptr && tagValue != nullptr && typeValue != nullptr
+                && operation.sampleHash == juce::String::fromUTF8(hashValue)
+                && operation.sampleSize == sqlite3_column_int64(find, 1)
+                && operation.tag == juce::String::fromUTF8(tagValue)
+                && juce::String(operation.isRemoval ? "remove" : "add") == juce::String::fromUTF8(typeValue);
+        }
+        sqlite3_finalize(find);
+        if ((!exists && findResult != SQLITE_DONE) || (exists && !sameOperation))
+        { error = "A synchronized tag-operation ID conflicts with existing metadata."; return false; }
+
+        if (!exists)
+        {
+            sqlite3_stmt* insert = nullptr;
+            if (sqlite3_prepare_v2(connection,
+                    "INSERT INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation) VALUES(?,?,?,?,?)",
+                    -1, &insert, nullptr) != SQLITE_OK)
+            { error = "Could not store a synchronized tag operation."; return false; }
+            sqlite3_bind_text(insert, 1, operation.operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(insert, 2, operation.sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(insert, 3, operation.sampleSize);
+            sqlite3_bind_text(insert, 4, operation.tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(insert, 5, operation.isRemoval ? "remove" : "add", -1, SQLITE_TRANSIENT);
+            const bool inserted = sqlite3_step(insert) == SQLITE_DONE;
+            sqlite3_finalize(insert);
+            if (!inserted)
+            { error = "Could not store a synchronized tag operation."; return false; }
+        }
+
+        if (operation.isRemoval)
+        {
+            std::set<std::string> existingReferences;
+            sqlite3_stmt* findReferences = nullptr;
+            if (sqlite3_prepare_v2(connection,
+                    "SELECT add_operation_id FROM metadata_tag_observed_adds WHERE remove_operation_id=?",
+                    -1, &findReferences, nullptr) != SQLITE_OK)
+            { error = "Could not inspect synchronized tag-removal references."; return false; }
+            sqlite3_bind_text(findReferences, 1, operation.operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            int referenceStep = SQLITE_OK;
+            while ((referenceStep = sqlite3_step(findReferences)) == SQLITE_ROW)
+            {
+                const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(findReferences, 0));
+                if (value != nullptr) existingReferences.insert(value);
+            }
+            sqlite3_finalize(findReferences);
+            if (referenceStep != SQLITE_DONE)
+            { error = "Could not inspect synchronized tag-removal references."; return false; }
+            std::set<std::string> incomingReferences;
+            for (const auto& id : operation.observedAddIds) incomingReferences.insert(id.toStdString());
+            if (exists && existingReferences != incomingReferences)
+            { error = "A synchronized tag removal changed its observed-add set."; return false; }
+
+            if (!exists)
+            {
+                sqlite3_stmt* insertReference = nullptr;
+                if (sqlite3_prepare_v2(connection,
+                        "INSERT INTO metadata_tag_observed_adds(remove_operation_id,add_operation_id) VALUES(?,?)",
+                        -1, &insertReference, nullptr) != SQLITE_OK)
+                { error = "Could not store synchronized tag-removal references."; return false; }
+                for (const auto& addId : operation.observedAddIds)
+                {
+                    sqlite3_reset(insertReference);
+                    sqlite3_clear_bindings(insertReference);
+                    sqlite3_bind_text(insertReference, 1, operation.operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(insertReference, 2, addId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    if (sqlite3_step(insertReference) != SQLITE_DONE)
+                    { sqlite3_finalize(insertReference); error = "Could not store synchronized tag-removal references."; return false; }
+                }
+                sqlite3_finalize(insertReference);
+            }
+        }
+        touchedIdentities.insert({operation.sampleHash.toStdString(), operation.sampleSize});
+    }
+    return true;
+}
+
+bool rebuildSynchronizedTags(sqlite3* connection, const std::string& hash, std::int64_t size,
+                             int& tagsAdded, juce::String& error)
+{
+    using TagPath = std::pair<std::string, std::string>;
+    std::set<TagPath> before;
+    sqlite3_stmt* query = nullptr;
+    if (sqlite3_prepare_v2(connection,
+            "SELECT s.path,t.tag FROM samples s JOIN sample_tags t ON t.path=s.path WHERE lower(s.fingerprint)=? AND s.size_bytes=?",
+            -1, &query, nullptr) != SQLITE_OK)
+    { error = "Could not read local tags before applying synchronized changes."; return false; }
+    sqlite3_bind_text(query, 1, hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(query, 2, size);
+    int step = SQLITE_OK;
+    while ((step = sqlite3_step(query)) == SQLITE_ROW)
+    {
+        const auto* pathValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+        const auto* tagValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 1));
+        if (pathValue != nullptr && tagValue != nullptr) before.insert({pathValue, tagValue});
+    }
+    sqlite3_finalize(query);
+    if (step != SQLITE_DONE)
+    { error = "Could not read local tags before applying synchronized changes."; return false; }
+
+    sqlite3_stmt* remove = nullptr;
+    if (sqlite3_prepare_v2(connection,
+            "DELETE FROM sample_tags WHERE path IN (SELECT path FROM samples WHERE lower(fingerprint)=? AND size_bytes=?)",
+            -1, &remove, nullptr) != SQLITE_OK)
+    { error = "Could not update synchronized sample tags."; return false; }
+    sqlite3_bind_text(remove, 1, hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(remove, 2, size);
+    bool ok = sqlite3_step(remove) == SQLITE_DONE;
+    sqlite3_finalize(remove);
+    if (!ok)
+    { error = "Could not update synchronized sample tags."; return false; }
+
+    sqlite3_stmt* insert = nullptr;
+    const char* insertSql = "INSERT OR IGNORE INTO sample_tags(path,tag) SELECT s.path,a.tag FROM samples s JOIN metadata_tag_operations a ON a.sample_sha256=? AND a.sample_size_bytes=? AND a.operation='add' WHERE lower(s.fingerprint)=? AND s.size_bytes=? AND NOT EXISTS(SELECT 1 FROM metadata_tag_observed_adds r WHERE r.add_operation_id=a.operation_id)";
+    if (sqlite3_prepare_v2(connection, insertSql, -1, &insert, nullptr) != SQLITE_OK)
+    { error = "Could not apply synchronized sample tags."; return false; }
+    sqlite3_bind_text(insert, 1, hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(insert, 2, size);
+    sqlite3_bind_text(insert, 3, hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(insert, 4, size);
+    ok = sqlite3_step(insert) == SQLITE_DONE;
+    sqlite3_finalize(insert);
+    if (!ok)
+    { error = "Could not apply synchronized sample tags."; return false; }
+
+    if (sqlite3_prepare_v2(connection,
+            "SELECT s.path,t.tag FROM samples s JOIN sample_tags t ON t.path=s.path WHERE lower(s.fingerprint)=? AND s.size_bytes=?",
+            -1, &query, nullptr) != SQLITE_OK)
+    { error = "Could not verify synchronized sample tags."; return false; }
+    sqlite3_bind_text(query, 1, hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(query, 2, size);
+    std::set<TagPath> after;
+    step = SQLITE_OK;
+    while ((step = sqlite3_step(query)) == SQLITE_ROW)
+    {
+        const auto* pathValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 0));
+        const auto* tagValue = reinterpret_cast<const char*>(sqlite3_column_text(query, 1));
+        if (pathValue != nullptr && tagValue != nullptr) after.insert({pathValue, tagValue});
+    }
+    sqlite3_finalize(query);
+    if (step != SQLITE_DONE)
+    { error = "Could not verify synchronized sample tags."; return false; }
+    for (const auto& tag : after)
+        if (before.find(tag) == before.end()) ++tagsAdded;
     return true;
 }
 }
@@ -140,6 +443,30 @@ bool SampleDatabase::open(const juce::File& file)
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN transient_count INTEGER NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     sqlite3_exec(connection, "ALTER TABLE plugin_sounds ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
     if (sqlite3_exec(connection, "CREATE TABLE IF NOT EXISTS sample_tags(path TEXT NOT NULL,tag TEXT NOT NULL,PRIMARY KEY(path,tag),FOREIGN KEY(path) REFERENCES samples(path) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS sample_tags_tag ON sample_tags(tag)", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+    const char* metadataTagOperationSchema = R"sql(
+        CREATE TABLE IF NOT EXISTS metadata_tag_operations(
+            operation_id TEXT PRIMARY KEY,
+            sample_sha256 TEXT NOT NULL,
+            sample_size_bytes INTEGER NOT NULL CHECK(sample_size_bytes>=0),
+            tag TEXT NOT NULL,
+            operation TEXT NOT NULL CHECK(operation IN ('add','remove'))
+        );
+        CREATE INDEX IF NOT EXISTS metadata_tag_operations_sample
+            ON metadata_tag_operations(sample_sha256,sample_size_bytes,tag,operation);
+        CREATE TABLE IF NOT EXISTS metadata_tag_observed_adds(
+            remove_operation_id TEXT NOT NULL,
+            add_operation_id TEXT NOT NULL,
+            PRIMARY KEY(remove_operation_id,add_operation_id)
+        );
+        UPDATE schema_info SET version=max(version,19) WHERE singleton=1;
+        INSERT OR IGNORE INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation)
+        SELECT 'legacy:' || lower(s.fingerprint) || ':' || s.size_bytes || ':' || lower(hex(t.tag)),
+               lower(s.fingerprint),s.size_bytes,t.tag,'add'
+        FROM samples s JOIN sample_tags t ON t.path=s.path
+        WHERE length(s.fingerprint)=64 AND lower(s.fingerprint) NOT GLOB '*[^0-9a-f]*' AND s.size_bytes>=0;
+    )sql";
+    if (sqlite3_exec(connection, metadataTagOperationSchema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     if (sqlite3_exec(connection,"CREATE TABLE IF NOT EXISTS mapping_profiles(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS mapping_entries(profile_name TEXT NOT NULL,instrument INTEGER NOT NULL,articulation INTEGER NOT NULL,note INTEGER NOT NULL CHECK(note BETWEEN 0 AND 127),PRIMARY KEY(profile_name,instrument,articulation),FOREIGN KEY(profile_name) REFERENCES mapping_profiles(name) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS sample_scan_history(id INTEGER PRIMARY KEY,root_path TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,status TEXT NOT NULL DEFAULT 'running',files_considered INTEGER NOT NULL DEFAULT 0,files_skipped INTEGER NOT NULL DEFAULT 0,files_indexed INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,last_completed_path TEXT NOT NULL DEFAULT '')",nullptr,nullptr,nullptr)!=SQLITE_OK)
         return false;
@@ -1098,20 +1425,167 @@ std::vector<ScannedSample> SampleDatabase::getManualClassificationExamples(int l
 
 bool SampleDatabase::setUserTags(const juce::File& file, const juce::StringArray& tags)
 {
-    if (connection == nullptr) return false;
-    const auto path=file.getFullPathName();
-    if (sqlite3_exec(connection,"BEGIN IMMEDIATE",nullptr,nullptr,nullptr)!=SQLITE_OK) return false;
-    sqlite3_stmt* remove=nullptr;
-    if(sqlite3_prepare_v2(connection,"DELETE FROM sample_tags WHERE path=?",-1,&remove,nullptr)!=SQLITE_OK){sqlite3_exec(connection,"ROLLBACK",nullptr,nullptr,nullptr);return false;}
-    sqlite3_bind_text(remove,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);
-    bool ok=sqlite3_step(remove)==SQLITE_DONE; sqlite3_finalize(remove);
-    sqlite3_stmt* add=nullptr;
-    if(ok && sqlite3_prepare_v2(connection,"INSERT OR IGNORE INTO sample_tags(path,tag) SELECT ?,? WHERE EXISTS(SELECT 1 FROM samples WHERE path=?)",-1,&add,nullptr)==SQLITE_OK){
-      for(const auto& raw:tags){auto tag=raw.trim();if(tag.isEmpty())continue;sqlite3_reset(add);sqlite3_clear_bindings(add);sqlite3_bind_text(add,1,path.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_text(add,2,tag.toRawUTF8(),-1,SQLITE_TRANSIENT);sqlite3_bind_text(add,3,path.toRawUTF8(),-1,SQLITE_TRANSIENT);if(sqlite3_step(add)!=SQLITE_DONE){ok=false;break;}}
-      sqlite3_finalize(add);
-    } else if(ok) ok=false;
-    sqlite3_exec(connection,ok?"COMMIT":"ROLLBACK",nullptr,nullptr,nullptr);
-    return ok;
+    if (connection == nullptr || sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+
+    const auto path = file.getFullPathName();
+    juce::StringArray currentTags, requestedTags;
+    sqlite3_stmt* current = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT tag FROM sample_tags WHERE path=? ORDER BY tag", -1, &current, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
+    sqlite3_bind_text(current, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    int currentStep = SQLITE_OK;
+    while ((currentStep = sqlite3_step(current)) == SQLITE_ROW)
+    {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(current, 0));
+        if (value != nullptr) currentTags.add(juce::String::fromUTF8(value));
+    }
+    sqlite3_finalize(current);
+    if (currentStep != SQLITE_DONE)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
+    for (const auto& raw : tags)
+    {
+        const auto tag = raw.trim();
+        if (tag.isNotEmpty()) requestedTags.addIfNotAlreadyThere(tag);
+    }
+
+    juce::String sampleHash;
+    std::int64_t sampleSize = 0;
+    sqlite3_stmt* identity = nullptr;
+    if (sqlite3_prepare_v2(connection, "SELECT fingerprint,size_bytes FROM samples WHERE path=?", -1, &identity, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
+    sqlite3_bind_text(identity, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const int identityStep = sqlite3_step(identity);
+    if (identityStep == SQLITE_ROW)
+    {
+        const auto* hashValue = reinterpret_cast<const char*>(sqlite3_column_text(identity, 0));
+        if (hashValue != nullptr) sampleHash = juce::String::fromUTF8(hashValue).toLowerCase();
+        sampleSize = sqlite3_column_int64(identity, 1);
+    }
+    sqlite3_finalize(identity);
+    if (identityStep != SQLITE_ROW && identityStep != SQLITE_DONE)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
+    const bool hasPortableIdentity = sampleHash.length() == 64 && sampleHash.containsOnly("0123456789abcdef") && sampleSize >= 0;
+
+    const auto recordAdd = [&](const juce::String& tag)
+    {
+        sqlite3_stmt* operation = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "INSERT INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation) VALUES(?,?,?,?,'add')",
+                -1, &operation, nullptr) != SQLITE_OK)
+            return false;
+        const auto operationId = juce::Uuid().toString().removeCharacters("{}-").toLowerCase();
+        sqlite3_bind_text(operation, 1, operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(operation, 2, sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(operation, 3, sampleSize);
+        sqlite3_bind_text(operation, 4, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        const bool ok = sqlite3_step(operation) == SQLITE_DONE;
+        sqlite3_finalize(operation);
+        return ok;
+    };
+    const auto recordRemoval = [&](const juce::String& tag)
+    {
+        std::vector<juce::String> observedAdds;
+        sqlite3_stmt* findAdds = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "SELECT a.operation_id FROM metadata_tag_operations a WHERE a.sample_sha256=? AND a.sample_size_bytes=? AND a.tag=? AND a.operation='add' AND NOT EXISTS(SELECT 1 FROM metadata_tag_observed_adds r WHERE r.add_operation_id=a.operation_id)",
+                -1, &findAdds, nullptr) != SQLITE_OK)
+            return false;
+        sqlite3_bind_text(findAdds, 1, sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(findAdds, 2, sampleSize);
+        sqlite3_bind_text(findAdds, 3, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        int step = SQLITE_OK;
+        while ((step = sqlite3_step(findAdds)) == SQLITE_ROW)
+        {
+            const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(findAdds, 0));
+            if (value != nullptr) observedAdds.emplace_back(juce::String::fromUTF8(value));
+        }
+        sqlite3_finalize(findAdds);
+        if (step != SQLITE_DONE) return false;
+
+        const auto removalId = juce::Uuid().toString().removeCharacters("{}-").toLowerCase();
+        sqlite3_stmt* insertRemoval = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "INSERT INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation) VALUES(?,?,?,?,'remove')",
+                -1, &insertRemoval, nullptr) != SQLITE_OK)
+            return false;
+        sqlite3_bind_text(insertRemoval, 1, removalId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(insertRemoval, 2, sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(insertRemoval, 3, sampleSize);
+        sqlite3_bind_text(insertRemoval, 4, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        bool ok = sqlite3_step(insertRemoval) == SQLITE_DONE;
+        sqlite3_finalize(insertRemoval);
+        if (!ok) return false;
+
+        sqlite3_stmt* insertObserved = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "INSERT INTO metadata_tag_observed_adds(remove_operation_id,add_operation_id) VALUES(?,?)",
+                -1, &insertObserved, nullptr) != SQLITE_OK)
+            return false;
+        for (const auto& addId : observedAdds)
+        {
+            sqlite3_reset(insertObserved);
+            sqlite3_clear_bindings(insertObserved);
+            sqlite3_bind_text(insertObserved, 1, removalId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(insertObserved, 2, addId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(insertObserved) != SQLITE_DONE) { ok = false; break; }
+        }
+        sqlite3_finalize(insertObserved);
+        return ok;
+    };
+
+    bool ok = true;
+    if (hasPortableIdentity)
+    {
+        for (const auto& oldTag : currentTags)
+            if (!requestedTags.contains(oldTag))
+                ok = recordRemoval(oldTag) && ok;
+        for (const auto& newTag : requestedTags)
+            if (!currentTags.contains(newTag))
+                ok = recordAdd(newTag) && ok;
+    }
+
+    sqlite3_stmt* remove = nullptr;
+    if (ok && sqlite3_prepare_v2(connection, "DELETE FROM sample_tags WHERE path=?", -1, &remove, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_text(remove, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+        ok = sqlite3_step(remove) == SQLITE_DONE;
+        sqlite3_finalize(remove);
+    }
+    else if (ok) ok = false;
+
+    sqlite3_stmt* add = nullptr;
+    if (ok && sqlite3_prepare_v2(connection,
+            "INSERT OR IGNORE INTO sample_tags(path,tag) SELECT ?,? WHERE EXISTS(SELECT 1 FROM samples WHERE path=?)",
+            -1, &add, nullptr) == SQLITE_OK)
+    {
+        for (const auto& tag : requestedTags)
+        {
+            sqlite3_reset(add);
+            sqlite3_clear_bindings(add);
+            sqlite3_bind_text(add, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(add, 2, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(add, 3, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(add) != SQLITE_DONE) { ok = false; break; }
+        }
+        sqlite3_finalize(add);
+    }
+    else if (ok) ok = false;
+
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    return ok && transactionResult == SQLITE_OK;
 }
 
 juce::StringArray SampleDatabase::getUserTags(const juce::File& file) const
@@ -1374,7 +1848,7 @@ juce::var SampleDatabase::exportPortableMetadata() const
     return archive;
 }
 
-PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::var& archive)
+PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::var& archive, bool mergeTags)
 {
     PortableMetadataMergeResult result;
     if (connection == nullptr || !archive.isObject()
@@ -1531,11 +2005,29 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
 
             for (const auto& tag : sample.tags)
             {
+                if (!mergeTags) continue;
                 sqlite3_reset(insertTag); sqlite3_clear_bindings(insertTag);
                 sqlite3_bind_text(insertTag, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(insertTag, 2, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
                 if (sqlite3_step(insertTag) != SQLITE_DONE) { ok = false; break; }
-                result.tagsAdded += sqlite3_changes(connection) > 0 ? 1 : 0;
+                const bool inserted = sqlite3_changes(connection) > 0;
+                result.tagsAdded += inserted ? 1 : 0;
+                if (inserted)
+                {
+                    const auto operationId = juce::Uuid().toString().removeCharacters("{}-").toLowerCase();
+                    sqlite3_stmt* addOperation = nullptr;
+                    if (sqlite3_prepare_v2(connection,
+                            "INSERT OR IGNORE INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation) VALUES(?,?,?,?,'add')",
+                            -1, &addOperation, nullptr) != SQLITE_OK)
+                    { ok = false; break; }
+                    sqlite3_bind_text(addOperation, 1, operationId.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(addOperation, 2, sample.hash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_int64(addOperation, 3, sample.size);
+                    sqlite3_bind_text(addOperation, 4, tag.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                    ok = sqlite3_step(addOperation) == SQLITE_DONE;
+                    sqlite3_finalize(addOperation);
+                    if (!ok) break;
+                }
             }
             if (!ok) break;
         }
@@ -1639,8 +2131,14 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
         return result;
     }
 
+    struct IncomingSyncArchive
+    {
+        juce::var metadata;
+        bool hasTagOperations = false;
+        std::vector<MetadataTagOperation> tagOperations;
+    };
     std::int64_t totalArchiveBytes = 0;
-    std::vector<juce::var> incomingArchives;
+    std::vector<IncomingSyncArchive> incomingArchives;
     for (const auto& archiveFile : archives)
     {
         const auto archiveBytes = archiveFile.getSize();
@@ -1662,9 +2160,25 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
             return result;
         }
 
+        const auto syncVersionValue = archive.getProperty("sync_version", {});
+        const int syncVersion = syncVersionValue.isVoid() ? 1 : static_cast<int>(syncVersionValue);
+        if ((!syncVersionValue.isVoid() && !syncVersionValue.isInt() && !syncVersionValue.isInt64())
+            || (syncVersion != 1 && syncVersion != 2))
+        {
+            result.error = "A synchronized device archive uses an unsupported sync version.";
+            return result;
+        }
+
+        IncomingSyncArchive incoming;
+        incoming.metadata = archive;
+        incoming.hasTagOperations = syncVersion == 2;
+        if (incoming.hasTagOperations
+            && !parseMetadataTagOperations(archive.getProperty("tag_operations", {}), incoming.tagOperations, result.error))
+            return result;
+
         if (archive.getProperty("device_id", {}).toString() == result.deviceId)
             continue;
-        incomingArchives.push_back(archive);
+        incomingArchives.push_back(std::move(incoming));
     }
 
     if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
@@ -1672,9 +2186,23 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
         result.error = "Could not start the metadata sync transaction.";
         return result;
     }
+    const char* backfillTagOperations = R"sql(
+        INSERT OR IGNORE INTO metadata_tag_operations(operation_id,sample_sha256,sample_size_bytes,tag,operation)
+        SELECT 'legacy:' || lower(s.fingerprint) || ':' || s.size_bytes || ':' || lower(hex(t.tag)),
+               lower(s.fingerprint),s.size_bytes,t.tag,'add'
+        FROM samples s JOIN sample_tags t ON t.path=s.path
+        WHERE length(s.fingerprint)=64 AND lower(s.fingerprint) NOT GLOB '*[^0-9a-f]*' AND s.size_bytes>=0;
+    )sql";
+    if (sqlite3_exec(connection, backfillTagOperations, nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not migrate existing user tags for synchronization.";
+        return result;
+    }
+    std::set<std::pair<std::string, std::int64_t>> touchedTagIdentities;
     for (const auto& archive : incomingArchives)
     {
-        const auto merged = mergePortableMetadata(archive);
+        const auto merged = mergePortableMetadata(archive.metadata, !archive.hasTagOperations);
         if (!merged.ok)
         {
             sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
@@ -1696,6 +2224,35 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
         result.categoryConflicts += merged.categoryConflicts;
         result.profilesAdded += merged.profilesAdded;
         result.profileConflicts += merged.profileConflicts;
+        if (archive.hasTagOperations
+            && !mergeMetadataTagOperations(connection, archive.tagOperations, touchedTagIdentities, result.error))
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            result.archivesMerged = 0;
+            result.samplesMatched = 0;
+            result.samplesUnavailable = 0;
+            result.tagsAdded = 0;
+            result.categoryConflicts = 0;
+            result.profilesAdded = 0;
+            result.profileConflicts = 0;
+            return result;
+        }
+    }
+
+    for (const auto& identity : touchedTagIdentities)
+    {
+        if (!rebuildSynchronizedTags(connection, identity.first, identity.second, result.tagsAdded, result.error))
+        {
+            sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+            result.archivesMerged = 0;
+            result.samplesMatched = 0;
+            result.samplesUnavailable = 0;
+            result.tagsAdded = 0;
+            result.categoryConflicts = 0;
+            result.profilesAdded = 0;
+            result.profileConflicts = 0;
+            return result;
+        }
     }
 
     auto snapshot = exportPortableMetadata();
@@ -1707,6 +2264,15 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
     }
     snapshot.getDynamicObject()->setProperty("device_id", result.deviceId);
     snapshot.getDynamicObject()->setProperty("created_utc", juce::Time::getCurrentTime().toISO8601(true));
+    snapshot.getDynamicObject()->setProperty("sync_version", 2);
+    const auto tagOperations = exportMetadataTagOperations(connection);
+    if (!tagOperations.isArray())
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        result.error = "Could not create this device's tag-operation snapshot.";
+        return result;
+    }
+    snapshot.getDynamicObject()->setProperty("tag_operations", tagOperations);
     const auto ownArchive = folder.getChildFile("MagDrum-sync-" + result.deviceId + ".json");
     juce::TemporaryFile stagedSnapshot(ownArchive);
     if (!stagedSnapshot.getFile().replaceWithText(juce::JSON::toString(snapshot, true)))

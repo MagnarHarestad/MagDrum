@@ -187,7 +187,7 @@ public:
     std::optional<MidiMappingProfile> loadMappingProfile(const juce::String& name) const;
     juce::StringArray getMappingProfileNames() const;
     juce::var exportPortableMetadata() const;
-    PortableMetadataMergeResult mergePortableMetadata(const juce::var& archive);
+    PortableMetadataMergeResult mergePortableMetadata(const juce::var& archive, bool mergeTags = true);
     PortableMetadataSyncResult syncPortableMetadataFolder(const juce::File& folder);
     juce::Array<juce::File> getAllPaths() const;
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
