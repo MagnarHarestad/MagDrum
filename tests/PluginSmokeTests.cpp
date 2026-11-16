@@ -1,4 +1,5 @@
 #include "plugin/PluginProcessor.h"
+#include "plugin/DrumPadLayout.h"
 #include "core/PluginScanProcess.h"
 #include "core/ScopedFileAccess.h"
 #include "ui/MagDrumLocalization.h"
@@ -19,6 +20,12 @@
 
 namespace
 {
+static_assert(magdrum::plugin::bossDr660PadLayout.size() == 16);
+static_assert(magdrum::plugin::bossDr660PadLayout[12].midiNote == 36);
+static_assert(magdrum::plugin::bossDr660PadLayout[13].midiNote == 38);
+static_assert(magdrum::plugin::bossDr660PadLayout[14].midiNote == 44);
+static_assert(magdrum::plugin::bossDr660PadLayout[15].midiNote == 56);
+
 thread_local bool countRealtimeAllocations = false;
 thread_local int realtimeAllocationCount = 0;
 

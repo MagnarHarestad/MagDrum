@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "DrumPadLayout.h"
 #include "../core/MagDrumPaths.h"
 #include "../core/PluginSourceKitRequest.h"
 #include "../core/PluginNoteScanner.h"
@@ -27,6 +28,10 @@
 namespace
 {
 using magdrum::ui::Palette;
+using magdrum::plugin::defaultPadNotes;
+using magdrum::plugin::padArticulations;
+using magdrum::plugin::padInstruments;
+using magdrum::plugin::padNames;
 #if defined(MAGDRUM_MOBILE_PLUGIN_UI)
 constexpr bool hasPluginScannerPage = false;
 constexpr int highestEditorPage = 3;
@@ -34,14 +39,9 @@ constexpr int highestEditorPage = 3;
 constexpr bool hasPluginScannerPage = true;
 constexpr int highestEditorPage = 4;
 #endif
-// Pad array order is row-major to match the Boss DR-660: kick/snare/pedal HH/cowbell on the bottom row.
-constexpr std::array<int, 16> defaultPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
-constexpr std::array<const char*, 16> padNames{"Crash 1","Crash 2","Bell","Ride","Tom 1","Tom 2","Tom 3","Tom 4","Side Stick","Clap","Closed HH","Open HH","Kick","Snare","Pedal HH","Cowbell"};
 constexpr std::array<const char*, 8> laneNames{"KICK","SNARE","CLOSED HAT","OPEN HAT","TOM","RIDE","CRASH","CLAP"};
 constexpr std::array<const char*, 8> laneDisplayNames{"Kick","Snare","Closed hi-hat","Open hi-hat","Tom","Ride","Crash","Clap"};
 using I=DrumInstrument;using A=DrumArticulation;
-constexpr std::array<I,16> padInstruments{I::Crash,I::Crash,I::Ride,I::Ride,I::Tom,I::Tom,I::Tom,I::Tom,I::Rimshot,I::Clap,I::HiHat,I::HiHat,I::Kick,I::Snare,I::HiHat,I::Percussion};
-constexpr std::array<A,16> padArticulations{A::Default,A::Default,A::Bell,A::Bow,A::High,A::Mid,A::Low,A::Low,A::SideStick,A::Default,A::Closed,A::Open,A::Default,A::Default,A::Pedal,A::Default};
 constexpr std::array<I,8> laneInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Ride,I::Crash,I::Clap};
 constexpr std::array<A,8> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default};
 juce::Colour categoryColour(const juce::String& value) { return Palette::forDrumCategory(value); }
