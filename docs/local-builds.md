@@ -1,8 +1,16 @@
+# Local builds
+
+**Active target: Windows x64/Cubase Pro 15.** Current package: [v0.1.2-test.201](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.201), VST3 0.1.2.201. Windows x64 Release CTest passed 2/2; the installed bundle passed the isolated 128-note scanner/render test. Cubase Pro 15 hands-on validation remains pending.
+
+**Platform pause:** Do not start Linux/macOS builds, tests, packaging, publication or installation until the user explicitly requests resumption. Their commands and reports below are retained for historical reference only. Windows ARM64 is also outside the current x64 target.
+
+## Recent release history
+
 Release v0.1.2-test.199 was built from source commit 87c348e and includes a fix for the Plugin Scanner VST3-folder chooser disappearing after tab changes. Windows x64 Release CTest passes 2/2, including the new page-visibility regression check. Package SHA-256: `02e3f9fae9e916ed3ba749ad7399552ff20479707c0b69f5dddd39d50e7c5654`. The package contains the no-UAC per-user installer; the .199 Cubase acceptance pass is pending.
 
 Release v0.1.2-test.193 contains the Windows x64 app, VST3 and packaged UAC launcher. Release CTest passes 2/2; installer launcher, package contents, embedded product versions, license notices and Microsoft runtime signature were checked. SHA-256: `ffb078941c2fd977031e513b9aced4f059ca9ee911f92ea6c8ca72f3a9a32d22`. Compile/link took 5:12, CTest 0:44 and packaging 0:04. The installed .193 module SHA-256 is `1beaed5a9acad3980662f90b8bdd5ced4a6d7fe97cf8e58620e98b3885c175b2`; its isolated JUCE host-integration smoke test passed. The `.cmd` launcher requests normal UAC, asks before replacing the system plugin, and keeps errors visible when elevation is cancelled. The prior `.190` Windows package remains documented below.\r\n\r\nPublic release [v0.1.2-test.159](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.159) contains Windows x64 with folder-sync validation that rejects tag-removal references to another sample/tag and rolls back the merge. Windows x64 Release CTest passes 2/2. SHA-256: c8f7aee38982c04e8229bb367a973c0bc349eae737b748d00b5e863942fba035. The .159 bundle was installed at `C:\Program Files\Common Files\VST3\MagDrum.vst3`; its module SHA-256 is `892ae3e7af51f58705b5d6f51cc0d80d2e0e39097b6dcc9fddf3324b5e8f348d`. The installed bundle passes the isolated JUCE host-integration smoke test. Its predecessor .157 was moved outside the scan path; backup module SHA-256 is `E0901F112994DDD85FBC4442AA05C4E4D1F90AF6B5B5DF947E8AC17FE1C05E23`. Cubase rescan and hands-on validation remain pending. Cubase rescan and hands-on validation remain pending.
 Release [v0.1.2-test.158](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.158) contains Windows x64 with observed-remove user-tag synchronization. Windows x64 Release CTest passes 2/2. SHA-256: Windows x64 ba31e2b04eb9ed947744a2c835780a0620ba70c54397620c2a4bbfcb8030bef7. Windows ARM64 and Linux x64 remain in [v0.1.1-test.156](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.156); Windows .159 was the installed version at that time; the previous .157 bundle is backed up outside Cubase scan paths. Rescan and hands-on validation remain pending.
-# Local builds
+## Windows x64 build
 
 Public release [v0.1.1-test.157](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.157) contains the Windows x64 package built from source commit d584943; the VST3 product version is 0.1.2. Windows x64 Release CTest passes 2/2, including deferred MIDI-trigger handling during sample-table updates. SHA-256: Windows x64 ba31e2b04eb9ed947744a2c835780a0620ba70c54397620c2a4bbfcb8030bef7. Release [v0.1.1-test.156](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.1-test.156) still provides the Windows ARM64 and Linux x64 packages with their previously recorded checksums and validation. Windows ARM64 has not been run natively; Linux x64 passes its prior Release CTest and Ardour scanner checks. The .157 system VST3 was installed at C:\Program Files\Common Files\VST3\MagDrum.vst3, then replaced by .159; its backup is under %ProgramData%\MagDrum\VST3-backups. Cubase rescan and hands-on validation remain pending.
 
@@ -12,7 +20,7 @@ The Windows x64 app, VST3, tests, and Cubase ZIP can be built without a GitHub A
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1
 ```
 
-Once Visual Studio's ARM64 C++ tools are installed, build the Windows ARM64 package from the same Windows x64 computer with:
+Windows ARM64 is outside the current x64/Cubase target. If the user later requests an ARM64 build, use this command:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build-Windows.ps1 -Architecture ARM64
@@ -88,11 +96,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Publish-LocalRelease.ps1 `
 
 The package arguments are explicit by design. A release may contain only the platforms available for that test; its generated notes identify the missing packages. Windows x64 is built and test-verified. Windows ARM64 is included as an architecture-checked test package but has not been runtime-tested on ARM64 Windows. Linux x64 is built and test-verified under WSL but needs native host smoke testing. macOS Intel and Apple Silicon packages are not present.
 
-## Other platform builds
+## Historical and deferred platform notes
 
 - **Windows ARM64:** Release v0.1.1-test.113 contains the app and VST3 cross-compiled from this x64 host. Both test executables were cross-compiled, and `dumpbin /headers` reports ARM64 for all four binaries. Tests and runtime still need validation on native ARM64 Windows. JUCE omitted the optional `moduleinfo.json` because its ARM64 helper cannot run on an AMD64 host.
 - **Linux x64:** The v0.1.1-test.119 app/VST3 package was built under Ubuntu 24.04 WSL2, both CTest suites passed, and linked dependencies resolve. Native Linux host/DAW smoke testing remains open.
-- **macOS Intel and Apple Silicon, AU:** use `Build-Unix.sh` on a Mac with compatible Xcode and the required SDKs. Those Apple targets cannot be built on the current Windows host.
+- **macOS Intel and Apple Silicon, AU (paused):** historical build instructions use `Build-Unix.sh` on a Mac with compatible Xcode and the required SDKs. Do not run this target until the user explicitly resumes it.
 - **iOS/iPadOS AUv3:** an initial source target is present, and its shared C++ builds as a Windows desktop preview. The iOS target itself has not been built or packaged. It requires macOS/Xcode, a registered Apple app group, signing setup, and device testing.
 
-**Local flow:** build and test a package on its available host using `Build-Windows.ps1` or `Build-Unix.sh`, transfer finished archives to the release machine, and optionally run `Publish-LocalRelease.ps1` with explicit archive names. To test Windows x64 in Cubase, use `latest-publish/MagDrum-Windows-x64.zip` and follow the bundled installer README; uploading a release is not required for local testing. No Actions minutes are used. Windows ARM64 can be cross-compiled here, but requires native runtime testing. Linux x64 builds and passes tests in WSL Ubuntu 24.04. Run `bash tools/Test-LinuxVST3-Ardour.sh latest-publish/MagDrum-Linux-x64.tar.gz` to verify the release bundle is recognized by Ardour 8 or later; this scanner check does not replace an interactive DAW session and audio-device test on native Linux. Intel and Apple Silicon macOS still need a Mac (Apple Silicon can cross-build Intel). This computer alone cannot produce and verify all five desktop packages. Self-hosted Actions runners are not required. `Publish-LocalRelease.ps1` authenticated through the Git Credential Manager keyring and created releases without starting GitHub Actions jobs.
+**Current local flow:** build and test Windows x64 using `Build-Windows.ps1`, then verify the package in Cubase Pro 15. Linux/macOS commands above are historical and paused; do not invoke them or publish new packages until the user explicitly asks to resume those targets. Existing Linux/ARM64 artifacts and their earlier test results are historical only. Self-hosted Actions runners are not required; the local Windows release flow uses no Actions minutes.

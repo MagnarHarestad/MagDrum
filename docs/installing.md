@@ -24,18 +24,18 @@ host, so the bundle has no `moduleinfo.json`. Steinberg marks that metadata file
 optional; a host can query the module factory instead, which may take longer.
 For Cubase Pro 15 on Windows x64, use the Windows x64 package above.
 
-## macOS Intel and Apple Silicon
+## macOS Intel and Apple Silicon — paused
 
-Unzip `MagDrum-macOS-Intel.zip` on Intel Macs or
+No macOS package is currently published, and macOS work is paused until requested. For future reference, if a package is supplied, unzip `MagDrum-macOS-Intel.zip` on Intel Macs or
 `MagDrum-macOS-AppleSilicon.zip` on Apple Silicon. Move `MagDrum.app` to Applications. To install the
 plugin formats, copy `MagDrum.vst3` to `~/Library/Audio/Plug-Ins/VST3` and
 `MagDrum.component` to `~/Library/Audio/Plug-Ins/Components`, creating those
 folders if needed. Restart the DAW and rescan its plugins. Separate native
 architecture builds are configured; neither archive is published yet.
 
-## Linux x64
+## Linux x64 — paused
 
-Extract `MagDrum-Linux-x64.tar.gz`. Launch `MagDrum` for the standalone app, or
+Only the historical v0.1.1-test.156 Linux package exists; new Linux work is paused until requested. If using that existing archive, extract `MagDrum-Linux-x64.tar.gz`, launch `MagDrum` for the standalone app, or
 run `./Install-MagDrum-Linux.sh` to install/update it and the VST3 to your user
 folders. Previous versions are moved outside the VST3 scan path. The Linux VST3 bundle includes the MagDrum scanner helper for isolated instrument discovery and note scans; runtime with native Linux instruments and DAWs still needs validation. The host
 system must provide the GUI/audio libraries used by the build.
