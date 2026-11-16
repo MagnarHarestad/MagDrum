@@ -11,6 +11,7 @@
 #include "../core/WavScanner.h"
 #include "../core/AudioClassifier.h"
 #include "../ui/MagDrumLocalization.h"
+#include "../ui/PortableMetadataConflictDialog.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -3278,13 +3279,24 @@ void MagDrumAudioProcessorEditor::finishMetadataFolderSync(const PortableMetadat
     auto message=magdrum::ui::localisedText("Metadata sync saved. Merged {devices} other device(s); {matched} sample matches, {unavailable} unavailable, {tags} new tags, {profiles} new profiles.");
     message=message.replace("{devices}",juce::String(result.archivesMerged)).replace("{matched}",juce::String(result.samplesMatched)).replace("{unavailable}",juce::String(result.samplesUnavailable)).replace("{tags}",juce::String(result.tagsAdded)).replace("{profiles}",juce::String(result.profilesAdded));
     status.setText(message,juce::dontSendNotification);
-    if(result.categoryConflicts>0||result.profileConflicts>0||result.samplesUnavailable>0)
+    if(!result.conflicts.empty())
     {
-        juce::String report;
-        if(result.categoryConflicts>0)report+=magdrum::ui::localisedText("Manual-category conflicts preserved: {count}").replace("{count}",juce::String(result.categoryConflicts))+"\n";
-        if(result.profileConflicts>0)report+=magdrum::ui::localisedText("Mapping-profile conflicts preserved: {count}").replace("{count}",juce::String(result.profileConflicts))+"\n";
-        if(result.samplesUnavailable>0)report+=magdrum::ui::localisedText("Sample identities not found on this device: {count}").replace("{count}",juce::String(result.samplesUnavailable))+"\n";
-        report+=magdrum::ui::localisedText("Conflicting local values were not overwritten. No audio files or plugin states were imported.");
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        magdrum::ui::showPortableMetadataConflictReview(this,result.conflicts,
+            [safe](const PortableMetadataConflict& conflict,const PortableMetadataConflictCandidate& choice)
+            {return safe!=nullptr&&safe->database.resolvePortableMetadataConflict(conflict,choice);},
+            [safe](int applied,int failed,int skipped)
+            {
+                if(safe==nullptr)return;
+                safe->refreshSamples();
+                safe->status.setText(magdrum::ui::localisedText("Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged.")
+                    .replace("{applied}",juce::String(applied)).replace("{failed}",juce::String(failed)).replace("{skipped}",juce::String(skipped)),
+                    juce::dontSendNotification);
+            });
+    }
+    else if(result.samplesUnavailable>0)
+    {
+        const auto report=magdrum::ui::localisedText("Sample identities not found on this device: {count}").replace("{count}",juce::String(result.samplesUnavailable));
         juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Metadata import report"),report,magdrum::ui::localisedText("Close"));
     }
 }
@@ -3324,6 +3336,21 @@ void MagDrumAudioProcessorEditor::finishPortableMetadataArchive(
         .replace("{profiles}",juce::String(merged.profilesAdded))
         .replace("{error}",merged.error);
     status.setText(message,juce::dontSendNotification);
+    if(merged.ok&&!merged.conflicts.empty())
+    {
+        juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+        magdrum::ui::showPortableMetadataConflictReview(this,merged.conflicts,
+            [safe](const PortableMetadataConflict& conflict,const PortableMetadataConflictCandidate& choice)
+            {return safe!=nullptr&&safe->database.resolvePortableMetadataConflict(conflict,choice);},
+            [safe](int applied,int failed,int skipped)
+            {
+                if(safe==nullptr)return;
+                safe->refreshSamples();
+                safe->status.setText(magdrum::ui::localisedText("Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged.")
+                    .replace("{applied}",juce::String(applied)).replace("{failed}",juce::String(failed)).replace("{skipped}",juce::String(skipped)),
+                    juce::dontSendNotification);
+            });
+    }
 }
 
 void MagDrumAudioProcessorEditor::setPage(int value){page=juce::jlimit(0,highestEditorPage,value);resized();repaint();}

@@ -1906,6 +1906,30 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
         return result;
     }
 
+    const auto sourceDeviceId = archive.getProperty("device_id", {}).toString();
+    const auto appendConflictValue = [&result, &sourceDeviceId](PortableMetadataConflict conflict,
+                                                                 const juce::String& incomingValue)
+    {
+        auto existing = std::find_if(result.conflicts.begin(), result.conflicts.end(),
+            [&conflict](const PortableMetadataConflict& candidate)
+            {
+                return candidate.type == conflict.type && candidate.sampleHash == conflict.sampleHash
+                    && candidate.sampleSizeBytes == conflict.sampleSizeBytes
+                    && candidate.profileName == conflict.profileName && candidate.localValue == conflict.localValue;
+            });
+        if (existing == result.conflicts.end())
+        {
+            result.conflicts.push_back(std::move(conflict));
+            existing = std::prev(result.conflicts.end());
+        }
+        const bool duplicate = std::any_of(existing->incomingValues.begin(), existing->incomingValues.end(),
+            [&sourceDeviceId, &incomingValue](const PortableMetadataConflictCandidate& candidate)
+            {
+                return candidate.deviceId == sourceDeviceId && candidate.value == incomingValue;
+            });
+        if (!duplicate) existing->incomingValues.push_back({sourceDeviceId, incomingValue});
+    };
+
     struct IncomingSample
     {
         juce::String hash;
@@ -2035,9 +2059,28 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
                     sqlite3_bind_text(updateCategory, 3, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
                     if (sqlite3_step(updateCategory) != SQLITE_DONE) { ok = false; break; }
                 }
-                else if (currentCategory != incoming) ++result.categoryConflicts;
+                else if (currentCategory != incoming)
+                {
+                    PortableMetadataConflict conflict;
+                    conflict.type = PortableMetadataConflictType::manualCategory;
+                    conflict.sampleHash = sample.hash;
+                    conflict.sampleSizeBytes = sample.size;
+                    conflict.localValue = currentCategory;
+                    appendConflictValue(std::move(conflict), incoming);
+                }
             }
-            else if (sample.categories.size() > 1) ++result.categoryConflicts;
+            else if (sample.categories.size() > 1)
+            {
+                for (const auto& incoming : sample.categories)
+                {
+                    PortableMetadataConflict conflict;
+                    conflict.type = PortableMetadataConflictType::manualCategory;
+                    conflict.sampleHash = sample.hash;
+                    conflict.sampleSizeBytes = sample.size;
+                    conflict.localValue = currentCategory;
+                    appendConflictValue(std::move(conflict), incoming);
+                }
+            }
 
             for (const auto& tag : sample.tags)
             {
@@ -2080,7 +2123,14 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
         if (profileStep == SQLITE_ROW)
         {
             const auto existing = loadMappingProfile(incoming.name);
-            if (!existing || existing->toCsv() != incoming.profile.toCsv()) ++result.profileConflicts;
+            if (!existing || existing->toCsv() != incoming.profile.toCsv())
+            {
+                PortableMetadataConflict conflict;
+                conflict.type = PortableMetadataConflictType::mappingProfile;
+                conflict.profileName = incoming.name;
+                conflict.localValue = existing ? juce::String::fromUTF8(existing->toCsv().c_str()) : juce::String();
+                appendConflictValue(std::move(conflict), juce::String::fromUTF8(incoming.profile.toCsv().c_str()));
+            }
             continue;
         }
         if (profileStep != SQLITE_DONE) { ok = false; break; }
@@ -2105,6 +2155,10 @@ PortableMetadataMergeResult SampleDatabase::mergePortableMetadata(const juce::va
         ? sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr)
         : SQLITE_OK;
     result.ok = ok && transactionResult == SQLITE_OK;
+    result.categoryConflicts = static_cast<int>(std::count_if(result.conflicts.begin(), result.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::manualCategory; }));
+    result.profileConflicts = static_cast<int>(std::count_if(result.conflicts.begin(), result.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::mappingProfile; }));
     if (!result.ok) result.error = "Metadata import failed; no changes were committed.";
     return result;
 }
@@ -2257,9 +2311,35 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
         result.samplesMatched += merged.samplesMatched;
         result.samplesUnavailable += merged.samplesUnavailable;
         result.tagsAdded += merged.tagsAdded;
-        result.categoryConflicts += merged.categoryConflicts;
+        for (const auto& conflict : merged.conflicts)
+        {
+            auto existing = std::find_if(result.conflicts.begin(), result.conflicts.end(),
+                [&conflict](const PortableMetadataConflict& candidate)
+                {
+                    return candidate.type == conflict.type && candidate.sampleHash == conflict.sampleHash
+                        && candidate.sampleSizeBytes == conflict.sampleSizeBytes
+                        && candidate.profileName == conflict.profileName && candidate.localValue == conflict.localValue;
+                });
+            if (existing == result.conflicts.end())
+            {
+                result.conflicts.push_back(conflict);
+                existing = std::prev(result.conflicts.end());
+            }
+            for (const auto& incoming : conflict.incomingValues)
+            {
+                const bool duplicate = std::any_of(existing->incomingValues.begin(), existing->incomingValues.end(),
+                    [&incoming](const PortableMetadataConflictCandidate& candidate)
+                    {
+                        return candidate.deviceId == incoming.deviceId && candidate.value == incoming.value;
+                    });
+                if (!duplicate) existing->incomingValues.push_back(incoming);
+            }
+        }
         result.profilesAdded += merged.profilesAdded;
-        result.profileConflicts += merged.profileConflicts;
+        result.categoryConflicts = static_cast<int>(std::count_if(result.conflicts.begin(), result.conflicts.end(),
+            [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::manualCategory; }));
+        result.profileConflicts = static_cast<int>(std::count_if(result.conflicts.begin(), result.conflicts.end(),
+            [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::mappingProfile; }));
         if (archive.hasTagOperations
             && !mergeMetadataTagOperations(connection, archive.tagOperations, touchedTagIdentities, result.error))
         {
@@ -2344,6 +2424,117 @@ PortableMetadataSyncResult SampleDatabase::syncPortableMetadataFolder(const juce
 
     result.ok = true;
     return result;
+}
+
+bool SampleDatabase::resolvePortableMetadataConflict(const PortableMetadataConflict& conflict,
+                                                     const PortableMetadataConflictCandidate& choice)
+{
+    if (connection == nullptr || choice.value.isEmpty() || sqlite3_get_autocommit(connection) == 0)
+        return false;
+    const bool isKnownChoice = std::any_of(conflict.incomingValues.begin(), conflict.incomingValues.end(),
+        [&choice](const PortableMetadataConflictCandidate& candidate)
+        {
+            return candidate.deviceId == choice.deviceId && candidate.value == choice.value;
+        });
+    if (!isKnownChoice || sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK)
+        return false;
+
+    bool ok = true;
+    if (conflict.type == PortableMetadataConflictType::manualCategory)
+    {
+        sqlite3_stmt* updatePluginSounds = nullptr;
+        sqlite3_stmt* updateSamples = nullptr;
+        if (sqlite3_prepare_v2(connection,
+                "UPDATE plugin_sounds SET category=? WHERE preview_path IN "
+                "(SELECT path FROM samples WHERE fingerprint=? AND size_bytes=? AND COALESCE(user_category,'')=?)",
+                -1, &updatePluginSounds, nullptr) != SQLITE_OK
+            || sqlite3_prepare_v2(connection,
+                "UPDATE samples SET user_category=?,category=? WHERE fingerprint=? AND size_bytes=? AND COALESCE(user_category,'')=?",
+                -1, &updateSamples, nullptr) != SQLITE_OK)
+            ok = false;
+
+        if (ok)
+        {
+            sqlite3_bind_text(updatePluginSounds, 1, choice.value.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(updatePluginSounds, 2, conflict.sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(updatePluginSounds, 3, conflict.sampleSizeBytes);
+            sqlite3_bind_text(updatePluginSounds, 4, conflict.localValue.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            ok = sqlite3_step(updatePluginSounds) == SQLITE_DONE;
+        }
+        if (ok)
+        {
+            sqlite3_bind_text(updateSamples, 1, choice.value.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(updateSamples, 2, choice.value.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(updateSamples, 3, conflict.sampleHash.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(updateSamples, 4, conflict.sampleSizeBytes);
+            sqlite3_bind_text(updateSamples, 5, conflict.localValue.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            ok = sqlite3_step(updateSamples) == SQLITE_DONE && sqlite3_changes(connection) > 0;
+        }
+        if (updatePluginSounds != nullptr) sqlite3_finalize(updatePluginSounds);
+        if (updateSamples != nullptr) sqlite3_finalize(updateSamples);
+    }
+    else if (conflict.type == PortableMetadataConflictType::mappingProfile)
+    {
+        const auto current = loadMappingProfile(conflict.profileName);
+        const auto currentCsv = current ? juce::String::fromUTF8(current->toCsv().c_str()) : juce::String();
+        const auto incoming = MidiMappingProfile::fromCsv(choice.value.toStdString());
+        ok = !conflict.profileName.trim().isEmpty() && currentCsv == conflict.localValue && incoming.has_value();
+
+        sqlite3_stmt* ensureProfile = nullptr;
+        sqlite3_stmt* removeMappings = nullptr;
+        sqlite3_stmt* addMapping = nullptr;
+        if (ok && (sqlite3_prepare_v2(connection,
+                "INSERT INTO mapping_profiles(name) VALUES(?) ON CONFLICT(name) DO NOTHING",
+                -1, &ensureProfile, nullptr) != SQLITE_OK
+            || sqlite3_prepare_v2(connection, "DELETE FROM mapping_entries WHERE profile_name=?",
+                -1, &removeMappings, nullptr) != SQLITE_OK
+            || sqlite3_prepare_v2(connection,
+                "INSERT INTO mapping_entries(profile_name,instrument,articulation,note) VALUES(?,?,?,?)",
+                -1, &addMapping, nullptr) != SQLITE_OK))
+            ok = false;
+        if (ok)
+        {
+            sqlite3_bind_text(ensureProfile, 1, conflict.profileName.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            ok = sqlite3_step(ensureProfile) == SQLITE_DONE;
+        }
+        if (ok)
+        {
+            sqlite3_bind_text(removeMappings, 1, conflict.profileName.toRawUTF8(), -1, SQLITE_TRANSIENT);
+            ok = sqlite3_step(removeMappings) == SQLITE_DONE;
+        }
+        if (ok)
+        {
+            for (const auto& mapping : incoming->entries())
+            {
+                sqlite3_reset(addMapping);
+                sqlite3_clear_bindings(addMapping);
+                sqlite3_bind_text(addMapping, 1, conflict.profileName.toRawUTF8(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(addMapping, 2, static_cast<int>(mapping.instrument));
+                sqlite3_bind_int(addMapping, 3, static_cast<int>(mapping.articulation));
+                sqlite3_bind_int(addMapping, 4, mapping.note);
+                if (sqlite3_step(addMapping) != SQLITE_DONE)
+                {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if (ensureProfile != nullptr) sqlite3_finalize(ensureProfile);
+        if (removeMappings != nullptr) sqlite3_finalize(removeMappings);
+        if (addMapping != nullptr) sqlite3_finalize(addMapping);
+    }
+    else
+    {
+        ok = false;
+    }
+
+    const int transactionResult = sqlite3_exec(connection, ok ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    if (transactionResult != SQLITE_OK)
+    {
+        sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+        return false;
+    }
+    return ok;
 }
 
 bool SampleDatabase::insertSample(const juce::File& file, double duration, int channels, double rate)

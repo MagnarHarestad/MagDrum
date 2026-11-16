@@ -17,7 +17,7 @@ $architectureKey = $Architecture.ToLowerInvariant()
 $buildDirectory = if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     # Keep one warm x64 Release tree across test releases; clean trees rebuild all of JUCE.
     $defaultBuildDirectory = if ($Architecture -eq 'x64') {
-        'build/local-windows-release-20261116'
+        'build/local-windows-release'
     }
     else {
         "build/local-windows-$architectureKey"

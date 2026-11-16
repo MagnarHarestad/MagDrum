@@ -108,11 +108,32 @@ struct PerceptualDuplicateMatch
     double similarity = 0.0;
 };
 
+enum class PortableMetadataConflictType
+{
+    manualCategory,
+    mappingProfile
+};
+
+struct PortableMetadataConflictCandidate
+{
+    juce::String deviceId;
+    juce::String value;
+};
+
+struct PortableMetadataConflict
+{
+    PortableMetadataConflictType type = PortableMetadataConflictType::manualCategory;
+    juce::String sampleHash, profileName, localValue;
+    std::int64_t sampleSizeBytes = 0;
+    std::vector<PortableMetadataConflictCandidate> incomingValues;
+};
+
 struct PortableMetadataMergeResult
 {
     bool ok = false;
     int samplesMatched = 0, samplesUnavailable = 0, tagsAdded = 0;
     int categoryConflicts = 0, profilesAdded = 0, profileConflicts = 0;
+    std::vector<PortableMetadataConflict> conflicts;
     juce::String error;
 };
 
@@ -189,6 +210,8 @@ public:
     juce::var exportPortableMetadata() const;
     PortableMetadataMergeResult mergePortableMetadata(const juce::var& archive, bool mergeTags = true);
     PortableMetadataSyncResult syncPortableMetadataFolder(const juce::File& folder);
+    bool resolvePortableMetadataConflict(const PortableMetadataConflict& conflict,
+                                         const PortableMetadataConflictCandidate& choice);
     juce::Array<juce::File> getAllPaths() const;
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;

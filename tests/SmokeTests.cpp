@@ -730,6 +730,33 @@ int runSmokeTests(int argc,char** argv)
     if(!importedProfile||importedProfile->entries().size()!=gm.entries().size()||importedProfile->toMidi(hat,false).note!=std::optional<std::uint8_t>(42))return 42;
     if(MidiMappingProfile::fromCsv("instrument,articulation,note\nHiHat,Closed,128\n")||MidiMappingProfile::fromCsv("wrong,header,order\n"))return 43;
     const auto portableSourceRoot=root.getSiblingFile("MagDrumPortableMetadataSource"),portableTargetRoot=root.getSiblingFile("MagDrumPortableMetadataTarget");portableSourceRoot.deleteRecursively();portableTargetRoot.deleteRecursively();if(!portableSourceRoot.createDirectory().wasOk()||!portableTargetRoot.createDirectory().wasOk())return 229;const auto portableSourceFile=portableSourceRoot.getChildFile("same-content.wav"),portableTargetFile=portableTargetRoot.getChildFile("same-content.wav");if(!waveFile.copyFileTo(portableSourceFile)||!portableSourceFile.copyFileTo(portableTargetFile))return 230;const auto portableSourceSamples=scanner.scan(portableSourceRoot),portableTargetSamples=scanner.scan(portableTargetRoot);if(portableSourceSamples.size()!=1||portableTargetSamples.size()!=1)return 231;SampleDatabase portableSourceDb,portableTargetDb;const auto portableSourceDbFile=root.getSiblingFile("MagDrumPortableMetadataSource.sqlite3"),portableTargetDbFile=root.getSiblingFile("MagDrumPortableMetadataTarget.sqlite3");portableSourceDbFile.deleteFile();portableTargetDbFile.deleteFile();if(!portableSourceDb.open(portableSourceDbFile)||!portableTargetDb.open(portableTargetDbFile)||!portableSourceDb.insertSample(portableSourceSamples.getFirst())||!portableTargetDb.insertSample(portableTargetSamples.getFirst()))return 232;juce::StringArray portableTags{"Shared tag"};if(!portableSourceDb.setUserCategory(portableSourceFile,"Snare")||!portableSourceDb.setUserTags(portableSourceFile,portableTags)||!portableSourceDb.saveMappingProfile("Portable GM",gm))return 233;const auto portableArchive=portableSourceDb.exportPortableMetadata();const auto portableJson=juce::JSON::toString(portableArchive,false);if(portableJson.contains(portableSourceFile.getFullPathName())||portableJson.contains(portableTargetFile.getFullPathName()))return 234;const auto parsedPortableArchive=juce::JSON::parse(portableJson);juce::StringArray localPortableTags{"Local tag"};if(!portableTargetDb.setUserTags(portableTargetFile,localPortableTags))return 235;auto portableImport=portableTargetDb.mergePortableMetadata(parsedPortableArchive);if(!portableImport.ok||portableImport.samplesMatched!=1||portableImport.samplesUnavailable!=0||portableImport.tagsAdded!=1||portableImport.profilesAdded!=1||portableImport.categoryConflicts!=0||portableImport.profileConflicts!=0||portableTargetDb.getCategory(portableTargetFile)!="Snare"||!portableTargetDb.getUserTags(portableTargetFile).contains("Shared tag")||!portableTargetDb.getUserTags(portableTargetFile).contains("Local tag")||!portableTargetDb.loadMappingProfile("Portable GM"))return 236;auto conflictingPortableProfile=gm;if(!conflictingPortableProfile.setMapping({DrumInstrument::HiHat,DrumArticulation::Closed,41})||!portableTargetDb.setUserCategory(portableTargetFile,"Kick")||!portableTargetDb.saveMappingProfile("Portable GM",conflictingPortableProfile))return 237;portableImport=portableTargetDb.mergePortableMetadata(parsedPortableArchive);const auto preservedPortableProfile=portableTargetDb.loadMappingProfile("Portable GM");if(!portableImport.ok||portableImport.tagsAdded!=0||portableImport.categoryConflicts!=1||portableImport.profileConflicts!=1||portableTargetDb.getCategory(portableTargetFile)!="Kick"||!preservedPortableProfile||preservedPortableProfile->toMidi(hat,false).note!=std::optional<std::uint8_t>(41))return 238;auto unsupportedPortableArchive=parsedPortableArchive;unsupportedPortableArchive.getDynamicObject()->setProperty("version",2);if(portableTargetDb.mergePortableMetadata(unsupportedPortableArchive).ok)return 239;
+    if (portableImport.conflicts.size() != 2) return 272;
+    const auto categoryConflictIt = std::find_if(portableImport.conflicts.begin(), portableImport.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::manualCategory; });
+    const auto profileConflictIt = std::find_if(portableImport.conflicts.begin(), portableImport.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::mappingProfile; });
+    if (categoryConflictIt == portableImport.conflicts.end() || profileConflictIt == portableImport.conflicts.end()
+        || categoryConflictIt->localValue != "Kick" || categoryConflictIt->incomingValues.size() != 1
+        || categoryConflictIt->incomingValues.front().value != "Snare" || profileConflictIt->profileName != "Portable GM"
+        || profileConflictIt->incomingValues.size() != 1) return 273;
+    const auto categoryConflict = *categoryConflictIt;
+    const auto profileConflict = *profileConflictIt;
+    if (!portableTargetDb.setUserCategory(portableTargetFile, "Rimshot")
+        || portableTargetDb.resolvePortableMetadataConflict(categoryConflict, categoryConflict.incomingValues.front())
+        || portableTargetDb.getCategory(portableTargetFile) != "Rimshot") return 274;
+    if (!portableTargetDb.setUserCategory(portableTargetFile, "Kick")
+        || !portableTargetDb.resolvePortableMetadataConflict(categoryConflict, categoryConflict.incomingValues.front())
+        || portableTargetDb.getCategory(portableTargetFile) != "Snare") return 275;
+    if (!portableTargetDb.saveMappingProfile("Portable GM", gm)
+        || portableTargetDb.resolvePortableMetadataConflict(profileConflict, profileConflict.incomingValues.front())) return 283;
+    if (!portableTargetDb.saveMappingProfile("Portable GM", conflictingPortableProfile)
+        || !portableTargetDb.resolvePortableMetadataConflict(profileConflict, profileConflict.incomingValues.front())) return 280;
+    const auto resolvedPortableProfile = portableTargetDb.loadMappingProfile("Portable GM");
+    if (!resolvedPortableProfile) return 281;
+    if (resolvedPortableProfile->entries().size() != gm.entries().size()
+        || resolvedPortableProfile->toMidi(hat, false).note != gm.toMidi(hat, false).note) return 282;
+    if (!portableTargetDb.setUserCategory(portableTargetFile, "Kick")
+        || !portableTargetDb.saveMappingProfile("Portable GM", conflictingPortableProfile)) return 277;
     const auto metadataSyncFolder = root.getSiblingFile("MagDrumPortableMetadataSync");
     metadataSyncFolder.deleteRecursively();
     if (!metadataSyncFolder.createDirectory().wasOk()) return 240;
@@ -750,9 +777,20 @@ int runSmokeTests(int argc,char** argv)
     if (targetSync.tagsAdded != 0) return 250;
     if (targetSync.categoryConflicts != 1) return 251;
     if (targetSync.profileConflicts != 1) return 252;
+    if (targetSync.conflicts.size() != 2) return 278;
+    const auto targetSyncCategoryConflict = std::find_if(targetSync.conflicts.begin(), targetSync.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::manualCategory; });
+    const auto targetSyncProfileConflict = std::find_if(targetSync.conflicts.begin(), targetSync.conflicts.end(),
+        [](const PortableMetadataConflict& conflict) { return conflict.type == PortableMetadataConflictType::mappingProfile; });
+    if (targetSyncCategoryConflict == targetSync.conflicts.end() || targetSyncProfileConflict == targetSync.conflicts.end()
+        || targetSyncCategoryConflict->incomingValues.size() != 1
+        || targetSyncCategoryConflict->incomingValues.front().deviceId != sourceSync.deviceId
+        || targetSyncCategoryConflict->incomingValues.front().value != "Snare"
+        || targetSyncProfileConflict->incomingValues.size() != 1
+        || targetSyncProfileConflict->incomingValues.front().deviceId != sourceSync.deviceId) return 279;
     if (portableTargetDb.getCategory(portableTargetFile) != "Kick") return 253;
     const auto returnSync = portableSourceDb.syncPortableMetadataFolder(metadataSyncFolder);
-    if (!returnSync.ok || returnSync.archivesMerged != 1 || returnSync.categoryConflicts != 1
+    if (!returnSync.ok || returnSync.conflicts.size() != 2 || returnSync.archivesMerged != 1 || returnSync.categoryConflicts != 1
         || returnSync.profileConflicts != 1 || portableSourceDb.getCategory(portableSourceFile) != "Snare") return 245;
     const auto repeatSync = portableSourceDb.syncPortableMetadataFolder(metadataSyncFolder);
     if (!repeatSync.ok || repeatSync.tagsAdded != 0 || repeatSync.profilesAdded != 0) return 246;
