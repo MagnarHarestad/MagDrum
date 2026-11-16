@@ -291,19 +291,23 @@ int runSmokeTests(int argc,char** argv)
     if(std::any_of(defaultFolders.begin(),defaultFolders.end(),[&](const juce::File& folder){return folder.getFullPathName().compareIgnoreCase(linuxCommonDocuments.getFullPathName())==0;}))return 247;
 #endif
     const auto defaultLibraryFixture=root.getChildFile("default-library-roots");
-    magdrum::library::DefaultLibraryRoots fixtureRoots{defaultLibraryFixture.getChildFile("CommonDocuments"),defaultLibraryFixture.getChildFile("CommonData"),defaultLibraryFixture.getChildFile("UserDocuments"),defaultLibraryFixture.getChildFile("UserMusic"),defaultLibraryFixture.getChildFile("ProgramFiles")};
+    magdrum::library::DefaultLibraryRoots fixtureRoots{defaultLibraryFixture.getChildFile("CommonDocuments"),defaultLibraryFixture.getChildFile("CommonData"),defaultLibraryFixture.getChildFile("UserDocuments"),defaultLibraryFixture.getChildFile("UserMusic"),defaultLibraryFixture.getChildFile("UserAppData"),defaultLibraryFixture.getChildFile("ProgramFiles")};
     const std::vector<juce::File> expectedLibraryFolders{
         fixtureRoots.commonDocuments,fixtureRoots.commonDocuments.getChildFile("Native Instruments"),fixtureRoots.commonDocuments.getChildFile("Steinberg"),fixtureRoots.commonDocuments.getChildFile("VST Sound"),
         fixtureRoots.commonData.getChildFile("Native Instruments"),fixtureRoots.commonData.getChildFile("Steinberg/Content"),fixtureRoots.commonData.getChildFile("Spectrasonics/STEAM"),
         fixtureRoots.userDocuments.getChildFile("Native Instruments"),fixtureRoots.userDocuments.getChildFile("Steinberg"),fixtureRoots.userMusic.getChildFile("Native Instruments"),fixtureRoots.userMusic.getChildFile("Steinberg"),
+        fixtureRoots.userApplicationData.getChildFile("Steinberg/Content"),
         fixtureRoots.programFiles.getChildFile("Steinberg/Cubase 15/VST Sound"),fixtureRoots.programFiles.getChildFile("Steinberg/Cubase 15/Media")
     };
     for(const auto& folder:expectedLibraryFolders)if(!folder.createDirectory().wasOk())return 243;
+    const auto perUserSteinbergMidi=fixtureRoots.userApplicationData.getChildFile("Steinberg/Content/Groove MIDI/Factory Drum Groove.mid");
+    if(!perUserSteinbergMidi.getParentDirectory().createDirectory().wasOk()||!perUserSteinbergMidi.replaceWithText("fixture"))return 248;
     const auto fixtureLibraryFolders=magdrum::library::findDefaultLibraryFolders(fixtureRoots);
-    if(fixtureLibraryFolders.size()!=10||std::none_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.getFullPathName().compareIgnoreCase(fixtureRoots.commonDocuments.getFullPathName())==0;})||std::any_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.isAChildOf(fixtureRoots.commonDocuments);}))return 244;
+    const auto perUserLibraryMidi=magdrum::library::findDrumMidiPatternFiles(fixtureLibraryFolders);
+    if(fixtureLibraryFolders.size()!=11||std::none_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.getFullPathName().compareIgnoreCase(fixtureRoots.commonDocuments.getFullPathName())==0;})||std::none_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.getFullPathName().compareIgnoreCase(fixtureRoots.userApplicationData.getChildFile("Steinberg/Content").getFullPathName())==0;})||std::none_of(perUserLibraryMidi.begin(),perUserLibraryMidi.end(),[&](const juce::File& found){return found==perUserSteinbergMidi;})||std::any_of(fixtureLibraryFolders.begin(),fixtureLibraryFolders.end(),[&](const juce::File& found){return found.isAChildOf(fixtureRoots.commonDocuments);}))return 244;
     fixtureRoots.userMusic=fixtureRoots.commonDocuments;
     const auto deduplicatedLibraryFolders=magdrum::library::findDefaultLibraryFolders(fixtureRoots);
-    if(deduplicatedLibraryFolders.size()!=8)return 245;
+    if(deduplicatedLibraryFolders.size()!=9)return 245;
     midiFixture.deleteRecursively();
     juce::StringArray crashCommand;crashCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());crashCommand.add("--magdrum-test-crash-fixture");
     const auto crashExecution=PluginScanProcess::monitorWorker(crashCommand,root.getChildFile("crash-progress.json"),root.getChildFile("crash-result.json"),root.getChildFile("crash-cancel"));

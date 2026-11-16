@@ -16,6 +16,7 @@ std::vector<juce::File> findDefaultLibraryFolders()
         juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory),
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
+        juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory),
         juce::File::getSpecialLocation(juce::File::globalApplicationsDirectory)
     });
 }
@@ -26,6 +27,7 @@ std::vector<juce::File> findDefaultLibraryFolders(const DefaultLibraryRoots& roo
     const auto& commonData = roots.commonData;
     const auto& userDocuments = roots.userDocuments;
     const auto& userMusic = roots.userMusic;
+    const auto& userApplicationData = roots.userApplicationData;
     const auto& programFiles = roots.programFiles;
 
     const std::vector<juce::File> candidates{
@@ -42,6 +44,8 @@ std::vector<juce::File> findDefaultLibraryFolders(const DefaultLibraryRoots& roo
         userDocuments.getChildFile("Steinberg"),
         userMusic.getChildFile("Native Instruments"),
         userMusic.getChildFile("Steinberg"),
+        // Legacy/user-scoped Steinberg content is registered under Roaming AppData.
+        userApplicationData.getChildFile("Steinberg/Content"),
         programFiles.getChildFile("Steinberg/Cubase 15/VST Sound"),
         programFiles.getChildFile("Steinberg/Cubase 15/Media")
     };

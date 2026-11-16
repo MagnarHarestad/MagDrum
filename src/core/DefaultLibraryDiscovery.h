@@ -12,6 +12,7 @@ struct DefaultLibraryRoots
     juce::File commonData;
     juce::File userDocuments;
     juce::File userMusic;
+    juce::File userApplicationData;
     juce::File programFiles;
 };
 
