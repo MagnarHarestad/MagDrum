@@ -110,6 +110,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
     $noteLines += @(
         '',
         'The Windows installer refuses to replace MagDrum while a Cubase process is running, including a hidden process without a visible window.',
+        'The Windows package bundles the Microsoft-signed Visual C++ runtime version used by this build; installation updates the system runtime only when it is missing or older.',
         'The sample-sort label and library scan separators use ASCII punctuation to avoid code-page glyph corruption. Localization catalogs are decoded as UTF-8; a Windows smoke test checks drum-machine, library and sort labels in all eight languages, including French accents.',
         'The sample browser uses a persistent SQLite FTS5 trigram index for substring search over sample names and paths, tags, sources, plugins and kits. Windows and Linux tests cover schema migration rebuilds and a 250,000-row indexed search.',
         'Sample similarity, exact and perceptual duplicate, velocity-layer, round-robin candidate, and portable metadata archive lookups run on background workers in the VST editor.',

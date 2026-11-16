@@ -46,12 +46,29 @@ $generator = switch ($vsMajorVersion) {
     '17' { 'Visual Studio 17 2022' }
     default { throw "Unsupported Visual Studio major version: $vsMajorVersion." }
 }
+$runtimeArchitecture = if ($Architecture -eq 'ARM64') { 'arm64' } else { 'x64' }
+$redistributableRoot = Join-Path $vsInstallPath 'VC/Redist/MSVC'
+$redistributableDirectory = Get-ChildItem -LiteralPath $redistributableRoot -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '^\d+\.' } |
+    Sort-Object { [version]$_.Name } -Descending |
+    Select-Object -First 1
+if (-not $redistributableDirectory) { throw 'The Visual C++ redistributable files were not found in Visual Studio.' }
+$vcRedistPath = Join-Path $redistributableDirectory.FullName "vc_redist.$runtimeArchitecture.exe"
+if (-not (Test-Path -LiteralPath $vcRedistPath -PathType Leaf)) {
+    throw "The Visual C++ $runtimeArchitecture redistributable was not found: $vcRedistPath"
+}
+$vcRedistSignature = Get-AuthenticodeSignature -FilePath $vcRedistPath
+if ($vcRedistSignature.Status -ne 'Valid' -or $vcRedistSignature.SignerCertificate.Subject -notlike '*CN=Microsoft Corporation*') {
+    throw "The Visual C++ redistributable does not have a valid Microsoft signature: $vcRedistPath"
+}
+$vcRedistVersion = [version](Get-Item -LiteralPath $vcRedistPath).VersionInfo.FileVersion
 $latestDirectory = Join-Path $repoRoot 'latest-publish'
 $buildTesting = if ($SkipTests) { 'OFF' } else { 'ON' }
 
 & (Join-Path $repoRoot 'tools/Validate-Localization.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerGuard.ps1')
 & (Join-Path $repoRoot 'tools/Test-WindowsInstallerCleanup.ps1')
+& (Join-Path $repoRoot 'tools/Test-WindowsInstallerPrerequisite.ps1')
 
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmakePath = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
@@ -159,6 +176,7 @@ try {
         Copy-Item -LiteralPath $sourceLicense -Destination (Join-Path $stagingDirectory $thirdPartyLicenses[$licensePath])
     }
 
+    Copy-Item -LiteralPath $vcRedistPath -Destination (Join-Path $stagingDirectory "vc_redist.$runtimeArchitecture.exe")
     $zipPath = Join-Path $buildDirectory ($stagingName + "-Windows-$Architecture.zip")
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath
     New-Item -ItemType Directory -Force -Path $latestDirectory | Out-Null
@@ -169,6 +187,7 @@ try {
     Write-Host "Windows $Architecture package: $latestZipPath"
     Write-Host "SHA-256: $hash"
     Write-Host "Product version: 0.1.2.$BuildRevision"
+    Write-Host "Bundled Microsoft Visual C++ $runtimeArchitecture Redistributable: $vcRedistVersion."
     Write-Host "Build parallelism: $Parallel."
     if ($SkipTests) {
         Write-Host 'CTest targets were not configured or run. Treat this package as a local iteration build; run the default full build before publishing.'

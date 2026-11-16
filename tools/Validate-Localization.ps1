@@ -28,8 +28,8 @@ if ($catalogBlocks.Count -ne $expectedLanguages.Count) {
 
 $failureCount = 0
 $expectedVelocityTranslations = @{
-    german = 'Anschlagstärke'
-    french = 'Vélocité'
+    german = [string]::Concat('Anschlagst', [char]0x00e4, 'rke')
+    french = [string]::Concat('V', [char]0x00e9, 'locit', [char]0x00e9)
     spanish = 'Velocidad'
     swedish = 'Anslag'
     norwegian = 'Anslagsstyrke'

@@ -1,9 +1,12 @@
 MagDrum test package for Windows (x64)
 
 The package contains the standalone MagDrum app and the MagDrum VST3 instrument. The VST3 bundle includes a matching-architecture MagDrum.exe helper used by its instrument-scanner button.
+The package also contains the Microsoft Visual C++ v14 Redistributable required by the app and plug-in. The installer checks the installed runtime version and launches the bundled, Microsoft-signed installer only when the matching x64 or ARM64 runtime is missing or older. A UAC prompt may appear if Windows needs to update this system prerequisite.
 To install the VST3 for Cubase, close Cubase and run Install-MagDrum.ps1 from
 PowerShell. By default the script installs to the standard per-user VST3 folder:
-%LOCALAPPDATA%\Programs\Common\VST3. No administrator access is needed.
+%LOCALAPPDATA%\Programs\Common\VST3. The plug-in copy does not need administrator
+access; Windows may request UAC if the required Visual C++ runtime is missing or
+older than this build.
 If a system-wide MagDrum VST3 already exists, a per-user installation stops
 instead of creating a duplicate. To replace the system-wide copy, open
 PowerShell as administrator and run Install-MagDrum.ps1 -AllUsers. The script

@@ -24,6 +24,14 @@ their package license files are inventoried in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). Package scripts fail if
 any required upstream license file is missing.
 
+MSVC-built Windows x64 and ARM64 packages include the matching Microsoft Visual
+C++ v14 Redistributable (vc_redist.x64.exe or vc_redist.arm64.exe). The
+installer compares its version with the installed target-architecture runtime
+and invokes the bundled, signed prerequisite only when needed. Microsoft limits
+redistribution to licensed Visual Studio users and applies its own license
+terms; see [Redistribute Visual C++ files](https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files)
+and [latest supported downloads](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+
 JUCE's VST3 SDK copy is MIT-licensed. JUCE enables FLAC and Ogg Vorbis decoding
 by default; the package includes FLAC, Ogg Vorbis and libvorbis license texts.
 It also includes the JUCE-bundled JPEG, PNG, zlib, HarfBuzz and SheenBidi license

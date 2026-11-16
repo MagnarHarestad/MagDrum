@@ -39,6 +39,8 @@ Apple-platform review before distribution.
 
 ## Other components and exclusions
 
+Windows packages also include the Microsoft Visual C++ v14 Redistributable matching the compiler toolset used to build MagDrum. The installer checks the target runtime version and installs this signed prerequisite only when it is missing or older. Redistribution is subject to the Microsoft Visual Studio license terms; see [Redistribute Visual C++ files](https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files).
+
 MagDrum fetches SQLite 3.54.1, which is in the public domain. SQLite's source
 contains the applicable notice. Linux packages dynamically use host-provided
 audio, windowing, graphics and font libraries; these system libraries are not

@@ -57,6 +57,7 @@ if (-not $newBuildTree) {
 
 Push-Location $repoRoot
 try {
+    $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
     if ($newBuildTree) {
         $configureArguments = @(
             '-S', $repoRoot,
@@ -78,6 +79,9 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Windows x64 development configure failed with exit code $LASTEXITCODE." }
     }
 
+    # With tests, mobile preview, and classifier evaluation disabled, ALL_BUILD contains
+    # only the Windows app, VST3, and their dependencies. One root target keeps CMake
+    # from starting MSBuild separately for the app and plugin.
     & $cmakePath --build $buildPath --config Debug --target ALL_BUILD --parallel $Parallel
     if ($LASTEXITCODE -ne 0) { throw "Windows x64 development build failed with exit code $LASTEXITCODE." }
 
@@ -88,7 +92,9 @@ try {
     if (-not (Test-Path -LiteralPath $module -PathType Leaf)) { throw 'The Windows x64 Debug VST3 module was not produced.' }
     Copy-Item -LiteralPath $app -Destination (Join-Path (Split-Path -Parent $module) 'MagDrum.exe') -Force
 
+    $buildTimer.Stop()
     Write-Host "Fast Windows x64 Debug VST3 build ready: $bundle"
+    Write-Host "Incremental build elapsed: $($buildTimer.Elapsed.ToString('hh\:mm\:ss'))."
     Write-Host 'This development build uses the Debug configuration and skips CTest, packaging, publishing, and installation.'
     Write-Host 'Use Build-Windows.ps1 -BuildRevision <test-number> for the optimized Release build, full checks, tests, and package.'
 }

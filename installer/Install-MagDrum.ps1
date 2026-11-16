@@ -46,6 +46,40 @@ else {
 $backup = Join-Path $backupParent "MagDrum.vst3.backup-$([DateTime]::Now.ToString('yyyyMMdd-HHmmss'))-$([guid]::NewGuid().ToString('N'))"
 if (-not $PSCmdlet.ShouldProcess($destination, 'Install MagDrum VST3')) { return }
 if ((Test-Path -LiteralPath $destination) -and -not $Force -and -not $PSCmdlet.ShouldContinue("A MagDrum VST3 already exists at $destination. Keep a backup and replace it?", 'Existing plug-in')) { return }
+$pluginModule = Get-ChildItem -LiteralPath $source -Recurse -File -Filter 'MagDrum.vst3' |
+    Select-Object -First 1
+if (-not $pluginModule) { throw 'The VST3 module binary was not found inside the package.' }
+$runtimeArchitecture = if ($pluginModule.Directory.Name -eq 'arm64-win') { 'arm64' } else { 'x64' }
+$runtimeInstaller = Join-Path $PSScriptRoot "vc_redist.$runtimeArchitecture.exe"
+if (-not (Test-Path -LiteralPath $runtimeInstaller -PathType Leaf)) {
+    throw "The required Visual C++ $runtimeArchitecture redistributable is missing from the package."
+}
+$runtimeVersion = [version](Get-Item -LiteralPath $runtimeInstaller).VersionInfo.FileVersion
+$runtimeState = Get-MagDrumVCRuntimeState -Architecture $runtimeArchitecture
+if (-not (Test-MagDrumVCRuntimeInstalled -MinimumVersion $runtimeVersion -RuntimeState $runtimeState)) {
+    Write-Host "Installing the Microsoft Visual C++ $runtimeArchitecture runtime required by this build."
+    $runtimeArguments = @('/install', '/passive', '/norestart')
+    $runtimeStart = @{
+        FilePath = $runtimeInstaller
+        ArgumentList = $runtimeArguments
+        Wait = $true
+        PassThru = $true
+        ErrorAction = 'Stop'
+    }
+    if (-not $pluginPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        $runtimeStart.Verb = 'RunAs'
+    }
+    $runtimeProcess = Start-Process @runtimeStart
+    if ($runtimeProcess.ExitCode -eq 3010) {
+        Write-Warning 'The Visual C++ runtime was installed; restart Windows before loading MagDrum.'
+    }
+    elseif ($runtimeProcess.ExitCode -ne 0) {
+        throw "Visual C++ runtime installation failed with exit code $($runtimeProcess.ExitCode)."
+    }
+    elseif (-not (Test-MagDrumVCRuntimeInstalled -MinimumVersion $runtimeVersion -RuntimeState (Get-MagDrumVCRuntimeState -Architecture $runtimeArchitecture))) {
+        throw 'The Visual C++ runtime installer completed but the required runtime version is still unavailable.'
+    }
+}
 New-Item -ItemType Directory -Force $parent | Out-Null
 New-Item -ItemType Directory -Force $backupParent | Out-Null
 try {

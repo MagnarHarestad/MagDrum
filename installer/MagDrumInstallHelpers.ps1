@@ -1,3 +1,45 @@
+function Get-MagDrumVCRuntimeState {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('x64', 'arm64')]
+        [string] $Architecture = 'x64'
+    )
+
+    $subKeyPath = "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$Architecture"
+    $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::LocalMachine,
+        [Microsoft.Win32.RegistryView]::Registry64)
+    try {
+        $runtimeKey = $baseKey.OpenSubKey($subKeyPath)
+        if ($null -eq $runtimeKey) { return $null }
+        try {
+            [pscustomobject]@{
+                Installed = [int]$runtimeKey.GetValue('Installed', 0)
+                Version = [string]$runtimeKey.GetValue('Version', '')
+            }
+        }
+        finally { $runtimeKey.Dispose() }
+    }
+    finally { $baseKey.Dispose() }
+}
+
+function Test-MagDrumVCRuntimeInstalled {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [version] $MinimumVersion,
+        [Parameter(Mandatory)] [AllowNull()] [object] $RuntimeState
+    )
+
+    if ($null -eq $RuntimeState -or [int]$RuntimeState.Installed -ne 1) { return $false }
+    try {
+        $installedVersion = [version](([string]$RuntimeState.Version).TrimStart([char]'v'))
+        return $installedVersion -ge $MinimumVersion
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-MagDrumDefaultVst3ScanRoots {
     [CmdletBinding()]
     param(
