@@ -220,6 +220,27 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
+    {
+        auto cancellation = std::make_shared<std::atomic<bool>>(false);
+        editor.scanning = false;
+        editor.scanningDefaultLibraries = true;
+        editor.defaultMidiSearchCancellation = cancellation;
+        editor.scanButton.setButtonText(magdrum::ui::localisedText("Cancel scan"));
+        editor.scanButton.setEnabled(true);
+        editor.chooseSampleFolder();
+        const bool cancelled = cancellation->load(std::memory_order_acquire)
+            && !editor.scanButton.isEnabled()
+            && editor.scanButton.getButtonText() == magdrum::ui::localisedText("Cancelling…")
+            && editor.status.getText() == magdrum::ui::localisedText("Stopping the drum MIDI search…");
+        editor.defaultMidiSearchCancellation.reset();
+        editor.scanningDefaultLibraries = false;
+        editor.scanButton.setEnabled(true);
+        editor.scanButton.setButtonText(magdrum::ui::localisedText("Add sample folder"));
+        editor.status.setText(juce::String(), juce::dontSendNotification);
+        return cancelled ? 0 : 1;
+    }
+
     static int checksLiveLanguageSwitching(MagDrumAudioProcessorEditor& editor,
                                            const juce::File& firstSample, const juce::File& secondSample)
     {
@@ -476,6 +497,8 @@ int main(int argc, char** argv)
         if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
         const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor, sample, comparisonSample);
         if(languageCheck!=0)return 42;
+        const int midiSearchCancellationCheck=MagDrumAudioProcessorEditorTestAccess::checksDefaultMidiSearchCancellation(editor);
+        if(midiSearchCancellationCheck!=0)return 43;
     }
 #endif
 

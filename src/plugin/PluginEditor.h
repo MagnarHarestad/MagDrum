@@ -83,7 +83,7 @@ private:
     void importMidiPattern();
     void loadMidiPatternFile(const juce::File&);
     void searchDefaultMidiPatterns();
-    void finishDefaultMidiPatternSearch(std::vector<juce::File>);
+    void finishDefaultMidiPatternSearch(std::vector<juce::File>, bool cancelled);
     void browseDefaultMidiPatterns();
     void chooseMappingCsv(bool exportCsv);
     void chooseSampleFolder();
@@ -160,6 +160,7 @@ private:
     bool scanningDefaultLibraries = false;
     std::vector<juce::File> defaultLibraryFolders;
     std::vector<juce::File> defaultMidiPatterns;
+    std::shared_ptr<std::atomic<bool>> defaultMidiSearchCancellation;
     size_t defaultLibraryFolderIndex = 0;
     std::int64_t defaultLibraryIndexedCount = 0;
     std::int64_t defaultLibraryErrorCount = 0;

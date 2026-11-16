@@ -1156,20 +1156,28 @@ private:
 class PluginMidiPatternDiscoveryJob final : public juce::ThreadPoolJob
 {
 public:
-    using Completion = std::function<void(std::vector<juce::File>)>;
-    PluginMidiPatternDiscoveryJob(std::vector<juce::File> roots, Completion completion)
-        : ThreadPoolJob("MagDrum VST3 MIDI pattern discovery"), searchRoots(std::move(roots)), onComplete(std::move(completion)) {}
+    using Completion = std::function<void(std::vector<juce::File>, bool)>;
+    PluginMidiPatternDiscoveryJob(std::vector<juce::File> roots,
+                                  std::shared_ptr<std::atomic<bool>> cancellation,
+                                  Completion completion)
+        : ThreadPoolJob("MagDrum VST3 MIDI pattern discovery"), searchRoots(std::move(roots)),
+          cancelFlag(std::move(cancellation)), onComplete(std::move(completion)) {}
 
     JobStatus runJob() override
     {
-        auto matches=magdrum::library::findDrumMidiPatternFiles(searchRoots,200,500000,[this]{return shouldExit();});
+        auto matches=magdrum::library::findDrumMidiPatternFiles(searchRoots,200,500000,[this]
+        {
+            return shouldExit() || (cancelFlag && cancelFlag->load(std::memory_order_acquire));
+        });
+        const bool cancelled = shouldExit() || (cancelFlag && cancelFlag->load(std::memory_order_acquire));
         if (onComplete)
-            onComplete(std::move(matches));
+            onComplete(std::move(matches), cancelled);
         return jobHasFinished;
     }
 
 private:
     std::vector<juce::File> searchRoots;
+    std::shared_ptr<std::atomic<bool>> cancelFlag;
     Completion onComplete;
 };
 
@@ -1623,7 +1631,10 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     const char* sorts[]{"Name A-Z","Duration shortest","Duration longest","Brightest first","Darkest first"};sortFilter.clear(juce::dontSendNotification);for(int i=0;i<5;++i)sortFilter.addItem(magdrum::ui::localisedText(sorts[i]),i+1);sortFilter.setSelectedId(selectedSort,juce::dontSendNotification);
     confidenceFilter.clear(juce::dontSendNotification);confidenceFilter.addItem(magdrum::ui::localisedText("All confidence levels"),1);confidenceFilter.addItem(magdrum::ui::localisedText("Needs review"),2);confidenceFilter.setSelectedId(selectedConfidence,juce::dontSendNotification);
     lengthSelect.clear(juce::dontSendNotification);for(int bars=1;bars<=magdrum::sequencer::maximumBars;++bars)lengthSelect.addItem(juce::String(bars)+" "+magdrum::ui::localisedText(bars==1?"bar":"bars"),bars);lengthSelect.setSelectedId(selectedLength,juce::dontSendNotification);
-    scanButton.setButtonText(magdrum::ui::localisedText(scanningDefaultLibraries?"Searching MIDI…":scanning?"Cancel scan":"Add sample folder"));scanDefaultsButton.setButtonText(magdrum::ui::localisedText("Scan installed libraries"));instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));searchButton.setButtonText(magdrum::ui::localisedText("Search"));previewButton.setButtonText(magdrum::ui::localisedText("Preview"));stopPreviewButton.setButtonText(magdrum::ui::localisedText("Stop"));assignButton.setButtonText(magdrum::ui::localisedText("Assign to pad"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying?"Stop":"Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(defaultMidiPatterns.empty()?magdrum::ui::localisedText("Find drum MIDI"):magdrum::ui::localisedText("Drum MIDI (")+juce::String(static_cast<int>(defaultMidiPatterns.size()))+")");editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
+    const bool scanCancellationRequested=(scanCancellation&&scanCancellation->load(std::memory_order_acquire))
+        ||(defaultMidiSearchCancellation&&defaultMidiSearchCancellation->load(std::memory_order_acquire));
+    const auto scanButtonLabel=scanCancellationRequested?"Cancelling…":(scanning||defaultMidiSearchCancellation?"Cancel scan":scanningDefaultLibraries?"Searching MIDI…":"Add sample folder");
+    scanButton.setButtonText(magdrum::ui::localisedText(scanButtonLabel));scanDefaultsButton.setButtonText(magdrum::ui::localisedText("Scan installed libraries"));instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));searchButton.setButtonText(magdrum::ui::localisedText("Search"));previewButton.setButtonText(magdrum::ui::localisedText("Preview"));stopPreviewButton.setButtonText(magdrum::ui::localisedText("Stop"));assignButton.setButtonText(magdrum::ui::localisedText("Assign to pad"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying?"Stop":"Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(defaultMidiPatterns.empty()?magdrum::ui::localisedText("Find drum MIDI"):magdrum::ui::localisedText("Drum MIDI (")+juce::String(static_cast<int>(defaultMidiPatterns.size()))+")");editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     for(size_t i=0;i<pads.size();++i)pads[i].setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));
     for(size_t row=0;row<laneLabels.size();++row)laneLabels[row].setText(magdrum::ui::localisedText(laneDisplayNames[row]),juce::dontSendNotification);
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));loadProfileButton.setButtonText(magdrum::ui::localisedText("Load profile"));saveProfileButton.setButtonText(magdrum::ui::localisedText("Save profile"));importCsvButton.setButtonText(magdrum::ui::localisedText("Import CSV"));exportCsvButton.setButtonText(magdrum::ui::localisedText("Export CSV"));setMappingButton.setButtonText(magdrum::ui::localisedText("Set mapping"));removeMappingButton.setButtonText(magdrum::ui::localisedText("Remove mapping"));
@@ -2634,6 +2645,14 @@ juce::File MagDrumAudioProcessorEditor::selectedSample()const{const int row=inde
 
 void MagDrumAudioProcessorEditor::chooseSampleFolder()
 {
+    if(scanningDefaultLibraries&&!scanning&&defaultMidiSearchCancellation)
+    {
+        defaultMidiSearchCancellation->store(true,std::memory_order_release);
+        scanButton.setButtonText(magdrum::ui::localisedText("Cancelling…"));
+        scanButton.setEnabled(false);
+        status.setText(magdrum::ui::localisedText("Stopping the drum MIDI search…"),juce::dontSendNotification);
+        return;
+    }
     if(scanning){if(scanningDefaultLibraries){scanningDefaultLibraries=false;defaultLibraryFolders.clear();}if(scanCancellation)scanCancellation->store(true);scanButton.setButtonText(magdrum::ui::localisedText("Cancelling…"));scanButton.setEnabled(false);status.setText(magdrum::ui::localisedText("Stopping the current folder scan…"),juce::dontSendNotification);return;}
     chooser=std::make_unique<juce::FileChooser>(magdrum::ui::localisedText("Choose a drum sample folder"),juce::File(),juce::String());
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
@@ -2754,26 +2773,30 @@ void MagDrumAudioProcessorEditor::searchDefaultMidiPatterns()
 {
     if(defaultLibraryFolders.empty())
     {
-        finishDefaultMidiPatternSearch({});
+        finishDefaultMidiPatternSearch({},false);
         return;
     }
-    scanButton.setEnabled(false);
     scanButton.setButtonText(magdrum::ui::localisedText("Searching MIDI…"));
     status.setText(magdrum::ui::localisedText("Searching detected library folders for drum MIDI patterns…"),juce::dontSendNotification);
+    defaultMidiSearchCancellation=std::make_shared<std::atomic<bool>>(false);
+    const auto cancellation=defaultMidiSearchCancellation;
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-    auto completion=[safe](std::vector<juce::File> patterns)
+    auto completion=[safe](std::vector<juce::File> patterns,bool cancelled)
     {
-        juce::MessageManager::callAsync([safe,patterns=std::move(patterns)]() mutable
+        juce::MessageManager::callAsync([safe,patterns=std::move(patterns),cancelled]() mutable
         {
             if(safe!=nullptr)
-                safe->finishDefaultMidiPatternSearch(std::move(patterns));
+                safe->finishDefaultMidiPatternSearch(std::move(patterns),cancelled);
         });
     };
-    scanWorkers.addJob(new PluginMidiPatternDiscoveryJob(defaultLibraryFolders,std::move(completion)),true);
+    scanButton.setEnabled(true);
+    scanButton.setButtonText(magdrum::ui::localisedText("Cancel scan"));
+    scanWorkers.addJob(new PluginMidiPatternDiscoveryJob(defaultLibraryFolders,cancellation,std::move(completion)),true);
 }
 
-void MagDrumAudioProcessorEditor::finishDefaultMidiPatternSearch(std::vector<juce::File> patterns)
+void MagDrumAudioProcessorEditor::finishDefaultMidiPatternSearch(std::vector<juce::File> patterns,bool cancelled)
 {
+    defaultMidiSearchCancellation.reset();
     defaultMidiPatterns=std::move(patterns);
     const auto folderCount=static_cast<int>(defaultLibraryFolders.size());
     scanningDefaultLibraries=false;
@@ -2794,6 +2817,12 @@ void MagDrumAudioProcessorEditor::finishDefaultMidiPatternSearch(std::vector<juc
         juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
             magdrum::ui::localisedText("Some installed library sounds need Plugin Scanner"), containerWarning,
             magdrum::ui::localisedText("Close"), this);
+    }
+    if(cancelled)
+    {
+        completionMessage=magdrum::ui::localisedText("Library scan cancelled · ")+juce::String(defaultLibraryIndexedCount)+" "+magdrum::ui::localisedText("audio samples indexed so far.");
+        if(!defaultMidiPatterns.empty())
+            completionMessage+=" · "+juce::String(static_cast<int>(defaultMidiPatterns.size()))+" "+magdrum::ui::localisedText("drum MIDI patterns found");
     }
     status.setText(completionMessage,juce::dontSendNotification);
 }
