@@ -143,7 +143,7 @@ juce::String canonicalFolderName(juce::String name)
 juce::String labelForFolder(const juce::String& rawName)
 {
     const auto name = canonicalFolderName(rawName);
-    if (name == "kick" || name == "kicks" || name == "bass drum" || name == "bass drums") return "Kick";
+    if (name == "kick" || name == "kicks" || name == "bass drum" || name == "bass drums" || name == "808s") return "Kick";
     if (name == "snare" || name == "snares") return "Snare";
     if (name == "closed hat" || name == "closed hats" || name == "hi hat" || name == "hi hats"
         || name == "hihat" || name == "hihats" || name == "hi-hat") return "Closed hi-hat";

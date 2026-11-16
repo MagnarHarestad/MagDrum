@@ -632,6 +632,8 @@ int runSmokeTests(int argc,char** argv)
     filenameOnly.file=juce::File("pride.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 142;
     filenameOnly.file=juce::File("sidekick.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 143;
     auto folderNamedSample=kickLike;folderNamedSample.file=juce::File("Library/KitA/Kicks/Layer 01/sample.wav");const auto folderKickPrediction=AudioClassifier{}.classify(folderNamedSample);if(folderKickPrediction.category!="Kick"||std::abs(folderKickPrediction.confidence-0.84)>1.0e-9)return 252;
+    folderNamedSample.file=juce::File("808s/808-bass-sub.wav");const auto folder808Prediction=AudioClassifier{}.classify(folderNamedSample);if(folder808Prediction.category!="Kick"||std::abs(folder808Prediction.confidence-0.97)>1.0e-9)return 255;
+    folderNamedSample.file=juce::File("808s/Snare.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Unknown")return 256;
     folderNamedSample.file=juce::File("percussion/loop 01.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Percussion")return 253;
     folderNamedSample.file=juce::File("Snare/Kick.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Unknown")return 254;
     ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");

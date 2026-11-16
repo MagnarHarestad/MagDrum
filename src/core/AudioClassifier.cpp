@@ -17,9 +17,9 @@ juce::String drumCategoryForFolder(juce::String folderName)
     folderName = folderName.trim();
     while (folderName.contains("  ")) folderName = folderName.replace("  ", " ");
 
-    static const std::array<std::pair<const char*, const char*>, 47> aliases{{
+    static const std::array<std::pair<const char*, const char*>, 48> aliases{{
         {"kick", "Kick"}, {"kicks", "Kick"}, {"bass drum", "Kick"}, {"bass drums", "Kick"},
-        {"bassdrum", "Kick"}, {"bassdrums", "Kick"}, {"bd", "Kick"},
+        {"bassdrum", "Kick"}, {"bassdrums", "Kick"}, {"bd", "Kick"}, {"808s", "Kick"},
         {"snare", "Snare"}, {"snares", "Snare"}, {"snr", "Snare"}, {"sd", "Snare"},
         {"closed hat", "Closed hi-hat"}, {"closed hats", "Closed hi-hat"},
         {"closed hihat", "Closed hi-hat"}, {"closed hihats", "Closed hi-hat"},
