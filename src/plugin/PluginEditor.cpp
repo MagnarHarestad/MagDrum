@@ -340,9 +340,9 @@ class MagDrumWaveform final : public juce::Component, private juce::ChangeListen
 public:
     MagDrumWaveform() : thumbnail(512, formats, cache)
     {
-        formats.registerBasicFormats();thumbnail.addChangeListener(this);
+        formats.registerBasicFormats();thumbnail.addChangeListener(this);magdrum::ui::languageChangeBroadcaster().addChangeListener(this);
     }
-    ~MagDrumWaveform() override { thumbnail.removeChangeListener(this); }
+    ~MagDrumWaveform() override { thumbnail.removeChangeListener(this);magdrum::ui::languageChangeBroadcaster().removeChangeListener(this); }
     void setFile(const juce::File& file)
     {
         currentFile=file;thumbnail.setSource(file.existsAsFile()?new juce::FileInputSource(file):nullptr);repaint();
@@ -361,6 +361,7 @@ private:
 };
 
 class MagDrumSampleComparison final : public juce::Component
+                                      , private juce::ChangeListener
 {
 public:
     using PreviewCallback = std::function<void(const juce::File&)>;
@@ -377,12 +378,25 @@ public:
         leftPreview.onClick=[this]{if(previewSample)previewSample(firstSample);};rightPreview.onClick=[this]{if(previewSample)previewSample(secondSample);};
         leftStop.onClick=[this]{if(stopSample)stopSample();};rightStop.onClick=[this]{if(stopSample)stopSample();};
         addAndMakeVisible(leftPreview);addAndMakeVisible(rightPreview);addAndMakeVisible(leftStop);addAndMakeVisible(rightStop);
+        magdrum::ui::languageChangeBroadcaster().addChangeListener(this);
+        applyLanguage();
     }
+    ~MagDrumSampleComparison() override { magdrum::ui::languageChangeBroadcaster().removeChangeListener(this); }
     void resized() override
     {
         auto area=getLocalBounds().reduced(12);const int column=area.getWidth()/2;auto a=area.removeFromLeft(column).reduced(6);auto b=area.reduced(6);leftTitle.setBounds(a.removeFromTop(30));auto leftControls=a.removeFromTop(30);leftPreview.setBounds(leftControls.removeFromLeft(leftControls.getWidth()/2-3));leftControls.removeFromLeft(6);leftStop.setBounds(leftControls);a.removeFromTop(6);leftWave.setBounds(a);rightTitle.setBounds(b.removeFromTop(30));auto rightControls=b.removeFromTop(30);rightPreview.setBounds(rightControls.removeFromLeft(rightControls.getWidth()/2-3));rightControls.removeFromLeft(6);rightStop.setBounds(rightControls);b.removeFromTop(6);rightWave.setBounds(b);
     }
 private:
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override
+    {
+        if(source==&magdrum::ui::languageChangeBroadcaster())applyLanguage();
+    }
+    void applyLanguage()
+    {
+        leftPreview.setButtonText(magdrum::ui::localisedText("Preview"));rightPreview.setButtonText(magdrum::ui::localisedText("Preview"));
+        leftStop.setButtonText(magdrum::ui::localisedText("Stop"));rightStop.setButtonText(magdrum::ui::localisedText("Stop"));
+        leftWave.repaint();rightWave.repaint();repaint();
+    }
     juce::File firstSample,secondSample;PreviewCallback previewSample;StopCallback stopSample;juce::Label leftTitle,rightTitle;juce::TextButton leftPreview,rightPreview,leftStop,rightStop;MagDrumWaveform leftWave,rightWave;
 };
 
@@ -1804,6 +1818,13 @@ void MagDrumAudioProcessorEditor::openMidiEventEditor()
     midiEventWindow.reset(window);
 }
 
+void MagDrumAudioProcessorEditor::openSampleComparisonWindow(const juce::File& first, const juce::File& second)
+{
+    if(first==juce::File()||second==juce::File())return;
+    comparisonWindow=std::make_unique<MagDrumSampleComparisonWindow>(first,second,
+        [this](const juce::File& file){previewSampleAsync(file);},[this]{stopSamplePreview();});
+}
+
 void MagDrumAudioProcessorEditor::reviewMidiChanges()
 {
     if(!hasImportedMidiBaseline){status.setText(magdrum::ui::localisedText("Import a MIDI pattern before reviewing changes."),juce::dontSendNotification);return;}
@@ -2950,7 +2971,7 @@ void MagDrumAudioProcessorEditor::handleLibraryTool(int action)
     }
     if(action==5)
     {
-        const auto selected=indexedList.getSelectedRows();if(selected.size()!=2){status.setText(magdrum::ui::localisedText("Ctrl-click exactly two samples in the list to compare their waveforms."),juce::dontSendNotification);return;}const auto first=juce::isPositiveAndBelow(selected[0],samples.size())?samples.getReference(selected[0]).file:juce::File();const auto second=juce::isPositiveAndBelow(selected[1],samples.size())?samples.getReference(selected[1]).file:juce::File();if(first==juce::File()||second==juce::File())return;comparisonWindow=std::make_unique<MagDrumSampleComparisonWindow>(first,second,[this](const juce::File& file){previewSampleAsync(file);},[this]{stopSamplePreview();});return;
+        const auto selected=indexedList.getSelectedRows();if(selected.size()!=2){status.setText(magdrum::ui::localisedText("Ctrl-click exactly two samples in the list to compare their waveforms."),juce::dontSendNotification);return;}const auto first=juce::isPositiveAndBelow(selected[0],samples.size())?samples.getReference(selected[0]).file:juce::File();const auto second=juce::isPositiveAndBelow(selected[1],samples.size())?samples.getReference(selected[1]).file:juce::File();if(first==juce::File()||second==juce::File())return;openSampleComparisonWindow(first,second);return;
     }
     if(action==6)
     {

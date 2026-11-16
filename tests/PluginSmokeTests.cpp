@@ -220,9 +220,14 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
-    static int checksLiveLanguageSwitching(MagDrumAudioProcessorEditor& editor)
+    static int checksLiveLanguageSwitching(MagDrumAudioProcessorEditor& editor,
+                                           const juce::File& firstSample, const juce::File& secondSample)
     {
         using magdrum::ui::Language;
+        editor.openSampleComparisonWindow(firstSample, secondSample);
+        if (editor.comparisonWindow == nullptr || editor.comparisonWindow->getContentComponent() == nullptr)
+            return 2;
+        auto* comparisonContent = editor.comparisonWindow->getContentComponent();
         const std::array<Language, 8> languages{
             Language::english, Language::german, Language::french, Language::spanish,
             Language::swedish, Language::norwegian, Language::danish, Language::finnish};
@@ -256,6 +261,29 @@ public:
                     magdrum::ui::setLanguage(Language::english, false);
                     return 1;
                 }
+            }
+            int previewButtons = 0, stopButtons = 0;
+            for (int childIndex = 0; childIndex < comparisonContent->getNumChildComponents(); ++childIndex)
+            {
+                auto* button = dynamic_cast<juce::TextButton*>(comparisonContent->getChildComponent(childIndex));
+                if (button == nullptr) continue;
+                if (button->getButtonText() == magdrum::ui::localisedText("Preview")) ++previewButtons;
+                else if (button->getButtonText() == magdrum::ui::localisedText("Stop")) ++stopButtons;
+                else
+                {
+                    std::cerr << "Live localization failed for " << magdrum::ui::languageName(language)
+                              << " sample-comparison button: '" << button->getButtonText() << "'.\n";
+                    magdrum::ui::setLanguage(Language::english, false);
+                    return 3;
+                }
+            }
+            if (previewButtons != 2 || stopButtons != 2
+                || editor.comparisonWindow->getName() != magdrum::ui::localisedText("Compare drum samples"))
+            {
+                std::cerr << "Live localization failed in the open sample-comparison window for "
+                          << magdrum::ui::languageName(language) << ".\n";
+                magdrum::ui::setLanguage(Language::english, false);
+                return 4;
             }
         }
         magdrum::ui::setLanguage(Language::english, false);
@@ -410,6 +438,8 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+    const auto comparisonSample = root.getChildFile("comparison.wav");
+    if (!writeFixture(comparisonSample, 0.18f)) return 3;
 
 #if JUCE_WINDOWS
     {
@@ -420,7 +450,7 @@ int main(int argc, char** argv)
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
         const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);
         if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
-        const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor);
+        const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor, sample, comparisonSample);
         if(languageCheck!=0)return 42;
     }
 #endif

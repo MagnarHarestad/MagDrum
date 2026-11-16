@@ -70,6 +70,7 @@ private:
     bool syncSequenceEventForCell(int lane, int step);
     void syncSequencerGridFromEvents();
     void openMidiEventEditor();
+    void openSampleComparisonWindow(const juce::File&, const juce::File&);
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     int gridResolutionSubdivisions() const;
