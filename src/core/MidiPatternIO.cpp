@@ -153,28 +153,64 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
         if (event) output.events.push_back(*event);
         else report.unmappedNotes.push_back(note);
     };
-    for(int track=0;track<midi.getNumTracks();++track)
+    struct TimedMessage
     {
-        const auto* sequence=midi.getTrack(track);if(sequence==nullptr)continue;
-        for(int i=0;i<sequence->getNumEvents();++i)
+        double beat = 0.0;
+        int track = 0;
+        int order = 0;
+        juce::MidiMessage message;
+    };
+    std::vector<TimedMessage> timedMessages;
+    for (int track = 0; track < midi.getNumTracks(); ++track)
+    {
+        const auto* sequence = midi.getTrack(track);
+        if (sequence == nullptr)
+            continue;
+        for (int i = 0; i < sequence->getNumEvents(); ++i)
         {
-            const auto* item=sequence->getEventPointer(i);if(item==nullptr)continue;
-            const auto& message=item->message;const double beat=item->message.getTimeStamp()/ticksPerQuarter;
-            if(std::isfinite(beat))output.lengthBeats=juce::jmax(output.lengthBeats,beat);
-            if(message.isTempoMetaEvent()||message.isTimeSignatureMetaEvent())
-                output.tempoAndSignature.push_back({beat,message});
-            if(message.isNoteOn())
-            {
-                const Key key{message.getChannel(),message.getNoteNumber()};
-                pending[key].push_back({beat,static_cast<std::uint8_t>(message.getVelocity())});
-            }
-            else if(message.isNoteOff())
-            {
-                const Key key{message.getChannel(),message.getNoteNumber()};auto found=pending.find(key);
-                if(found==pending.end()||found->second.empty())continue;
-                const auto start=found->second.front();found->second.erase(found->second.begin());
-                appendImportedEvent(message.getNoteNumber(),start.second,start.first,juce::jmax(0.0,beat-start.first));
-            }
+            const auto* item = sequence->getEventPointer(i);
+            if (item == nullptr)
+                continue;
+            const double beat = item->message.getTimeStamp() / ticksPerQuarter;
+            if (!std::isfinite(beat))
+                continue;
+            output.lengthBeats = juce::jmax(output.lengthBeats, beat);
+            timedMessages.push_back({beat, track, i, item->message});
+        }
+    }
+
+    // Pair note-ons and note-offs in musical time, not track-by-track order.
+    // A type-1 MIDI file may split overlapping notes of the same pitch across tracks.
+    std::stable_sort(timedMessages.begin(), timedMessages.end(), [](const TimedMessage& left, const TimedMessage& right)
+    {
+        if (left.beat != right.beat)
+            return left.beat < right.beat;
+        if (left.track != right.track)
+            return left.track < right.track;
+        return left.order < right.order;
+    });
+
+    for (const auto& timed : timedMessages)
+    {
+        const auto& message = timed.message;
+        const double beat = timed.beat;
+        if (message.isTempoMetaEvent() || message.isTimeSignatureMetaEvent())
+            output.tempoAndSignature.push_back({beat, message});
+        if (message.isNoteOn())
+        {
+            const Key key{message.getChannel(), message.getNoteNumber()};
+            pending[key].push_back({beat, static_cast<std::uint8_t>(message.getVelocity())});
+        }
+        else if (message.isNoteOff())
+        {
+            const Key key{message.getChannel(), message.getNoteNumber()};
+            auto found = pending.find(key);
+            if (found == pending.end() || found->second.empty())
+                continue;
+            const auto start = found->second.front();
+            found->second.erase(found->second.begin());
+            appendImportedEvent(message.getNoteNumber(), start.second, start.first,
+                                juce::jmax(0.0, beat - start.first));
         }
     }
     // Keep malformed files with missing note-offs usable; assign a short default gate.
