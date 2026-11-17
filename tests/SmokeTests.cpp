@@ -936,6 +936,72 @@ int runSmokeTests(int argc,char** argv)
     MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
     if(!midiReport.ok||!midiReport.ambiguousNotes.empty()||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2||std::abs(decodedPattern.lengthBeats-8.0)>0.001)return 24;
     if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
+    juce::MidiFile smpteMidi;
+    smpteMidi.setSmpteTimeFormat(25, 40);
+    juce::MidiMessageSequence smpteTempoTrack, smpteDrumTrack;
+    smpteTempoTrack.addEvent(juce::MidiMessage::timeSignatureMetaEvent(4, 4), 0.0);
+    smpteTempoTrack.addEvent(juce::MidiMessage::tempoMetaEvent(1000000), 1000.0);
+    smpteTempoTrack.addEvent(juce::MidiMessage::endOfTrack(), 2000.0);
+    smpteDrumTrack.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 1000.0);
+    smpteDrumTrack.addEvent(juce::MidiMessage::noteOff(10, 36), 1500.0);
+    smpteDrumTrack.addEvent(juce::MidiMessage::endOfTrack(), 2000.0);
+    smpteTempoTrack.sort();
+    smpteDrumTrack.sort();
+    smpteMidi.addTrack(smpteTempoTrack);
+    smpteMidi.addTrack(smpteDrumTrack);
+    const auto smpteMidiFile = root.getChildFile("smpte-tempo-change.mid");
+    auto smpteMidiStream = smpteMidiFile.createOutputStream();
+    if (! smpteMidiStream || ! smpteMidi.writeTo(*smpteMidiStream)) return 282;
+    smpteMidiStream->flush();
+    MidiPattern smptePattern;
+    const auto smpteReport = midiIO.read(smpteMidiFile, gm, smptePattern);
+    if (! smpteReport.ok || smptePattern.events.size() != 1 || smptePattern.tempoAndSignature.size() != 2
+        || smptePattern.events[0].instrument != DrumInstrument::Kick
+        || std::abs(smptePattern.events[0].positionBeats - 2.0) > 0.001
+        || std::abs(smptePattern.events[0].durationBeats - 0.5) > 0.001
+        || std::abs(smptePattern.lengthBeats - 3.0) > 0.001
+        || std::abs(smptePattern.tempoAndSignature[1].positionBeats - 2.0) > 0.001)
+    {
+        std::cerr << "SMPTE tempo-map conversion did not preserve drum timing.\n";
+        return 283;
+    }
+
+    juce::MidiFile dropFrameMidi;
+    dropFrameMidi.setSmpteTimeFormat(29, 80);
+    juce::MidiMessageSequence dropFrameTrack;
+    dropFrameTrack.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0.0);
+    dropFrameTrack.addEvent(juce::MidiMessage::noteOff(10, 36), 3000.0);
+    dropFrameTrack.addEvent(juce::MidiMessage::endOfTrack(), 3000.0);
+    dropFrameTrack.sort();
+    dropFrameMidi.addTrack(dropFrameTrack);
+    const auto dropFrameMidiFile = root.getChildFile("smpte-drop-frame.mid");
+    auto dropFrameStream = dropFrameMidiFile.createOutputStream();
+    if (! dropFrameStream || ! dropFrameMidi.writeTo(*dropFrameStream)) return 284;
+    dropFrameStream->flush();
+    MidiPattern dropFramePattern;
+    const auto dropFrameReport = midiIO.read(dropFrameMidiFile, gm, dropFramePattern);
+    if (! dropFrameReport.ok || dropFramePattern.events.size() != 1
+        || std::abs(dropFramePattern.events[0].durationBeats - 2.5025) > 0.001
+        || std::abs(dropFramePattern.lengthBeats - 2.5025) > 0.001)
+    {
+        std::cerr << "29.97 fps SMPTE timing was not converted using its drop-frame rate.\n";
+        return 285;
+    }
+
+    juce::MidiFile invalidSmpteMidi;
+    invalidSmpteMidi.setSmpteTimeFormat(23, 80);
+    juce::MidiMessageSequence invalidSmpteTrack;
+    invalidSmpteTrack.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0.0);
+    invalidSmpteTrack.addEvent(juce::MidiMessage::noteOff(10, 36), 10.0);
+    invalidSmpteTrack.sort();
+    invalidSmpteMidi.addTrack(invalidSmpteTrack);
+    const auto invalidSmpteMidiFile = root.getChildFile("smpte-invalid-frame-rate.mid");
+    auto invalidSmpteStream = invalidSmpteMidiFile.createOutputStream();
+    if (! invalidSmpteStream || ! invalidSmpteMidi.writeTo(*invalidSmpteStream)) return 286;
+    invalidSmpteStream->flush();
+    MidiPattern invalidSmptePattern;
+    const auto invalidSmpteReport = midiIO.read(invalidSmpteMidiFile, gm, invalidSmptePattern);
+    if (invalidSmpteReport.ok || invalidSmpteReport.error.isEmpty() || ! invalidSmptePattern.events.empty()) return 287;
     juce::MidiFile overlappingTrackMidi;overlappingTrackMidi.setTicksPerQuarterNote(960);juce::MidiMessageSequence firstTrack,secondTrack;firstTrack.addEvent(juce::MidiMessage::noteOn(10,42,static_cast<juce::uint8>(90)),0);firstTrack.addEvent(juce::MidiMessage::noteOff(10,42),2880);secondTrack.addEvent(juce::MidiMessage::noteOn(10,42,static_cast<juce::uint8>(100)),960);secondTrack.addEvent(juce::MidiMessage::noteOff(10,42),1920);firstTrack.sort();secondTrack.sort();overlappingTrackMidi.addTrack(firstTrack);overlappingTrackMidi.addTrack(secondTrack);const auto overlappingTrackFile=root.getChildFile("overlapping-notes-across-tracks.mid");auto overlappingTrackStream=overlappingTrackFile.createOutputStream();if(!overlappingTrackStream||!overlappingTrackMidi.writeTo(*overlappingTrackStream))return 280;overlappingTrackStream->flush();MidiPattern overlappingTrackPattern;const auto overlappingTrackReport=midiIO.read(overlappingTrackFile,gm,overlappingTrackPattern);if(!overlappingTrackReport.ok||overlappingTrackPattern.events.size()!=2||std::abs(overlappingTrackPattern.events[0].positionBeats)>0.001||std::abs(overlappingTrackPattern.events[0].durationBeats-2.0)>0.002||std::abs(overlappingTrackPattern.events[1].positionBeats-1.0)>0.001||std::abs(overlappingTrackPattern.events[1].durationBeats-2.0)>0.002)return 281;
     const auto exactPatternDiff=compareMidiPatterns(pattern,decodedPattern);
     if(!exactPatternDiff.removedEvents.empty()||!exactPatternDiff.addedEvents.empty()||!exactPatternDiff.removedMetadata.empty()||!exactPatternDiff.addedMetadata.empty()||exactPatternDiff.lengthChanged){std::cerr<<"Exact MIDI round-trip diff: removed="<<exactPatternDiff.removedEvents.size()<<", added="<<exactPatternDiff.addedEvents.size()<<", removed metadata="<<exactPatternDiff.removedMetadata.size()<<", added metadata="<<exactPatternDiff.addedMetadata.size()<<", length changed="<<exactPatternDiff.lengthChanged<<"\n";return 135;}

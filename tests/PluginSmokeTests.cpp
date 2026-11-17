@@ -263,6 +263,49 @@ public:
         return cancelled ? 0 : 1;
     }
 
+    static int checksSmpteMidiImport(MagDrumAudioProcessorEditor& editor,
+                                     MagDrumAudioProcessor& processor)
+    {
+        juce::MidiFile midi;
+        midi.setSmpteTimeFormat(25, 40);
+        juce::MidiMessageSequence tempoTrack, drumTrack;
+        tempoTrack.addEvent(juce::MidiMessage::timeSignatureMetaEvent(4, 4), 0.0);
+        tempoTrack.addEvent(juce::MidiMessage::tempoMetaEvent(1000000), 1000.0);
+        tempoTrack.addEvent(juce::MidiMessage::endOfTrack(), 2000.0);
+        drumTrack.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(104)), 1000.0);
+        drumTrack.addEvent(juce::MidiMessage::noteOff(10, 36), 1500.0);
+        drumTrack.addEvent(juce::MidiMessage::endOfTrack(), 2000.0);
+        tempoTrack.sort();
+        drumTrack.sort();
+        midi.addTrack(tempoTrack);
+        midi.addTrack(drumTrack);
+
+        const auto file = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("MagDrumPluginSmokeTest").getChildFile("plugin-smpte.mid");
+        auto stream = file.createOutputStream();
+        if (stream == nullptr || ! midi.writeTo(*stream))
+            return 1;
+        stream->flush();
+        stream.reset();
+
+        editor.loadMidiPatternFile(file);
+        if (! editor.sequenceEventsInitialised || editor.sequenceEvents.size() != 1
+            || editor.sequenceEvents.front().instrument != DrumInstrument::Kick
+            || std::abs(editor.sequenceEvents.front().positionBeats - 2.0) > 0.001
+            || std::abs(editor.sequenceEvents.front().durationBeats - 0.5) > 0.001
+            || editor.sequenceMetadata.size() != 2
+            || std::abs(editor.sequenceMetadata[1].positionBeats - 2.0) > 0.001
+            || ! editor.reviewMidiButton.isEnabled() || ! editor.editMidiEventsButton.isEnabled())
+        {
+            std::cerr << "The VST MIDI editor did not import SMPTE events on the tempo map.\n";
+            return 2;
+        }
+        const auto state = processor.getPluginEditorState();
+        if (state == nullptr || state->getNumChildElements() == 0)
+            return 3;
+        return 0;
+    }
+
     static int checksLiveLanguageSwitching(MagDrumAudioProcessorEditor& editor,
                                            const juce::File& firstSample, const juce::File& secondSample)
     {
@@ -523,6 +566,8 @@ int main(int argc, char** argv)
         if(languageCheck!=0)return 42;
         const int midiSearchCancellationCheck=MagDrumAudioProcessorEditorTestAccess::checksDefaultMidiSearchCancellation(editor);
         if(midiSearchCancellationCheck!=0)return 43;
+        const int smpteImportCheck = MagDrumAudioProcessorEditorTestAccess::checksSmpteMidiImport(editor, editorProcessor);
+        if (smpteImportCheck != 0) return 288 + smpteImportCheck;
     }
 #endif
 

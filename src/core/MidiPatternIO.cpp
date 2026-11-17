@@ -133,8 +133,37 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
     juce::FileInputStream input(file);
     juce::MidiFile midi;
     if(!input.openedOk()||!midi.readFrom(input)){report.error="Could not read Standard MIDI File";return report;}
-    const int ticksPerQuarter=midi.getTimeFormat();
-    if(ticksPerQuarter<=0){report.error="SMPTE time division is not supported; use a PPQ MIDI file";return report;}
+    const short timeFormat = midi.getTimeFormat();
+    const bool usesPpqTiming = timeFormat > 0;
+    double secondsPerTick = 0.0;
+    if (timeFormat == 0)
+    {
+        report.error = "MIDI time division is invalid.";
+        return report;
+    }
+    if (! usesPpqTiming)
+    {
+        const auto rawTimeFormat = static_cast<std::uint16_t>(timeFormat);
+        const int encodedFrameCode = static_cast<int>((rawTimeFormat >> 8) & 0xff);
+        const int signedFrameCode = encodedFrameCode >= 128 ? encodedFrameCode - 256 : encodedFrameCode;
+        const int framesPerSecondCode = -signedFrameCode;
+        const int ticksPerFrame = static_cast<int>(rawTimeFormat & 0xff);
+        double framesPerSecond = 0.0;
+        switch (framesPerSecondCode)
+        {
+            case 24: framesPerSecond = 24.0; break;
+            case 25: framesPerSecond = 25.0; break;
+            case 29: framesPerSecond = 30000.0 / 1001.0; break;
+            case 30: framesPerSecond = 30.0; break;
+            default: break;
+        }
+        if (framesPerSecond <= 0.0 || ticksPerFrame <= 0)
+        {
+            report.error = "SMPTE MIDI time division is invalid or unsupported.";
+            return report;
+        }
+        secondsPerTick = 1.0 / (framesPerSecond * ticksPerFrame);
+    }
     using Key=std::pair<int,int>;
     std::map<Key,std::vector<std::pair<double,std::uint8_t>>> pending;
     std::map<int,MidiAmbiguousNote> ambiguousNotes;
@@ -155,6 +184,7 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
     };
     struct TimedMessage
     {
+        double absoluteTime = 0.0;
         double beat = 0.0;
         int track = 0;
         int order = 0;
@@ -171,11 +201,11 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
             const auto* item = sequence->getEventPointer(i);
             if (item == nullptr)
                 continue;
-            const double beat = item->message.getTimeStamp() / ticksPerQuarter;
-            if (!std::isfinite(beat))
+            const double timestamp = item->message.getTimeStamp();
+            const double absoluteTime = usesPpqTiming ? timestamp / timeFormat : timestamp * secondsPerTick;
+            if (! std::isfinite(absoluteTime) || absoluteTime < 0.0)
                 continue;
-            output.lengthBeats = juce::jmax(output.lengthBeats, beat);
-            timedMessages.push_back({beat, track, i, item->message});
+            timedMessages.push_back({absoluteTime, 0.0, track, i, item->message});
         }
     }
 
@@ -183,12 +213,39 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
     // A type-1 MIDI file may split overlapping notes of the same pitch across tracks.
     std::stable_sort(timedMessages.begin(), timedMessages.end(), [](const TimedMessage& left, const TimedMessage& right)
     {
-        if (left.beat != right.beat)
-            return left.beat < right.beat;
+        if (left.absoluteTime != right.absoluteTime)
+            return left.absoluteTime < right.absoluteTime;
         if (left.track != right.track)
             return left.track < right.track;
         return left.order < right.order;
     });
+
+    if (usesPpqTiming)
+    {
+        for (auto& timed : timedMessages)
+            timed.beat = timed.absoluteTime;
+    }
+    else
+    {
+        double previousSeconds = 0.0;
+        double currentBeat = 0.0;
+        double secondsPerQuarterNote = 0.5;
+        for (auto& timed : timedMessages)
+        {
+            currentBeat += (timed.absoluteTime - previousSeconds) / secondsPerQuarterNote;
+            previousSeconds = timed.absoluteTime;
+            timed.beat = currentBeat;
+            if (timed.message.isTempoMetaEvent())
+            {
+                const double newTempo = timed.message.getTempoSecondsPerQuarterNote();
+                if (std::isfinite(newTempo) && newTempo > 0.0)
+                    secondsPerQuarterNote = newTempo;
+            }
+        }
+    }
+
+    for (const auto& timed : timedMessages)
+        output.lengthBeats = juce::jmax(output.lengthBeats, timed.beat);
 
     for (const auto& timed : timedMessages)
     {

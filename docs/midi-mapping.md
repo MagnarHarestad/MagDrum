@@ -10,6 +10,8 @@ The desktop app provides MIDI import/export buttons, save/load controls for name
 
 After importing a MIDI file, open **Edit pattern** to review drum events and change instrument, articulation, velocity, beat position and duration, or delete an event. The editor sorts events by beat position after edits. Use **Compare with imported** to see the events and tempo/meter metadata removed from or added to the original imported pattern, including pattern-length changes. It also lists imported tempo and time-signature events and lets users set or remove either type at any non-negative beat without changing the other metadata events.
 
+MIDI imports accept both PPQ beat-based and valid SMPTE absolute-time division. SMPTE event times are converted into musical beats using the file's tempo map (defaulting to 120 BPM when no initial tempo is present); the resulting patterns export in standard PPQ format. Invalid SMPTE frame-rate codes are rejected with an import error.
+
 When MIDI import encounters unmapped notes, the app lists each note number and how many note events used it. When a MIDI note maps to multiple instrument/articulation pairs, the import report lists all candidates and explains that the first profile entry was used for those events. Edit the profile to make that note unique before importing if another meaning is intended. MIDI export lists the semantic events that were omitted because the active profile did not map them.
 
 ## Current limitations
