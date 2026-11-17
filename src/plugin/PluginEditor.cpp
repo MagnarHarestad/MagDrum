@@ -235,11 +235,52 @@ private:
 
 class MagDrumSampleMap final : public juce::Component, public juce::SettableTooltipClient
 {
+    class ProjectionJob final : public juce::ThreadPoolJob
+    {
+    public:
+        ProjectionJob(MagDrumSampleMap& owner, std::uint64_t generation,
+                      std::vector<juce::String> fingerprints)
+            : ThreadPoolJob("MagDrum acoustic sample map projection"), safeOwner(&owner),
+              requestGeneration(generation), fingerprintTexts(std::move(fingerprints)) {}
+        JobStatus runJob() override
+        {
+            auto result = magdrum::projectAcousticFingerprints(fingerprintTexts);
+            juce::MessageManager::callAsync([owner = safeOwner, generation = requestGeneration,
+                                              points = std::move(result)]() mutable
+            {
+                if (owner != nullptr) owner->applyProjection(generation, std::move(points));
+            });
+            return jobHasFinished;
+        }
+    private:
+        juce::Component::SafePointer<MagDrumSampleMap> safeOwner;
+        std::uint64_t requestGeneration;
+        std::vector<juce::String> fingerprintTexts;
+    };
 public:
     std::function<void(int)> onSelect;
+    ~MagDrumSampleMap() override { projectionWorkers.removeAllJobs(true, -1); }
     void setSamples(const juce::Array<SampleBrowseRecord>& value, int selected)
     {
-        samples=value;selectedIndex=selected;rebuildSimilarityMap();repaint();
+        samples=value;selectedIndex=selected;++projectionGeneration;
+        pointForSampleIndex.assign(static_cast<size_t>(samples.size()), -1);
+        acousticPoints.clear();
+        const auto representativeIndices = magdrum::representativeSampleIndices(static_cast<size_t>(samples.size()));
+        acousticPoints.reserve(representativeIndices.size());
+        for (const int sampleIndex : representativeIndices)
+        {
+            const auto fallback = samplePosition(samples.getReference(sampleIndex));
+            magdrum::SampleSimilarityPoint point;
+            point.sampleIndex = sampleIndex;point.x = fallback.x;point.y = 1.0f - fallback.y;
+            pointForSampleIndex[static_cast<size_t>(sampleIndex)] = static_cast<int>(acousticPoints.size());
+            acousticPoints.push_back(point);
+        }
+        std::vector<juce::String> fingerprints;
+        fingerprints.reserve(static_cast<size_t>(samples.size()));
+        for (const auto& sample : samples) fingerprints.push_back(sample.acousticFingerprint);
+        if (!fingerprints.empty())
+            projectionWorkers.addJob(new ProjectionJob(*this, projectionGeneration, std::move(fingerprints)), true);
+        repaint();
     }
     void setSelected(int selected) { selectedIndex=selected;repaint(); }
     void mouseMove(const juce::MouseEvent& event) override
@@ -280,13 +321,18 @@ public:
         g.setColour(Palette::Accent.withAlpha(0.9f));
         g.drawText(magdrum::ui::localisedText("Similar sounds cluster together"),
                    legendArea,juce::Justification::centredRight,true);
-        g.drawText(magdrum::ui::localisedText("Click to select and preview"),
+        const auto footer = samples.size() > static_cast<int>(acousticPoints.size())
+            ? magdrum::ui::localisedText("Showing a representative subset")
+            : magdrum::ui::localisedText("Click to select and preview");
+        g.drawText(footer,
                    static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),
                    static_cast<int>(plot.getWidth()),14,juce::Justification::centred);
-        for(int i=0;i<samples.size();++i)
+        for(const auto& projected : acousticPoints)
         {
+            const int i=projected.sampleIndex;
+            if(!juce::isPositiveAndBelow(i,samples.size()))continue;
             const auto& sample=samples.getReference(i);
-            const auto position=samplePosition(i, plot);
+            const auto position=samplePosition(projected, plot);
             const auto x=position.x, y=position.y;
             const bool selected=i==selectedIndex;const float radius=selected?7.0f:4.2f;
             if(selected){g.setColour(categoryColour(sample.category).withAlpha(0.18f));g.fillEllipse(x-radius-7.0f,y-radius-7.0f,(radius+7.0f)*2,(radius+7.0f)*2);}
@@ -306,25 +352,30 @@ public:
         }
     }
 private:
-    void rebuildSimilarityMap()
+    void applyProjection(std::uint64_t generation, std::vector<magdrum::SampleSimilarityPoint> points)
     {
-        std::vector<juce::String> fingerprints;
-        fingerprints.reserve(static_cast<size_t>(samples.size()));
-        for (int i = 0; i < samples.size(); ++i)
-            fingerprints.push_back(samples.getReference(i).acousticFingerprint);
-        acousticPoints = magdrum::projectAcousticFingerprints(fingerprints);
-        for (int i = 0; i < samples.size(); ++i)
-            if (!acousticPoints[static_cast<size_t>(i)].hasAcousticFingerprint)
+        if (generation != projectionGeneration) return;
+        acousticPoints = std::move(points);
+        pointForSampleIndex.assign(static_cast<size_t>(samples.size()), -1);
+        for (size_t pointIndex = 0; pointIndex < acousticPoints.size(); ++pointIndex)
+        {
+            auto& point = acousticPoints[pointIndex];
+            if (!juce::isPositiveAndBelow(point.sampleIndex, samples.size())) continue;
+            pointForSampleIndex[static_cast<size_t>(point.sampleIndex)] = static_cast<int>(pointIndex);
+            if (!point.hasAcousticFingerprint)
             {
-                const auto fallback = samplePosition(samples.getReference(i));
-                acousticPoints[static_cast<size_t>(i)].x = fallback.x;
-                acousticPoints[static_cast<size_t>(i)].y = 1.0f - fallback.y;
+                const auto fallback = samplePosition(samples.getReference(point.sampleIndex));
+                point.x = fallback.x;point.y = 1.0f - fallback.y;
             }
+        }
+        repaint();
     }
     bool hasAcousticFingerprint(int index) const
     {
-        return juce::isPositiveAndBelow(index, static_cast<int>(acousticPoints.size()))
-            && acousticPoints[static_cast<size_t>(index)].hasAcousticFingerprint;
+        if (!juce::isPositiveAndBelow(index, static_cast<int>(pointForSampleIndex.size()))) return false;
+        const int pointIndex = pointForSampleIndex[static_cast<size_t>(index)];
+        return juce::isPositiveAndBelow(pointIndex, static_cast<int>(acousticPoints.size()))
+            && acousticPoints[static_cast<size_t>(pointIndex)].hasAcousticFingerprint;
     }
     juce::Rectangle<float> plotBounds() const
     {
@@ -341,28 +392,28 @@ private:
             std::log10(juce::jmax(100.0,sample.brightnessHz)/100.0)/2.5);
         return {static_cast<float>(duration), static_cast<float>(1.0 - brightness)};
     }
-    juce::Point<float> samplePosition(int index, juce::Rectangle<float> plot) const
+    static juce::Point<float> samplePosition(const magdrum::SampleSimilarityPoint& point,
+                                             juce::Rectangle<float> plot)
     {
-        const auto point = juce::isPositiveAndBelow(index, static_cast<int>(acousticPoints.size()))
-            ? juce::Point<float>{acousticPoints[static_cast<size_t>(index)].x, acousticPoints[static_cast<size_t>(index)].y}
-            : juce::Point<float>{0.5f, 0.5f};
         return {plot.getX() + 6.0f + point.x * (plot.getWidth() - 12.0f),
                 plot.getBottom() - 6.0f - point.y * (plot.getHeight() - 12.0f)};
     }
     int sampleAt(juce::Point<float> point) const
     {
         const auto plot=plotBounds();
-        if(samples.isEmpty()||!plot.contains(point))return -1;
+        if(acousticPoints.empty()||!plot.contains(point))return -1;
         int closest=-1;
         float distance=24.0f;
-        for(int i=0;i<samples.size();++i)
+        for(const auto& projected : acousticPoints)
         {
-            const float current=point.getDistanceFrom(samplePosition(i, plot));
-            if(current<distance){distance=current;closest=i;}
+            const float current=point.getDistanceFrom(samplePosition(projected, plot));
+            if(current<distance){distance=current;closest=projected.sampleIndex;}
         }
         return closest;
     }
-    juce::Array<SampleBrowseRecord> samples;std::vector<magdrum::SampleSimilarityPoint> acousticPoints;int selectedIndex=-1;
+    juce::Array<SampleBrowseRecord> samples;std::vector<magdrum::SampleSimilarityPoint> acousticPoints;
+    std::vector<int> pointForSampleIndex;juce::ThreadPool projectionWorkers{1};
+    std::uint64_t projectionGeneration=0;int selectedIndex=-1;
 };
 
 class MagDrumWaveform final : public juce::Component, private juce::ChangeListener

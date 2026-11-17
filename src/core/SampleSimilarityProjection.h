@@ -14,12 +14,30 @@ struct SampleSimilarityPoint
 {
     float x = 0.5f;
     float y = 0.5f;
+    int sampleIndex = -1;
     bool hasAcousticFingerprint = false;
 };
 
+inline std::vector<int> representativeSampleIndices(size_t sampleCount)
+{
+    constexpr size_t maximumPoints = 3000;
+    const size_t count = std::min(sampleCount, maximumPoints);
+    std::vector<int> indices;
+    indices.reserve(count);
+    if (count == 0) return indices;
+    if (count == sampleCount)
+    {
+        for (size_t i = 0; i < count; ++i) indices.push_back(static_cast<int>(i));
+        return indices;
+    }
+    for (size_t i = 0; i < count; ++i)
+        indices.push_back(static_cast<int>((sampleCount - 1) * i / (count - 1)));
+    return indices;
+}
+
 // Project the indexed 4 x 16 log-band fingerprints into two principal
-// components. Invalid or unavailable fingerprints remain at the neutral point
-// so the UI can position them with its metadata fallback.
+// components. A deterministic uniform subset bounds work and drawing cost for
+// very large libraries. Invalid fingerprints remain neutral for metadata fallback.
 inline std::vector<SampleSimilarityPoint> projectAcousticFingerprints(
     const std::vector<juce::String>& fingerprintTexts)
 {
@@ -44,13 +62,22 @@ inline std::vector<SampleSimilarityPoint> projectAcousticFingerprints(
         return true;
     };
 
-    std::vector<SampleSimilarityPoint> points(fingerprintTexts.size());
+    std::vector<SampleSimilarityPoint> points;
     std::vector<std::array<double, dimensions>> vectors;
-    std::vector<size_t> indices;
-    for (size_t i = 0; i < fingerprintTexts.size(); ++i)
+    std::vector<size_t> projectedPointIndices;
+    const auto selectedIndices = representativeSampleIndices(fingerprintTexts.size());
+    points.reserve(selectedIndices.size());
+    for (const int sampleIndex : selectedIndices)
     {
+        const size_t i = static_cast<size_t>(sampleIndex);
         std::array<double, dimensions> values{};
-        if (!decode(fingerprintTexts[i], values)) continue;
+        SampleSimilarityPoint point;
+        point.sampleIndex = sampleIndex;
+        if (!decode(fingerprintTexts[i], values))
+        {
+            points.push_back(point);
+            continue;
+        }
         // Each of the four time windows stores a spectrum. Normalize per
         // window to compare timbre and its evolution rather than playback level.
         for (size_t segment = 0; segment < 4; ++segment)
@@ -60,9 +87,10 @@ inline std::vector<SampleSimilarityPoint> projectAcousticFingerprints(
             if (total > 1.0e-8)
                 for (size_t band = 0; band < 16; ++band) values[segment * 16 + band] /= total;
         }
-        points[i].hasAcousticFingerprint = true;
+        point.hasAcousticFingerprint = true;
+        points.push_back(point);
         vectors.push_back(values);
-        indices.push_back(i);
+        projectedPointIndices.push_back(points.size() - 1);
     }
 
     if (vectors.size() < 2) return points;
@@ -136,8 +164,9 @@ inline std::vector<SampleSimilarityPoint> projectAcousticFingerprints(
     const double scale = span > 1.0e-9 ? 1.0 / span : 0.0;
     for (size_t i = 0; i < projected.size(); ++i)
     {
-        points[indices[i]].x = static_cast<float>(0.5 + (projected[i][0] - centerX) * scale);
-        points[indices[i]].y = static_cast<float>(0.5 + (projected[i][1] - centerY) * scale);
+        auto& point = points[projectedPointIndices[i]];
+        point.x = static_cast<float>(0.5 + (projected[i][0] - centerX) * scale);
+        point.y = static_cast<float>(0.5 + (projected[i][1] - centerY) * scale);
     }
     return points;
 }
