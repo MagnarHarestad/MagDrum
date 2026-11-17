@@ -1,12 +1,13 @@
 # MagDrum local test package
 
-Windows x64 test release: v0.1.2-test.208 (VST3 version 0.1.2.208).
+Windows x64 test release: v0.1.2-test.209 (VST3 version 0.1.2.209).
 
-- Windows x64 ZIP SHA-256: 15c43b053c6200143dbcc82ba8f3e582cd10547bc669786084c5a880a242ea7c
-- Packaged VST3 module SHA-256: 2f3d8ccbe3fcc17fae08ea88a6a82b948c4f48ab22276c2fc3d0833923c6785c
-- Windows Release CTest: 2/2 passed. The core tests cover tempo-map conversion, 29.97 fps drop-frame timing and invalid SMPTE rates; the VST editor test imports a SMPTE file into the sequencer.
-- The package checker verified contents, license notices, signatures and version 0.1.2.208.
+- Windows x64 ZIP SHA-256: 50e6b869edbce793b2c81c87255e25fd62031c648ad7c3c1a3feedf28ea7ca5e
+- Packaged VST3 module SHA-256: ECB8F23482786050B3CCE7F7B08620CB6B0DF2464F1699C8301E5C0F992187BB
+- Release CTest: 2/2 passed.
+- Windows package verifier passed for contents, license notices, signatures and version 0.1.2.209.
+- Steinberg VST3 SDK validator: 47/47 checks passed; 1 VST parameter exposed, MIDI CC uses the VST3 event bus.
+- MIDI importer coverage from this build includes tempo-map conversion, 29.97 fps drop-frame timing and invalid SMPTE rate rejection.
+- Install and Cubase Pro 15 acceptance are pending.
 
-The MIDI importer accepts PPQ and valid SMPTE divisions at 24, 25, 29.97 or 30 fps. It converts absolute time to musical beats using the tempo map, defaulting to 120 BPM before a tempo event, and exports in PPQ format.
-
-See the [Windows release package](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.208) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
+See the [Windows release package](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.209) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
