@@ -17,11 +17,13 @@
 #include "core/PluginVelocityLayerAnalyzer.h"
 #include "core/PluginRoundRobinAnalyzer.h"
 #include "core/SampleFeatureFilter.h"
+#include "core/SampleSimilarityProjection.h"
 #include "core/SampleClassificationReview.h"
 #include "core/StructuredLogger.h"
 #include <iostream>
 #include <array>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <cstdlib>
 #include <chrono>
@@ -386,6 +388,12 @@ int runSmokeTests(int argc,char** argv)
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
     if(scanned.getFirst().acousticFingerprint.length()!=128)return 56;
+    const auto encodeFingerprint=[](const std::array<std::uint8_t,64>& values){constexpr char digits[]="0123456789abcdef";juce::String encoded;for(const auto value:values){encoded+=digits[value>>4];encoded+=digits[value&0x0f];}return encoded;};
+    std::array<std::uint8_t,64> lowSpectrum{},nearbyLowSpectrum{},highSpectrum{};
+    for(size_t segment=0;segment<4;++segment){lowSpectrum[segment*16+2]=220;lowSpectrum[segment*16+3]=35;nearbyLowSpectrum[segment*16+2]=215;nearbyLowSpectrum[segment*16+3]=40;highSpectrum[segment*16+12]=220;highSpectrum[segment*16+13]=35;}
+    const auto similarityPoints=magdrum::projectAcousticFingerprints({encodeFingerprint(lowSpectrum),encodeFingerprint(nearbyLowSpectrum),encodeFingerprint(highSpectrum),juce::String("invalid")});
+    const auto pointDistance=[](const magdrum::SampleSimilarityPoint& first,const magdrum::SampleSimilarityPoint& second){return std::hypot(first.x-second.x,first.y-second.y);};
+    if(similarityPoints.size()!=4||!similarityPoints[0].hasAcousticFingerprint||!similarityPoints[1].hasAcousticFingerprint||!similarityPoints[2].hasAcousticFingerprint||similarityPoints[3].hasAcousticFingerprint||pointDistance(similarityPoints[0],similarityPoints[1])>0.1f||pointDistance(similarityPoints[0],similarityPoints[2])<0.5f)return 227;
     if(scanned.getFirst().fundamentalHz<418.0||scanned.getFirst().fundamentalHz>462.0||scanned.getFirst().pitchConfidence<0.65)return 43;
     if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600||scanned.getFirst().spectralFlatness>0.1){std::cerr<<"Feature check: peak="<<scanned.getFirst().peak<<" rms="<<scanned.getFirst().rms<<" centroid="<<scanned.getFirst().spectralCentroidHz<<" flatness="<<scanned.getFirst().spectralFlatness<<"\n";return 18;}
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;
