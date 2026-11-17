@@ -2,6 +2,7 @@
 param(
     [string] $PluginBundle = (Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3\MagDrum.vst3'),
     [string] $BuildDirectory = 'build\local-windows-release',
+    [string] $ReleasePackage = 'latest-publish\MagDrum-Windows-x64.zip',
     [string] $ExpectedVersion
 )
 
@@ -30,6 +31,23 @@ foreach ($requiredPath in @($modulePath, $scannerPath, $coreTestPath, $pluginTes
     }
 }
 
+$defaultUserBundle = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3\MagDrum.vst3'))
+if ($bundlePath.Equals($defaultUserBundle, [StringComparison]::OrdinalIgnoreCase)) {
+    $scanRoots = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3'),
+        (Join-Path $env:ProgramFiles 'Common Files\VST3')
+    )
+    $otherBundles = foreach ($scanRoot in $scanRoots) {
+        if (Test-Path -LiteralPath $scanRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $scanRoot -Directory -Filter 'MagDrum.vst3' |
+                Where-Object { -not $_.FullName.Equals($bundlePath, [StringComparison]::OrdinalIgnoreCase) }
+        }
+    }
+    if ($otherBundles) {
+        $paths = ($otherBundles | ForEach-Object FullName) -join [Environment]::NewLine
+        throw "Another MagDrum VST3 bundle is present in a standard Windows scan root:`n$paths`nMove the older bundle outside the scan paths before testing in Cubase."
+    }
+}
 $version = (Get-Item -LiteralPath $modulePath).VersionInfo.ProductVersion
 if ([string]::IsNullOrWhiteSpace($version)) { throw 'The installed VST3 has no ProductVersion metadata.' }
 if ($ExpectedVersion -and $version -ne $ExpectedVersion) {
@@ -37,6 +55,36 @@ if ($ExpectedVersion -and $version -ne $ExpectedVersion) {
 }
 
 $moduleHash = (Get-FileHash -LiteralPath $modulePath -Algorithm SHA256).Hash
+$packagePath = if ([IO.Path]::IsPathRooted($ReleasePackage)) {
+    [IO.Path]::GetFullPath($ReleasePackage)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repoRoot $ReleasePackage))
+}
+if (Test-Path -LiteralPath $packagePath -PathType Leaf) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
+    try {
+        $expectedEntryName = 'MagDrum.vst3/Contents/x86_64-win/MagDrum.vst3'
+        $entry = $archive.Entries | Where-Object { $_.FullName.Replace([string][char]92, '/') -ieq $expectedEntryName } | Select-Object -First 1
+        if ($null -eq $entry) { throw "Release package does not contain the x64 VST3 module: $packagePath" }
+        $entryStream = $entry.Open()
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            $packageModuleHash = [BitConverter]::ToString($sha256.ComputeHash($entryStream)).Replace('-', '')
+        } finally {
+            $sha256.Dispose()
+            $entryStream.Dispose()
+        }
+    } finally {
+        $archive.Dispose()
+    }
+    if ($moduleHash -ne $packageModuleHash) {
+        throw "Installed VST3 hash $moduleHash does not match release package module hash $packageModuleHash."
+    }
+    Write-Host "Package module SHA-256: $packageModuleHash"
+} else {
+    Write-Warning "Release package not found; installed-module hash comparison was skipped: $packagePath"
+}
 Write-Host "Installed MagDrum VST3: $version"
 Write-Host "Module SHA-256: $moduleHash"
 Write-Host 'Running the Windows core smoke suite and isolated 128-note VST3 scanner/render check...'
