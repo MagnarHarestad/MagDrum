@@ -142,6 +142,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'The installed-library scan includes Native Instruments shared Public Documents content, Steinberg shared and per-user Roaming AppData content, Cubase 15 Media and VST Sound locations, and detected Spectrasonics locations.',
         'The manual-example classifier selects an acoustic fingerprint weight using category-stratified validation with query filenames hidden. It remains a local, low-confidence review aid; the current folder-labeled collections do not demonstrate reliable audio-only or cross-kit classification.',
         'A conservative audio-only Kick suggestion covers low-centroid, strong-transient samples when the pitch estimate may be overtone-biased. On a 52-file CC0 three-kit corpus, accuracy rose from 32.7% to 44.2% / macro F1 0.320; three percussion samples were false kick suggestions and none reached the 0.75 acceptance threshold. The 121-file single-kit result remained 22.3% / 0.212, so the classifier remains a manual-review aid.',
+        'Generic HiHat/HH filename cues are searchable as Hi-hat but no longer imply Closed; contradictory open/closed cues remain Unknown.',
         'Opt-in metadata folder sync is available from the standalone app and VST. It shares tags, manual categories, and MIDI maps only; it never copies samples, paths, or plug-in states. Merge is transactional, and cloud-provider upload completion still needs to be confirmed by the user.'
     )
 }

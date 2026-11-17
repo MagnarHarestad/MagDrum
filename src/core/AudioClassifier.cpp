@@ -110,6 +110,18 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"distort", "distorted", "distortion", "distortions", "saturate", "saturated",
              "saturation", "fuzz", "fuzzy", "overdrive", "overdriven"})) addTag("Distorted");
 
+    const bool hasHiHatCue = has({"hi hat", "hihat", "hh", "closed hat", "closed hats", "closedhat",
+                                  "open hat", "open hats", "openhat", "pedal hat", "pedal hats", "pedalhat",
+                                  "foot hat", "foot hats", "chh", "hhc", "ohh", "hho", "phh", "hhp"});
+    const bool hasClosedHiHatCue = has({"closed hat", "closed hats", "closedhat", "closed hihat",
+                                        "closed hi hat", "closed hihats", "closed hi hats", "chh", "hhc"});
+    const bool hasOpenHiHatCue = has({"open hat", "open hats", "openhat", "open hihat", "open hi hat",
+                                      "open hihats", "open hi hats", "ohh", "hho"});
+    const bool hasPedalHiHatCue = has({"pedal hat", "pedal hats", "pedalhat", "pedal hihat", "pedal hi hat",
+                                       "pedal hihats", "pedal hi hats", "foot hat", "foot hats", "phh", "hhp"});
+    if (hasHiHatCue)
+        addTag("Hi-hat");
+
     if (sample.durationSeconds <= 0.0 || sample.rms <= 0.00001 || sample.peak <= 0.0001)
         return out;
 
@@ -155,12 +167,9 @@ DrumClassification classify(const ScannedSample& sample) const override
     juce::StringArray namedCategories;
     if (has({"kick", "bass drum", "bassdrum", "bd"})) namedCategories.add("Kick");
     if (has({"snare", "snr", "sd"})) namedCategories.add("Snare");
-    if (has({"hi-hat", "hihat", "hi hat", "closed hat", "open hat", "pedal hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp"}))
-    {
-        if (has({"pedal", "foot", "phh", "hhp"})) namedCategories.add("Pedal hi-hat");
-        else if (has({"open", "ohh", "hho"})) namedCategories.add("Open hi-hat");
-        else namedCategories.add("Closed hi-hat");
-    }
+    if (hasClosedHiHatCue) namedCategories.add("Closed hi-hat");
+    if (hasOpenHiHatCue) namedCategories.add("Open hi-hat");
+    if (hasPedalHiHatCue) namedCategories.add("Pedal hi-hat");
     if (has({"clap", "handclap"})) namedCategories.add("Clap");
     if (has({"tom", "floor tom", "rack tom", "tomhi", "tomlo", "htom", "ltom"})) namedCategories.add("Tom");
     if (has({"rimshot", "rim shot", "side stick", "sidestick"})) namedCategories.add("Rimshot");

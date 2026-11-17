@@ -618,6 +618,21 @@ int runSmokeTests(int argc,char** argv)
         }
         if (std::strcmp(filename, "ridebell_vl1_rr1.flac") == 0 && !mapped.tags.contains("Articulation: Bell")) return 216;
     }
+    for (const auto* genericHatName : {"HiHat.wav", "HH.wav", "Hi-Hat_01.wav"})
+    {
+        ScannedSample ambiguousHat;
+        ambiguousHat.file = juce::File(genericHatName);
+        const auto result = AudioClassifier{}.classify(ambiguousHat);
+        if (result.category != "Unknown" || !result.tags.contains("Hi-hat"))
+        {
+            std::cerr << "Ambiguous hi-hat name was assigned a specific family: " << genericHatName
+                      << " => " << result.category << '\n';
+            return 263;
+        }
+    }
+    ScannedSample contradictoryHat = kickLike;
+    contradictoryHat.file = juce::File("Closed_HiHat_Open_HiHat.wav");
+    if (AudioClassifier{}.classify(contradictoryHat).category != "Unknown") return 264;
     auto sustainedTone=scanned.getFirst();sustainedTone.file=juce::File("tone.wav");
     if(AudioClassifier{}.classify(sustainedTone).category!="Unknown")return 138;
     auto lowCentroidNoise=kickLike;lowCentroidNoise.transientStrength=.02;lowCentroidNoise.fundamentalHz=0;lowCentroidNoise.pitchConfidence=0;
