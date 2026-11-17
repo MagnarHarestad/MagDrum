@@ -154,7 +154,7 @@ juce::String labelForFolder(const juce::String& rawName)
     if (name == "rimshot" || name == "rimshots" || name == "side stick" || name == "side sticks") return "Rimshot";
     if (name == "ride" || name == "rides" || name == "ride cymbal" || name == "ride cymbals") return "Ride";
     if (name == "crash" || name == "crashes" || name == "crash cymbal" || name == "crash cymbals") return "Crash";
-    if (name == "percussion" || name == "percs" || name == "perc" || name == "percussions") return "Percussion";
+    if (name == "percussion" || name == "percs" || name == "perc" || name == "percussions" || name == "conga" || name == "congas" || name == "bongo" || name == "bongos" || name == "cowbell" || name == "shaker" || name == "shakers" || name == "tambourine" || name == "tambourines" || name == "agogo" || name == "agogo bell" || name == "agogo bells" || name == "woodblock" || name == "woodblocks" || name == "wood block" || name == "wood blocks" || name == "triangle" || name == "triangles" || name == "clave" || name == "claves" || name == "guiro" || name == "guiros" || name == "güiro" || name == "güiros" || name == "timbale" || name == "timbales" || name == "cabasa" || name == "djembe" || name == "djembes" || name == "cajon" || name == "cajón" || name == "castanet" || name == "castanets" || name == "maraca" || name == "maracas" || name == "vibraslap") return "Percussion";
     return {};
 }
 

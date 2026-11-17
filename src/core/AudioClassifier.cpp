@@ -8,6 +8,25 @@
 
 namespace
 {
+bool hasPercussionInstrumentCue(juce::String name)
+{
+    constexpr char separators[] = "-_.,;()[]{}+";
+    name = name.toLowerCase();
+    for (const auto* separator = separators; *separator != '\0'; ++separator)
+        name = name.replaceCharacter(*separator, ' ');
+
+    constexpr const char* cues[]{
+        "conga", "congas", "bongo", "bongos", "cowbell", "shaker", "shakers", "tambourine",
+        "tambourines", "agogo", "agogo bell", "agogo bells", "woodblock", "woodblocks",
+        "wood block", "wood blocks", "triangle", "triangles", "clave", "claves", "guiro",
+        "guiros", "güiro", "güiros", "timbale", "timbales", "cabasa", "djembe", "djembes",
+        "cajon", "cajón", "castanet", "castanets", "maraca", "maracas", "vibraslap"
+    };
+    for (const auto* cue : cues)
+        if (name.containsWholeWordIgnoreCase(cue))
+            return true;
+    return false;
+}
 juce::String drumCategoryForFolder(juce::String folderName)
 {
     constexpr char separators[] = "-_.,;()[]{}+";
@@ -45,7 +64,8 @@ juce::String drumCategoryForFolder(juce::String folderName)
     if (folderName == "crash" || folderName == "crashes" || folderName == "crash cymbal" || folderName == "crash cymbals") return "Crash";
     if (folderName == "percussion" || folderName == "percussions" || folderName == "perc" || folderName == "percs"
         || folderName == "conga" || folderName == "congas" || folderName == "bongo" || folderName == "bongos"
-        || folderName == "cowbell" || folderName == "shaker" || folderName == "tambourine") return "Percussion";
+        || folderName == "cowbell" || folderName == "shaker" || folderName == "tambourine"
+        || hasPercussionInstrumentCue(folderName)) return "Percussion";
     if (folderName == "ride cymbal" || folderName == "ride cymbals") return "Ride";
     return {};
 }
@@ -146,7 +166,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"rimshot", "rim shot", "side stick", "sidestick"})) namedCategories.add("Rimshot");
     if (has({"ride", "ride cymbal", "ridebell", "ride bell"})) namedCategories.add("Ride");
     if (has({"crash", "crash cymbal"})) namedCategories.add("Crash");
-    if (has({"percussion", "conga", "bongo", "cowbell", "shaker", "tambourine"})) namedCategories.add("Percussion");
+    if (hasPercussionInstrumentCue(name)) namedCategories.add("Percussion");
 
     bool categoryFromFolder = false;
     auto folder = sample.file.getParentDirectory();
@@ -170,7 +190,7 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "htom", "ltom", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick", "percussion"});
+        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "htom", "ltom", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick"}) || hasPercussionInstrumentCue(name);
         out.confidence = categoryFromFolder ? (filenameCategoryCue ? 0.97 : 0.84) : (filenameCategoryCue ? 0.92 : 0.82);
         return out;
     }

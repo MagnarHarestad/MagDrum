@@ -1,6 +1,6 @@
 # Local builds
 
-**Active target: Windows x64/Cubase Pro 15.** Current package: [v0.1.2-test.201](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.201), VST3 0.1.2.201. Windows x64 Release CTest passed 2/2; the installed bundle passed the isolated 128-note scanner/render test. Cubase Pro 15 hands-on validation remains pending.
+**Active target: Windows x64/Cubase Pro 15.** Current package: [v0.1.2-test.202](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.202), VST3 0.1.2.202. Windows x64 Release CTest passed 2/2; the installed bundle passed the isolated 128-note scanner/render test. Cubase Pro 15 hands-on validation remains pending.
 
 **Platform pause:** Do not start Linux/macOS builds, tests, packaging, publication or installation until the user explicitly requests resumption. Their commands and reports below are retained for historical reference only. Windows ARM64 is also outside the current x64 target.
 

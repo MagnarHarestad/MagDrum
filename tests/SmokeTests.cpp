@@ -625,9 +625,9 @@ int runSmokeTests(int argc,char** argv)
     ScannedSample filenameOnly;filenameOnly.durationSeconds=.5;filenameOnly.rms=.2;filenameOnly.peak=.8;filenameOnly.spectralCentroidHz=2500;filenameOnly.transientStrength=.01;
     filenameOnly.file=juce::File("Kick_01.wav");const auto tokenKick=AudioClassifier{}.classify(filenameOnly);
     if(tokenKick.category!="Kick"||tokenKick.confidence<0.9)return 141;
-    const std::array<std::pair<const char*,const char*>,7> drumAliases{{
+    const std::array<std::pair<const char*,const char*>,13> drumAliases{{
         {"BD_01.wav","Kick"},{"SD_Center.wav","Snare"},{"CHH_Closed.wav","Closed hi-hat"},
-        {"OHH_Open.wav","Open hi-hat"},{"PHH_Foot.wav","Pedal hi-hat"},{"kickmic_htom_center_vl1.wav","Tom"},{"kickmic_ltom_center_vl1.wav","Tom"}}};
+        {"OHH_Open.wav","Open hi-hat"},{"PHH_Foot.wav","Pedal hi-hat"},{"kickmic_htom_center_vl1.wav","Tom"},{"kickmic_ltom_center_vl1.wav","Tom"},{"Agogo_High_v1_rr1.wav","Percussion"},{"Wood_Block_01.wav","Percussion"},{"Triangle_Hit.wav","Percussion"},{"Guiro_Scrape.wav","Percussion"},{"Timbales_High.wav","Percussion"},{"Cajon_Slap.wav","Percussion"}}};
     for(const auto& [filename,category] : drumAliases){filenameOnly.file=juce::File(filename);if(AudioClassifier{}.classify(filenameOnly).category!=category)return 197;}
     filenameOnly.file=juce::File("pride.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 142;
     filenameOnly.file=juce::File("sidekick.wav");if(AudioClassifier{}.classify(filenameOnly).category!="Unknown")return 143;
@@ -637,6 +637,7 @@ int runSmokeTests(int argc,char** argv)
     folderNamedSample.file=juce::File("Library/KitA/htom/Layer 01/sample.wav");const auto folderTomPrediction=AudioClassifier{}.classify(folderNamedSample);if(folderTomPrediction.category!="Tom"||std::abs(folderTomPrediction.confidence-0.84)>1.0e-9)return 257;
     folderNamedSample.file=juce::File("Library/KitA/ltom/Snare.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Unknown")return 258;
     folderNamedSample.file=juce::File("percussion/loop 01.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Percussion")return 253;
+    folderNamedSample.file=juce::File("Library/KitA/Agogo/Layer 01/sample.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Percussion")return 259;
     folderNamedSample.file=juce::File("Snare/Kick.wav");if(AudioClassifier{}.classify(folderNamedSample).category!="Unknown")return 254;
     ScannedSample ambiguousName=kickLike;ambiguousName.file=juce::File("kick_snare.wav");
     if(AudioClassifier{}.classify(ambiguousName).category!="Unknown")return 65;
