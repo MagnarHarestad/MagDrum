@@ -218,8 +218,15 @@ DrumClassification classify(const ScannedSample& sample) const override
     else
     {
         const bool hasLowKickPitch = sample.pitchConfidence < 0.65 || sample.fundamentalHz <= 120.0;
+        // Some short low-frequency kicks have a strong, stable overtone that
+        // misleads the pitch estimator. Allow a conservative spectral/transient
+        // fallback without requiring that unreliable pitch estimate to be low.
+        const bool hasLowKickSpectralShape = sample.spectralCentroidHz > 0.0
+            && sample.spectralCentroidHz < 200.0 && sample.durationSeconds <= 2.5
+            && transientRatio > 1.5;
         if (sample.spectralCentroidHz > 0.0 && sample.spectralCentroidHz < 450.0
-            && sample.durationSeconds < 3.0 && transientRatio > 0.45 && hasLowKickPitch)
+            && sample.durationSeconds < 3.0 && transientRatio > 0.45
+            && (hasLowKickPitch || hasLowKickSpectralShape))
         {
             out.category = "Kick";
             out.confidence = juce::jlimit(0.35, 0.72, 0.62 - sample.spectralCentroidHz / 12000.0 + (transientRatio > 1.0 ? 0.04 : 0.0));

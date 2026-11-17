@@ -571,6 +571,9 @@ int runSmokeTests(int argc,char** argv)
     if(prediction.category!="Kick"||prediction.confidence<=0.0||prediction.confidence>1.0)return 13;
     auto longKickLike=kickLike;longKickLike.durationSeconds=2.1;longKickLike.spectralCentroidHz=200.0;
     if(AudioClassifier{}.classify(longKickLike).category!="Kick")return 243;
+    auto harmonicKickLike=kickLike;harmonicKickLike.durationSeconds=1.0;harmonicKickLike.spectralCentroidHz=165.0;harmonicKickLike.transientStrength=0.4;harmonicKickLike.fundamentalHz=1002.0;harmonicKickLike.pitchConfidence=0.95;
+    const auto harmonicKickPrediction=AudioClassifier{}.classify(harmonicKickLike);
+    if(harmonicKickPrediction.category!="Kick"||harmonicKickPrediction.confidence<0.4||harmonicKickPrediction.confidence>=0.75)return 260;
     auto tonalPercussion=kickLike;tonalPercussion.spectralCentroidHz=2500.0;tonalPercussion.spectralFlatness=0.3;tonalPercussion.fundamentalHz=180.0;
     if(AudioClassifier{}.classify(tonalPercussion).category!="Snare")return 208;
     auto tomLike=kickLike;tomLike.durationSeconds=2.6;tomLike.fundamentalHz=180.0;tomLike.spectralCentroidHz=700.0;const auto tomPrediction=AudioClassifier{}.classify(tomLike);
