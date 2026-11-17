@@ -8,6 +8,7 @@ Windows x64 test release: v0.1.2-test.209 (VST3 version 0.1.2.209).
 - Windows package verifier passed for contents, license notices, signatures and version 0.1.2.209.
 - Steinberg VST3 SDK validator: 47/47 checks passed; 1 VST parameter exposed, MIDI CC uses the VST3 event bus.
 - MIDI importer coverage from this build includes tempo-map conversion, 29.97 fps drop-frame timing and invalid SMPTE rate rejection.
-- Install and Cubase Pro 15 acceptance are pending.
+- Installed per-user at %LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3; package and installed module hashes match, and isolated rendering passed for all 128 MIDI notes including C1. The previous .208 bundle is backed up outside scan folders.
+- Cubase Pro 15 rescan and hands-on acceptance are pending.
 
 See the [Windows release package](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.209) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
