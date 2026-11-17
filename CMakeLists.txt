@@ -54,6 +54,11 @@ juce_add_plugin(MagDrumPlugin
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
     PRODUCT_NAME "MagDrum")
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND TARGET MagDrumPlugin_VST3)
+ # MIDI arrives on the VST3 event bus; do not expose JUCE's 2,080 legacy CC emulation parameters to the DAW.
+ target_compile_definitions(MagDrumPlugin PRIVATE JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0)
+ target_compile_definitions(MagDrumPlugin_VST3 PRIVATE JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0)
+endif()
 juce_generate_juce_header(MagDrumPlugin)
 target_sources(MagDrumPlugin PRIVATE src/plugin/PluginProcessor.cpp src/plugin/PluginEditor.cpp src/ui/MagDrumLocalization.cpp src/core/SampleDatabase.cpp src/core/MidiMapping.cpp src/core/MidiPatternIO.cpp src/core/DefaultLibraryDiscovery.cpp src/core/WavScanner.cpp src/core/AudioClassifier.cpp src/core/MagDrumPaths.cpp src/core/ScopedFileAccess.cpp src/core/PluginScanProcess.cpp src/core/PluginNoteScanner.cpp src/core/DeviceRealtimeRenderer.cpp src/core/PluginVelocityLayerAnalyzer.cpp src/core/PluginRoundRobinAnalyzer.cpp)
 target_include_directories(MagDrumPlugin PRIVATE src)
