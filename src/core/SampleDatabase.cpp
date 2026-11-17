@@ -2721,7 +2721,8 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "s.classification_confidence,(s.user_category<>''),COALESCE(p.identifier,''),COALESCE(p.name,''),"
         "COALESCE(k.name,''),COALESCE(ps.midi_note,rr.midi_note,-1),COALESCE(ps.velocity,rr.velocity,0),"
         "COALESCE(ps.articulation,''),COALESCE(rr.take_index,1),"
-        "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) "
+        "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path),"
+        "COALESCE(s.acoustic_fingerprint,'') "
         "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
         "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
         "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
@@ -2774,6 +2775,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         record.articulation = text(14); record.takeIndex = sqlite3_column_int(statement, 15);
         record.classificationTags.addTokens(text(16), juce::String::charToString(31), "");
         record.classificationTags.removeEmptyStrings();
+        record.acousticFingerprint = text(17);
         page.records.add(std::move(record));
     }
     sqlite3_finalize(statement);

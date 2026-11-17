@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <vector>
 #if JUCE_WINDOWS
 #ifndef NOMINMAX
@@ -238,7 +239,7 @@ public:
     std::function<void(int)> onSelect;
     void setSamples(const juce::Array<SampleBrowseRecord>& value, int selected)
     {
-        samples=value;selectedIndex=selected;repaint();
+        samples=value;selectedIndex=selected;rebuildSimilarityMap();repaint();
     }
     void setSelected(int selected) { selectedIndex=selected;repaint(); }
     void mouseMove(const juce::MouseEvent& event) override
@@ -250,6 +251,8 @@ public:
             +" · "+juce::String(sample.durationSeconds,2)+" s";
         if(sample.brightnessHz>0.0)
             details+=" · "+juce::String(sample.brightnessHz,0)+" Hz";
+        if (!hasAcousticFingerprint(index))
+            details += "\n" + magdrum::ui::localisedText("Position estimated from duration and brightness");
         if(sample.pluginName.isNotEmpty())
         {
             details+="\n"+sample.pluginName;
@@ -273,16 +276,17 @@ public:
         const int legendWidth=juce::jmin(150,heading.getWidth()/2);
         auto legendArea=heading.removeFromRight(legendWidth);
         heading.removeFromRight(8);
-        g.drawText(magdrum::ui::localisedText("SAMPLE MAP  ·  brightness × duration"),heading,juce::Justification::centredLeft,true);
+        g.drawText(magdrum::ui::localisedText("ACOUSTIC SIMILARITY MAP"),heading,juce::Justification::centredLeft,true);
         g.setColour(Palette::Accent.withAlpha(0.9f));
-        g.drawText(magdrum::ui::localisedText("Bright")+" ↑  ·  "+magdrum::ui::localisedText("Dark")+" ↓",
+        g.drawText(magdrum::ui::localisedText("Similar sounds cluster together"),
                    legendArea,juce::Justification::centredRight,true);
-        g.drawText(magdrum::ui::localisedText("SHORTER"),static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::left);
-        g.drawText(magdrum::ui::localisedText("LONGER"),static_cast<int>(plot.getRight()-80),static_cast<int>(plot.getBottom()+4),80,14,juce::Justification::right);
+        g.drawText(magdrum::ui::localisedText("Click to select and preview"),
+                   static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),
+                   static_cast<int>(plot.getWidth()),14,juce::Justification::centred);
         for(int i=0;i<samples.size();++i)
         {
             const auto& sample=samples.getReference(i);
-            const auto position=samplePosition(sample,plot);
+            const auto position=samplePosition(i, plot);
             const auto x=position.x, y=position.y;
             const bool selected=i==selectedIndex;const float radius=selected?7.0f:4.2f;
             if(selected){g.setColour(categoryColour(sample.category).withAlpha(0.18f));g.fillEllipse(x-radius-7.0f,y-radius-7.0f,(radius+7.0f)*2,(radius+7.0f)*2);}
@@ -302,6 +306,130 @@ public:
         }
     }
 private:
+    static bool decodeFingerprint(const juce::String& text, std::array<double, 64>& values)
+    {
+        if (text.length() != 128) return false;
+        for (int i = 0; i < 64; ++i)
+        {
+            const auto nibble = [](juce::juce_wchar c) -> int
+            {
+                if (c >= '0' && c <= '9') return static_cast<int>(c - '0');
+                if (c >= 'a' && c <= 'f') return static_cast<int>(c - 'a' + 10);
+                if (c >= 'A' && c <= 'F') return static_cast<int>(c - 'A' + 10);
+                return -1;
+            };
+            const int high = nibble(text[i * 2]), low = nibble(text[i * 2 + 1]);
+            if (high < 0 || low < 0) return false;
+            values[static_cast<size_t>(i)] = static_cast<double>((high << 4) | low) / 255.0;
+        }
+        return true;
+    }
+    void rebuildSimilarityMap()
+    {
+        acousticPoints.assign(static_cast<size_t>(samples.size()), {});
+        std::vector<std::array<double, 64>> vectors;
+        std::vector<int> indices;
+        for (int i = 0; i < samples.size(); ++i)
+        {
+            std::array<double, 64> values{};
+            if (!decodeFingerprint(samples.getReference(i).acousticFingerprint, values)) continue;
+            // Each of the four time windows stores a spectrum. Normalize per window
+            // to compare timbre and its evolution rather than playback level.
+            for (int segment = 0; segment < 4; ++segment)
+            {
+                double total = 0.0;
+                for (int band = 0; band < 16; ++band) total += values[static_cast<size_t>(segment * 16 + band)];
+                if (total > 1.0e-8)
+                    for (int band = 0; band < 16; ++band) values[static_cast<size_t>(segment * 16 + band)] /= total;
+            }
+            vectors.push_back(values);
+            indices.push_back(i);
+        }
+        if (vectors.size() >= 2)
+        {
+            constexpr size_t dimensions = 64;
+            std::array<double, dimensions> mean{};
+            for (const auto& row : vectors)
+                for (size_t d = 0; d < dimensions; ++d) mean[d] += row[d] / static_cast<double>(vectors.size());
+            std::array<double, dimensions * dimensions> covariance{};
+            for (const auto& row : vectors)
+                for (size_t a = 0; a < dimensions; ++a)
+                {
+                    const double da = row[a] - mean[a];
+                    for (size_t b = 0; b < dimensions; ++b)
+                        covariance[a * dimensions + b] += da * (row[b] - mean[b]);
+                }
+            const auto principalComponent = [&covariance](std::array<double, dimensions> seed,
+                                                           const std::array<double, dimensions>* previous)
+            {
+                for (int iteration = 0; iteration < 48; ++iteration)
+                {
+                    std::array<double, dimensions> next{};
+                    for (size_t a = 0; a < dimensions; ++a)
+                        for (size_t b = 0; b < dimensions; ++b)
+                            next[a] += covariance[a * dimensions + b] * seed[b];
+                    if (previous != nullptr)
+                    {
+                        double dot = 0.0;
+                        for (size_t d = 0; d < dimensions; ++d) dot += next[d] * (*previous)[d];
+                        for (size_t d = 0; d < dimensions; ++d) next[d] -= dot * (*previous)[d];
+                    }
+                    double norm = 0.0;
+                    for (const auto component : next) norm += component * component;
+                    norm = std::sqrt(norm);
+                    if (norm < 1.0e-12) return std::array<double, dimensions>{};
+                    for (size_t d = 0; d < dimensions; ++d) seed[d] = next[d] / norm;
+                }
+                size_t dominant = 0;
+                for (size_t d = 1; d < dimensions; ++d)
+                    if (std::abs(seed[d]) > std::abs(seed[dominant])) dominant = d;
+                if (seed[dominant] < 0.0)
+                    for (auto& component : seed) component = -component;
+                return seed;
+            };
+            std::array<double, dimensions> seedX{}, seedY{};
+            for (size_t d = 0; d < dimensions; ++d)
+            {
+                seedX[d] = 1.0 + static_cast<double>((d * 37) % 17) / 17.0;
+                seedY[d] = 1.0 + static_cast<double>((d * 13 + 7) % 19) / 19.0;
+            }
+            const auto axisX = principalComponent(seedX, nullptr);
+            const auto axisY = principalComponent(seedY, &axisX);
+            std::vector<juce::Point<double>> projected;
+            double minX = std::numeric_limits<double>::max(), maxX = std::numeric_limits<double>::lowest();
+            double minY = std::numeric_limits<double>::max(), maxY = std::numeric_limits<double>::lowest();
+            for (const auto& row : vectors)
+            {
+                double x = 0.0, y = 0.0;
+                for (size_t d = 0; d < dimensions; ++d)
+                {
+                    x += (row[d] - mean[d]) * axisX[d];
+                    y += (row[d] - mean[d]) * axisY[d];
+                }
+                projected.emplace_back(x, y);
+                minX = std::min(minX, x); maxX = std::max(maxX, x);
+                minY = std::min(minY, y); maxY = std::max(maxY, y);
+            }
+            for (size_t i = 0; i < projected.size(); ++i)
+            {
+                const float x = maxX - minX > 1.0e-9 ? static_cast<float>((projected[i].x - minX) / (maxX - minX)) : 0.5f;
+                const float y = maxY - minY > 1.0e-9 ? static_cast<float>((projected[i].y - minY) / (maxY - minY)) : 0.5f;
+                acousticPoints[static_cast<size_t>(indices[i])] = {x, y};
+            }
+        }
+        for (int i = 0; i < samples.size(); ++i)
+            if (std::find(indices.begin(), indices.end(), i) == indices.end())
+            {
+                const auto fallback = samplePosition(samples.getReference(i));
+                acousticPoints[static_cast<size_t>(i)] = {fallback.x, 1.0f - fallback.y};
+            }
+    }
+    bool hasAcousticFingerprint(int index) const
+    {
+        std::array<double, 64> values{};
+        return juce::isPositiveAndBelow(index, samples.size())
+            && decodeFingerprint(samples.getReference(index).acousticFingerprint, values);
+    }
     juce::Rectangle<float> plotBounds() const
     {
         auto plot=getLocalBounds().toFloat().reduced(14.0f).reduced(24.0f,24.0f);
@@ -309,15 +437,20 @@ private:
         plot.removeFromBottom(20.0f);
         return plot;
     }
-    static juce::Point<float> samplePosition(const SampleBrowseRecord& sample,
-                                             juce::Rectangle<float> plot)
+    static juce::Point<float> samplePosition(const SampleBrowseRecord& sample)
     {
         const double duration=juce::jlimit(0.0,1.0,
             std::log10(juce::jmax(0.01,sample.durationSeconds)+0.01)/2.0);
         const double brightness=juce::jlimit(0.0,1.0,
             std::log10(juce::jmax(100.0,sample.brightnessHz)/100.0)/2.5);
-        return {plot.getX()+static_cast<float>(duration)*(plot.getWidth()-12.0f)+6.0f,
-                plot.getBottom()-static_cast<float>(brightness)*(plot.getHeight()-12.0f)-6.0f};
+        return {static_cast<float>(duration), static_cast<float>(1.0 - brightness)};
+    }
+    juce::Point<float> samplePosition(int index, juce::Rectangle<float> plot) const
+    {
+        const auto point = juce::isPositiveAndBelow(index, static_cast<int>(acousticPoints.size()))
+            ? acousticPoints[static_cast<size_t>(index)] : juce::Point<float>{0.5f, 0.5f};
+        return {plot.getX() + 6.0f + point.x * (plot.getWidth() - 12.0f),
+                plot.getBottom() - 6.0f - point.y * (plot.getHeight() - 12.0f)};
     }
     int sampleAt(juce::Point<float> point) const
     {
@@ -327,12 +460,12 @@ private:
         float distance=24.0f;
         for(int i=0;i<samples.size();++i)
         {
-            const float current=point.getDistanceFrom(samplePosition(samples.getReference(i),plot));
+            const float current=point.getDistanceFrom(samplePosition(i, plot));
             if(current<distance){distance=current;closest=i;}
         }
         return closest;
     }
-    juce::Array<SampleBrowseRecord> samples;int selectedIndex=-1;
+    juce::Array<SampleBrowseRecord> samples;std::vector<juce::Point<float>> acousticPoints;int selectedIndex=-1;
 };
 
 class MagDrumWaveform final : public juce::Component, private juce::ChangeListener

@@ -6,6 +6,8 @@ The Windows VST3 editor is organized into five views. Open MagDrum on an instrum
 
 VST sample previews are decoded on a cancellable background worker, so large files do not block Cubase's editor thread. If you request another preview while one is loading, the older request is cancelled and the newer selection takes priority.
 
+The sample map projects the indexed four-window, 16-band acoustic fingerprints onto two principal components so samples with similar spectra tend to appear near one another. Points keep their drum-category colors; hover a point to inspect the sample and click to select it for preview. Older samples without a usable fingerprint are placed using their duration and brightness instead.
+
 Click **Stop** beside **Preview** to cancel a file decode or silence the current sample preview. The comparison window also has a **Stop** button below each waveform.
 
 To audition a pair while comparing them, Ctrl-click exactly two sample rows and choose **Sample tools > Compare two selected waveforms**. Use the **Preview** button under either waveform to hear that sample through the instrument output; choosing the other button replaces the previous comparison preview.

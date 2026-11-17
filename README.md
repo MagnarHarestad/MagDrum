@@ -12,7 +12,7 @@ MagDrum is a drum sound library and MIDI mapping workspace. Windows x64/Cubase i
 
 ## Phase 1 foundation
 
-The Windows MagDrum VST3 has five editor views: a duration/brightness sample map, a DR-660-inspired 4×4 drum machine with waveform and velocity layers, a 1–16-bar sequencer with selectable time signatures, per-step velocity and MIDI import length detection, MIDI mapping profiles, and a plugin scanner workspace. It can scan Native Instruments' shared Public Documents content location plus common Native Instruments, Spectrasonics/STEAM and Steinberg/Cubase audio folders directly from the plug-in, and shares the standalone library database. See [Windows VST3 workflow](docs/windows-plugin.md).
+The Windows MagDrum VST3 has five editor views: an acoustic-similarity sample map based on indexed fingerprints, a DR-660-inspired 4×4 drum machine with waveform and velocity layers, a 1–16-bar sequencer with selectable time signatures, per-step velocity and MIDI import length detection, MIDI mapping profiles, and a plugin scanner workspace. It can scan Native Instruments' shared Public Documents content location plus common Native Instruments, Spectrasonics/STEAM and Steinberg/Cubase audio folders directly from the plug-in, and shares the standalone library database. See [Windows VST3 workflow](docs/windows-plugin.md).
 
 The VST3 and standalone app offer English, German, French, Spanish, Swedish, Norwegian, Danish and Finnish from the top-right ☰ menu under **Language**. English is the first-run default. The choice is saved in the shared per-user MagDrum settings folder and updates the library, drum machine, sequencer and MIDI-map views immediately.
 

@@ -74,6 +74,7 @@ struct SampleBrowseRecord
     juce::String category, sourceType, sourceName, sourceIdentifier;
     juce::String pluginIdentifier, pluginName, kitName, articulation;
     juce::StringArray classificationTags;
+    juce::String acousticFingerprint;
     double durationSeconds = 0.0, brightnessHz = 0.0;
     double classificationConfidence = 0.0;
     int midiNote = -1, velocity = 0, takeIndex = 1;
