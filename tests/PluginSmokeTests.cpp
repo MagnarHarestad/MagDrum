@@ -904,12 +904,15 @@ int main(int argc, char** argv)
 
     auto& controlStateSource = makeTestProcessor();
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
-    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f});
-    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f});
+    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 350.0f, 8000.0f});
+    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, 25000.0f});
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
         || std::abs(clampedParameters.pan + 1.0f) > 0.001f
-        || std::abs(clampedParameters.tuneSemitones - 24.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.tuneSemitones - 24.0f) > 0.001f
+        || std::abs(clampedParameters.attackMs - 1000.0f) > 0.001f
+        || std::abs(clampedParameters.releaseMs - 5000.0f) > 0.001f
+        || std::abs(clampedParameters.filterCutoffHz - 20000.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -919,13 +922,21 @@ int main(int argc, char** argv)
     if (std::abs(restoredParameters.gainDb + 6.0f) > 0.001f
         || std::abs(restoredParameters.pan + 1.0f) > 0.001f
         || std::abs(restoredParameters.tuneSemitones - 12.0f) > 0.001f
+        || std::abs(restoredParameters.attackMs - 25.0f) > 0.001f
+        || std::abs(restoredParameters.releaseMs - 350.0f) > 0.001f
+        || std::abs(restoredParameters.filterCutoffHz - 8000.0f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::infinity(),
+                                               -std::numeric_limits<float>::infinity(),
+                                               std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
                                                -std::numeric_limits<float>::infinity()});
     const auto finiteParameters = controlStateSource.getNoteParameters(38);
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
         || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
+    if (finiteParameters.attackMs != 0.0f || finiteParameters.releaseMs != 0.0f
+        || finiteParameters.filterCutoffHz != 20000.0f) return 40;
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
@@ -936,6 +947,26 @@ int main(int argc, char** argv)
     const double unattenuatedPeak = renderPeak(gainReference, 36, 127);
     const double attenuatedPeak = renderPeak(gainReduced, 36, 127);
     if (unattenuatedPeak <= 0.05 || std::abs(attenuatedPeak / unattenuatedPeak - 0.501187) > 0.02) return 26;
+
+    auto& attackReference = makeTestProcessor();
+    auto& attackShaped = makeTestProcessor();
+    if (!attackReference.loadSampleForNote(36, sample) || !attackShaped.loadSampleForNote(36, sample)) return 41;
+    attackReference.prepareToPlay(48000.0, 128);
+    attackShaped.prepareToPlay(48000.0, 128);
+    attackShaped.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 100.0f, 0.0f, 20000.0f});
+    const double naturalAttackPeak = renderPeakInRange(attackReference, 36, 127, 0, 128);
+    const double shapedAttackPeak = renderPeakInRange(attackShaped, 36, 127, 0, 128);
+    if (naturalAttackPeak < 0.05 || shapedAttackPeak / naturalAttackPeak > 0.05) return 42;
+
+    auto& filterReference = makeTestProcessor();
+    auto& filteredPad = makeTestProcessor();
+    if (!filterReference.loadSampleForNote(36, sample) || !filteredPad.loadSampleForNote(36, sample)) return 43;
+    filterReference.prepareToPlay(48000.0, 128);
+    filteredPad.prepareToPlay(48000.0, 128);
+    filteredPad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100.0f});
+    const double naturalFilterPeak = renderPeak(filterReference, 36, 127);
+    const double filteredPeak = renderPeak(filteredPad, 36, 127);
+    if (naturalFilterPeak < 0.05 || filteredPeak / naturalFilterPeak > 0.6) return 44;
 
     auto& leftPan = makeTestProcessor();
     auto& rightPan = makeTestProcessor();

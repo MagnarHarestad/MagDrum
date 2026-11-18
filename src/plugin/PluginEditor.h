@@ -195,8 +195,9 @@ private:
     std::unique_ptr<MagDrumWaveform> waveform;
     std::array<magdrum::ui::DrumPadButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
-    juce::Label gainLabel, panLabel, tuneLabel;
-    juce::Slider gainSlider, panSlider, tuneSlider;
+    juce::Label padMixHeading, padShapeHeading;
+    juce::Label gainLabel, panLabel, tuneLabel, attackLabel, releaseLabel, filterCutoffLabel;
+    juce::Slider gainSlider, panSlider, tuneSlider, attackSlider, releaseSlider, filterCutoffSlider;
     bool updatingPadControls = false;
     juce::TextEditor velocityRange;
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load sample"};

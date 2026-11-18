@@ -1395,6 +1395,22 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     configurePadControl(gainSlider, gainLabel, "PAD GAIN", -60.0, 6.0, 0.1, " dB");
     configurePadControl(panSlider, panLabel, "PAD PAN", -1.0, 1.0, 0.01, {});
     configurePadControl(tuneSlider, tuneLabel, "PAD TUNE", -24.0, 24.0, 0.1, " st");
+    configurePadControl(attackSlider, attackLabel, "PAD ATTACK", 0.0, 1000.0, 1.0, " ms");
+    configurePadControl(releaseSlider, releaseLabel, "PAD RELEASE", 0.0, 5000.0, 1.0, " ms");
+    configurePadControl(filterCutoffSlider, filterCutoffLabel, "FILTER CUTOFF", 20.0, 20000.0, 1.0, " Hz");
+    attackSlider.setNumDecimalPlacesToDisplay(0);
+    releaseSlider.setNumDecimalPlacesToDisplay(0);
+    filterCutoffSlider.setNumDecimalPlacesToDisplay(0);
+    filterCutoffSlider.setSkewFactorFromMidPoint(4000.0);
+    for (auto* heading : {&padMixHeading, &padShapeHeading})
+    {
+        heading->setJustificationType(juce::Justification::centredLeft);
+        heading->setColour(juce::Label::textColourId, Palette::Accent);
+        heading->setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+        addAndMakeVisible(*heading);
+    }
+    padMixHeading.setText(magdrum::ui::localisedText("PAD MIX"), juce::dontSendNotification);
+    padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"), juce::dontSendNotification);
     gainSlider.onValueChange = [this]
     {
         if (updatingPadControls) return;
@@ -1416,6 +1432,30 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         if (updatingPadControls) return;
         auto parameters = processor.getNoteParameters(selectedNote);
         parameters.tuneSemitones = static_cast<float>(tuneSlider.getValue());
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    attackSlider.onValueChange = [this]
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.attackMs = static_cast<float>(attackSlider.getValue());
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    releaseSlider.onValueChange = [this]
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.releaseMs = static_cast<float>(releaseSlider.getValue());
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    filterCutoffSlider.onValueChange = [this]
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.filterCutoffHz = static_cast<float>(filterCutoffSlider.getValue());
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
     };
@@ -1586,7 +1626,7 @@ void MagDrumAudioProcessorEditor::resized()
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
-    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);attackLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);attackSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
     const auto barMap=currentBarMap();
     const int selectedBar=juce::jlimit(1,barMap.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
     const auto& visibleBar=barMap.bars[static_cast<size_t>(selectedBar-1)];
@@ -1627,20 +1667,32 @@ void MagDrumAudioProcessorEditor::resized()
             pads[i].setBounds(grid.getX()+col*(padW+gap),grid.getY()+row*(padH+gap),padW,padH);
         }
         bounds.removeFromLeft(18);
-        selectedPadTitle.setBounds(bounds.removeFromTop(30));bounds.removeFromTop(4);
-        sampleDetails.setBounds(bounds.removeFromTop(42));bounds.removeFromTop(4);
-        auto controls=bounds.removeFromTop(100);
+        selectedPadTitle.setBounds(bounds.removeFromTop(26));bounds.removeFromTop(2);
+        sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
+        padMixHeading.setBounds(bounds.removeFromTop(15));
+        auto controls=bounds.removeFromTop(78);
         const int controlWidth=controls.getWidth()/3;
-        const std::array<std::pair<juce::Label*,juce::Slider*>,3> padControls{{
+        const std::array<std::pair<juce::Label*,juce::Slider*>,3> padMixControls{{
             {&gainLabel,&gainSlider},{&panLabel,&panSlider},{&tuneLabel,&tuneSlider}}};
-        for(size_t index=0;index<padControls.size();++index)
+        for(size_t index=0;index<padMixControls.size();++index)
         {
-            auto column=controls.removeFromLeft(index+1==padControls.size()?controls.getWidth():controlWidth);
-            padControls[index].first->setBounds(column.removeFromTop(18));
-            padControls[index].second->setBounds(column);
+            auto column=controls.removeFromLeft(index+1==padMixControls.size()?controls.getWidth():controlWidth);
+            padMixControls[index].first->setBounds(column.removeFromTop(15));
+            padMixControls[index].second->setBounds(column);
         }
-        bounds.removeFromTop(4);
-        waveform->setBounds(bounds.removeFromTop(juce::jmin(126,bounds.getHeight()/2)));
+        bounds.removeFromTop(2);
+        padShapeHeading.setBounds(bounds.removeFromTop(15));
+        controls=bounds.removeFromTop(78);
+        const std::array<std::pair<juce::Label*,juce::Slider*>,3> padShapeControls{{
+            {&attackLabel,&attackSlider},{&releaseLabel,&releaseSlider},{&filterCutoffLabel,&filterCutoffSlider}}};
+        for(size_t index=0;index<padShapeControls.size();++index)
+        {
+            auto column=controls.removeFromLeft(index+1==padShapeControls.size()?controls.getWidth():controlWidth);
+            padShapeControls[index].first->setBounds(column.removeFromTop(15));
+            padShapeControls[index].second->setBounds(column);
+        }
+        bounds.removeFromTop(3);
+        waveform->setBounds(bounds.removeFromTop(juce::jmin(104,bounds.getHeight()/2)));
         bounds.removeFromTop(4);
         auto row=bounds.removeFromBottom(34);velocityRange.setBounds(row.removeFromLeft(100));row.removeFromLeft(8);clearPadButton.setBounds(row.removeFromLeft(108));row.removeFromLeft(8);loadButton.setBounds(row);
         layerSummary.setBounds(bounds);
@@ -1767,6 +1819,11 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     gainLabel.setText(magdrum::ui::localisedText("PAD GAIN"),juce::dontSendNotification);
     panLabel.setText(magdrum::ui::localisedText("PAD PAN"),juce::dontSendNotification);
     tuneLabel.setText(magdrum::ui::localisedText("PAD TUNE"),juce::dontSendNotification);
+    attackLabel.setText(magdrum::ui::localisedText("PAD ATTACK"),juce::dontSendNotification);
+    releaseLabel.setText(magdrum::ui::localisedText("PAD RELEASE"),juce::dontSendNotification);
+    filterCutoffLabel.setText(magdrum::ui::localisedText("FILTER CUTOFF"),juce::dontSendNotification);
+    padMixHeading.setText(magdrum::ui::localisedText("PAD MIX"),juce::dontSendNotification);
+    padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"),juce::dontSendNotification);
     playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));playSequenceButton.setTooltip(magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
     importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));
@@ -3638,6 +3695,9 @@ void MagDrumAudioProcessorEditor::setNote(int note)
     gainSlider.setValue(parameters.gainDb,juce::dontSendNotification);
     panSlider.setValue(parameters.pan,juce::dontSendNotification);
     tuneSlider.setValue(parameters.tuneSemitones,juce::dontSendNotification);
+    attackSlider.setValue(parameters.attackMs,juce::dontSendNotification);
+    releaseSlider.setValue(parameters.releaseMs,juce::dontSendNotification);
+    filterCutoffSlider.setValue(parameters.filterCutoffHz,juce::dontSendNotification);
     updatingPadControls=false;
     updateLayerSummary();
     const auto layers=processor.getSampleLayersForNote(selectedNote);

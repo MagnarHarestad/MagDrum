@@ -40,6 +40,9 @@ public:
         float gainDb = 0.0f;
         float pan = 0.0f;
         float tuneSemitones = 0.0f;
+        float attackMs = 0.0f;
+        float releaseMs = 0.0f;
+        float filterCutoffHz = 20000.0f;
     };
 
     MagDrumAudioProcessor();
@@ -118,6 +121,13 @@ private:
         float rightPanGain = 1.0f;
         double playbackRate = 1.0;
         bool active = false;
+        double elapsedOutputSamples = 0.0;
+        double totalOutputSamples = 0.0;
+        double attackSamples = 0.0;
+        double releaseSamples = 0.0;
+        float lowPassCoefficient = 0.0f;
+        float lowPassStateLeft = 0.0f;
+        float lowPassStateRight = 0.0f;
     };
 
     static constexpr int maxVoices = 32;
@@ -142,6 +152,9 @@ private:
     std::array<std::atomic<float>, 128> noteGainDb{};
     std::array<std::atomic<float>, 128> notePan{};
     std::array<std::atomic<float>, 128> noteTuneSemitones{};
+    std::array<std::atomic<float>, 128> noteAttackMs{};
+    std::array<std::atomic<float>, 128> noteReleaseMs{};
+    std::array<std::atomic<float>, 128> noteFilterCutoffHz{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
