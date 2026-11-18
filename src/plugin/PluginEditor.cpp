@@ -4580,29 +4580,35 @@ void MagDrumAudioProcessorEditor::manageSampleLayers()
             const size_t index = static_cast<size_t>((action - 100) / 3);
             if (index >= layers.size())
                 return;
-            const auto& layer = layers[index];
-            const int actionInLayer = (action - 100) % 3;
-            if (actionInLayer == 0)
-            {
-                safe->previewSampleAsync(juce::File(layer.path));
-                return;
-            }
-            if (actionInLayer == 1)
-            {
-                safe->editSampleLayerVelocityRange(layer);
-                return;
-            }
-            if (!safe->processor.removeSampleLayer(note, layer.slotIndex))
-            {
-                safe->status.setText(magdrum::ui::localisedText("Could not remove sample layer."),
-                                     juce::dontSendNotification);
-                return;
-            }
-            safe->processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
-            safe->updateLayerSummary();
-            safe->refreshSampleAssignmentLabels();
-            safe->status.setText(magdrum::ui::localisedText("Layer removed."), juce::dontSendNotification);
+            safe->handleSampleLayerMenuAction(note, layers[index], (action - 100) % 3);
         });
+}
+
+void MagDrumAudioProcessorEditor::handleSampleLayerMenuAction(
+    int note, const MagDrumAudioProcessor::SampleLayerInfo& layer, int action)
+{
+    if (action == 0)
+    {
+        previewSampleAsync(juce::File(layer.path));
+        return;
+    }
+    if (action == 1)
+    {
+        editSampleLayerVelocityRange(layer);
+        return;
+    }
+    if (action != 2)
+        return;
+    if (!processor.removeSampleLayer(note, layer.slotIndex))
+    {
+        status.setText(magdrum::ui::localisedText("Could not remove sample layer."),
+                       juce::dontSendNotification);
+        return;
+    }
+    processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    updateLayerSummary();
+    refreshSampleAssignmentLabels();
+    status.setText(magdrum::ui::localisedText("Layer removed."), juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::editSampleLayerVelocityRange(

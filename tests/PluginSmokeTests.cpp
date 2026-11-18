@@ -967,6 +967,15 @@ public:
                                            const juce::File& firstSample, const juce::File& secondSample)
     {
         using magdrum::ui::Language;
+        MagDrumAudioProcessor::SampleLayerInfo previewLayer;
+        previewLayer.path = firstSample.getFullPathName();
+        editor.handleSampleLayerMenuAction(36, previewLayer, 0);
+        if (editor.status.getText() != magdrum::ui::localisedText("Previewing ") + firstSample.getFileName())
+        {
+            std::cerr << "The drum-machine layer menu did not start preview for the selected layer.\n";
+            return 11;
+        }
+        editor.stopSamplePreview();
         const juce::Point<int> originalSize{editor.getWidth(), editor.getHeight()};
         const int originalPage = editor.page;
         editor.setSize(1000, 620);

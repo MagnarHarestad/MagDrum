@@ -64,6 +64,7 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void manageSampleLayers();
+    void handleSampleLayerMenuAction(int note, const MagDrumAudioProcessor::SampleLayerInfo&, int action);
     void editSampleLayerVelocityRange(const MagDrumAudioProcessor::SampleLayerInfo&);
     void refreshSamples();
     void selectSampleMapSample(int index);
