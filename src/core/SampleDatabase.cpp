@@ -2692,6 +2692,19 @@ juce::Array<SampleBrowseRecord> SampleDatabase::searchSampleBrowseRecords(const 
 SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFilter& filter,
                                                             int limit, int offset) const
 {
+    return searchSampleBrowseRecordsImpl(filter, limit, offset, false);
+}
+
+SampleBrowsePage SampleDatabase::searchSampleMapRecords(const SampleBrowseFilter& filter,
+                                                         int maximumPoints) const
+{
+    return searchSampleBrowseRecordsImpl(filter, maximumPoints, 0, true);
+}
+
+SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrowseFilter& filter,
+                                                                int limit, int offset,
+                                                                bool evenlySpacedRepresentative) const
+{
     SampleBrowsePage page;
     if (connection == nullptr || limit <= 0) return page;
 
@@ -2715,14 +2728,18 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         case 5: ordering = "s.spectral_centroid ASC,s.name COLLATE NOCASE,s.path COLLATE NOCASE"; break;
         default: break;
     }
-    const auto sql = juce::String(
-        "SELECT s.path,COALESCE(NULLIF(s.user_category,''),s.category),s.duration,s.spectral_centroid,"
-        "COALESCE(src.source_type,''),COALESCE(src.display_name,''),COALESCE(src.identifier,''),"
-        "s.classification_confidence,(s.user_category<>''),COALESCE(p.identifier,''),COALESCE(p.name,''),"
-        "COALESCE(k.name,''),COALESCE(ps.midi_note,rr.midi_note,-1),COALESCE(ps.velocity,rr.velocity,0),"
-        "COALESCE(ps.articulation,''),COALESCE(rr.take_index,1),"
-        "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path),"
-        "COALESCE(s.acoustic_fingerprint,'') "
+    const auto selectColumns = juce::String(
+        "s.path AS path,COALESCE(NULLIF(s.user_category,''),s.category) AS category,"
+        "s.duration AS duration,s.spectral_centroid AS spectral_centroid,"
+        "COALESCE(src.source_type,'') AS source_type,COALESCE(src.display_name,'') AS source_name,"
+        "COALESCE(src.identifier,'') AS source_identifier,s.classification_confidence AS confidence,"
+        "(s.user_category<>'') AS manually_classified,COALESCE(p.identifier,'') AS plugin_identifier,"
+        "COALESCE(p.name,'') AS plugin_name,COALESCE(k.name,'') AS kit_name,"
+        "COALESCE(ps.midi_note,rr.midi_note,-1) AS midi_note,COALESCE(ps.velocity,rr.velocity,0) AS velocity,"
+        "COALESCE(ps.articulation,'') AS articulation,COALESCE(rr.take_index,1) AS take_index,"
+        "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) AS tags,"
+        "COALESCE(s.acoustic_fingerprint,'') AS acoustic_fingerprint");
+    const auto fromAndWhere = juce::String(
         "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
         "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
         "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
@@ -2737,8 +2754,24 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
         "OR (?8=4 AND s.duration>=0.5 AND s.duration<2.0) OR (?8=5 AND s.duration>=2.0) "
         "OR (?8=6 AND s.spectral_centroid>0 AND s.spectral_centroid<1000) "
         "OR (?8=7 AND s.spectral_centroid>=1000 AND s.spectral_centroid<3000) "
-        "OR (?8=8 AND s.spectral_centroid>=3000)) ORDER BY " + ordering
-        + " LIMIT ?9 OFFSET ?10";
+        "OR (?8=8 AND s.spectral_centroid>=3000))";
+    juce::String sql;
+    if (evenlySpacedRepresentative)
+    {
+        sql = "WITH matched AS (SELECT " + selectColumns + " " + fromAndWhere
+            + "), ranked AS (SELECT *,ROW_NUMBER() OVER (ORDER BY path COLLATE NOCASE) AS map_row,"
+              "COUNT(*) OVER() AS map_total FROM matched), sampled AS (SELECT * FROM ranked WHERE map_row=1 OR "
+              "CAST((map_row-1)* (?9-1)/(map_total-1) AS INTEGER) "
+              "<> CAST((map_row-2)* (?9-1)/(map_total-1) AS INTEGER)) "
+              "SELECT path,category,duration,spectral_centroid,source_type,source_name,source_identifier,confidence,"
+              "manually_classified,plugin_identifier,plugin_name,kit_name,midi_note,velocity,articulation,take_index,tags,"
+              "acoustic_fingerprint FROM sampled ORDER BY map_row LIMIT ?10";
+    }
+    else
+    {
+        sql = "SELECT " + selectColumns + " " + fromAndWhere + " ORDER BY " + ordering
+            + " LIMIT ?9 OFFSET ?10";
+    }
 
     sqlite3_stmt* statement = nullptr;
     if (sqlite3_prepare_v2(connection, sql.toRawUTF8(), -1, &statement, nullptr) != SQLITE_OK) return page;
@@ -2751,13 +2784,17 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecords(const SampleBrowseFil
     bindText(4, filter.sourceIdentifier); bindText(5, filter.pluginName); bindText(6, filter.kitName);
     sqlite3_bind_int(statement, 7, filter.needsReview ? 1 : 0);
     sqlite3_bind_int(statement, 8, juce::jlimit(1, 8, filter.feature));
-    const int pageLimit = juce::jlimit(1, 1000, limit);
-    sqlite3_bind_int(statement, 9, pageLimit + 1);
-    sqlite3_bind_int(statement, 10, juce::jmax(0, offset));
+    const int pageLimit = juce::jlimit(1, evenlySpacedRepresentative ? 3000 : 1000, limit);
+    sqlite3_bind_int(statement, 9, evenlySpacedRepresentative ? pageLimit : pageLimit + 1);
+    sqlite3_bind_int(statement, 10, evenlySpacedRepresentative ? pageLimit : juce::jmax(0, offset));
 
     while (sqlite3_step(statement) == SQLITE_ROW)
     {
-        if (page.records.size() == pageLimit) { page.hasMore = true; break; }
+        if (page.records.size() == pageLimit)
+        {
+            if (!evenlySpacedRepresentative) page.hasMore = true;
+            break;
+        }
         const auto text = [statement](int column)
         {
             const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(statement, column));

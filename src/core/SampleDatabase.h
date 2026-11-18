@@ -196,6 +196,8 @@ public:
                                                               int limit, int offset = 0) const;
     SampleBrowsePage searchSampleBrowseRecords(const SampleBrowseFilter& filter,
                                                int limit, int offset = 0) const;
+    SampleBrowsePage searchSampleMapRecords(const SampleBrowseFilter& filter,
+                                            int maximumPoints = 3000) const;
     std::optional<juce::File> getFirstSampleForCategory(const juce::String& category) const;
     bool setUserTags(const juce::File& file, const juce::StringArray& tags);
     juce::StringArray getUserTags(const juce::File& file) const;
@@ -217,5 +219,8 @@ public:
     juce::Array<SampleBrowseRecord> getSampleBrowseRecords() const;
     juce::Array<juce::File> searchPaths(const juce::String& query, int limit = 200) const;
 private:
+    SampleBrowsePage searchSampleBrowseRecordsImpl(const SampleBrowseFilter& filter,
+                                                   int limit, int offset,
+                                                   bool evenlySpacedRepresentative) const;
     sqlite3* connection = nullptr;
 };

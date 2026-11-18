@@ -652,15 +652,18 @@ public:
     using Completion = std::function<void(bool, SampleBrowsePage)>;
 
     PluginSampleBrowseJob(juce::File databaseFile, SampleBrowseFilter filter, int limit, int offset,
-                          Completion completion)
+                          Completion completion, bool evenlySpacedRepresentative = false)
         : ThreadPoolJob("MagDrum VST sample library query"), dbPath(std::move(databaseFile)),
-          queryFilter(std::move(filter)), pageLimit(limit), pageOffset(offset), onComplete(std::move(completion)) {}
+          queryFilter(std::move(filter)), pageLimit(limit), pageOffset(offset),
+          representative(evenlySpacedRepresentative), onComplete(std::move(completion)) {}
 
     JobStatus runJob() override
     {
         SampleDatabase queryDatabase;
         const bool opened = queryDatabase.open(dbPath);
-        auto page = opened ? queryDatabase.searchSampleBrowseRecords(queryFilter, pageLimit, pageOffset)
+        auto page = opened ? (representative
+            ? queryDatabase.searchSampleMapRecords(queryFilter, pageLimit)
+            : queryDatabase.searchSampleBrowseRecords(queryFilter, pageLimit, pageOffset))
                            : SampleBrowsePage{};
         juce::MessageManager::callAsync([completion = std::move(onComplete), opened,
                                          page = std::move(page)]() mutable
@@ -675,6 +678,7 @@ private:
     juce::File dbPath;
     SampleBrowseFilter queryFilter;
     int pageLimit = 250, pageOffset = 0;
+    bool representative = false;
     Completion onComplete;
 };
 
@@ -1429,8 +1433,12 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     instrumentScannerButton.setTooltip(magdrum::ui::localisedText("Open MagDrum's isolated instrument browser to load VST instruments, choose kits and capture MIDI notes."));
     scanDefaultsButton.setTooltip(magdrum::ui::localisedText("Scan audio files in common Native Instruments, Spectrasonics and Steinberg library locations."));
     indexedList.setModel(this);indexedList.setRowHeight(43);indexedList.setMultipleSelectionEnabled(true);addAndMakeVisible(indexedList);
-    sampleMap->onSelect=[this](int index){if(juce::isPositiveAndBelow(index,samples.size()))indexedList.selectRow(index);};
-    sampleMap->onPreview=[this](int index){if(juce::isPositiveAndBelow(index,samples.size()))previewSampleAsync(samples.getReference(index).file);};
+    sampleMap->onSelect=[this](int index) { selectSampleMapSample(index); };
+    sampleMap->onPreview=[this](int index)
+    {
+        if (juce::isPositiveAndBelow(index, sampleMapSamples.size()))
+            previewSampleAsync(sampleMapSamples.getReference(index).file);
+    };
     sampleMap->onStopPreview=[this]{stopSamplePreview();};addAndMakeVisible(*sampleMap);
     sampleScanProgress.setTextToDisplay(juce::String{});sampleScanProgress.setPercentageDisplay(true);sampleScanProgress.setColour(juce::ProgressBar::foregroundColourId,Palette::Accent);sampleScanProgress.setColour(juce::ProgressBar::backgroundColourId,Palette::Panel);addAndMakeVisible(sampleScanProgress);
     sampleScanProgressLabel.setJustificationType(juce::Justification::centredLeft);sampleScanProgressLabel.setColour(juce::Label::textColourId,Palette::Muted);sampleScanProgressLabel.setFont(juce::Font(juce::FontOptions(11.0f)));addAndMakeVisible(sampleScanProgressLabel);
@@ -1722,7 +1730,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleMapWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2350,7 +2358,15 @@ void MagDrumAudioProcessorEditor::paintListBoxItem(int row,juce::Graphics& g,int
 }
 void MagDrumAudioProcessorEditor::selectedRowsChanged(int row)
 {
-    sampleMap->setSelected(row);
+    if (juce::isPositiveAndBelow(row, samples.size())) sampleMapSelectedFile = {};
+    int mapRow = -1;
+    if (juce::isPositiveAndBelow(row, samples.size()))
+    {
+        const auto& selected = samples.getReference(row).file;
+        for (int index = 0; index < sampleMapSamples.size(); ++index)
+            if (sampleMapSamples.getReference(index).file == selected) { mapRow = index; break; }
+    }
+    sampleMap->setSelected(mapRow);
     if(!juce::isPositiveAndBelow(row,samples.size())){openSourceKitButton.setEnabled(false);return;}
     const auto& sample=samples.getReference(row);
     openSourceKitButton.setEnabled(sample.pluginIdentifier.isNotEmpty());
@@ -2475,6 +2491,32 @@ void MagDrumAudioProcessorEditor::refreshSamples()
         if (safe != nullptr && safe->sampleBrowseGeneration == requestGeneration)
             safe->loadSamplePage(true, requestGeneration);
     });
+}
+
+void MagDrumAudioProcessorEditor::selectSampleMapSample(int index)
+{
+    if (!juce::isPositiveAndBelow(index, sampleMapSamples.size())) return;
+    const auto& record = sampleMapSamples.getReference(index);
+    const auto pageRecord = std::find_if(samples.begin(), samples.end(), [&record](const auto& item)
+    { return item.file == record.file; });
+    if (pageRecord != samples.end())
+    {
+        sampleMapSelectedFile = {};
+        indexedList.selectRow(static_cast<int>(std::distance(samples.begin(), pageRecord)));
+        return;
+    }
+    sampleMapSelectedFile = record.file;
+    indexedList.deselectAllRows();
+    sampleMap->setSelected(index);
+    auto details = magdrum::ui::localisedText(record.category) + " | "
+        + juce::String(record.durationSeconds, 2) + " s | "
+        + juce::String(static_cast<int>(record.brightnessHz)) + " Hz";
+    if (record.pluginName.isNotEmpty())
+        details += " | " + record.pluginName + " / " + record.kitName;
+    details += "\n" + record.file.getFullPathName();
+    sampleDetails.setText(details, juce::dontSendNotification);
+    openSourceKitButton.setEnabled(record.pluginIdentifier.isNotEmpty());
+    status.setText(record.file.getFileName(), juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::refreshSampleAssignmentLabels()
@@ -3071,15 +3113,41 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
     }
 
     const int offset = reset ? 0 : sampleOffset;
+    const bool requestMap = reset && sampleMapGeneration != requestGeneration;
+    if (requestMap)
+    {
+        sampleMapGeneration = requestGeneration;
+        sampleMapQueryPending = true;
+    }
     sampleBrowseQueryPending = true;
     indexedList.setEnabled(false);
-    sampleMap->setEnabled(false);
+    sampleMap->setEnabled(!sampleMapQueryPending);
     previewButton.setEnabled(false);
     assignButton.setEnabled(false);
     libraryToolsButton.setEnabled(false);
     moreSamplesButton.setEnabled(false);
 
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    if (requestMap)
+    {
+        auto mapOptions = options;
+        sampleMapWorkers.addJob(new PluginSampleBrowseJob(databaseFile, std::move(mapOptions), 3000, 0,
+            [safe, requestGeneration](bool opened, SampleBrowsePage result)
+            {
+                if (safe == nullptr || requestGeneration != safe->sampleBrowseGeneration) return;
+                safe->sampleMapQueryPending = false;
+                safe->sampleMapSamples = opened ? std::move(result.records) : juce::Array<SampleBrowseRecord>{};
+                int selectedMapRow = -1;
+                const auto selectedFile = safe->sampleMapSelectedFile != juce::File()
+                    ? safe->sampleMapSelectedFile : safe->selectedSample();
+                if (selectedFile != juce::File())
+                    for (int index = 0; index < safe->sampleMapSamples.size(); ++index)
+                        if (safe->sampleMapSamples.getReference(index).file == selectedFile)
+                        { selectedMapRow = index; break; }
+                safe->sampleMap->setSamples(safe->sampleMapSamples, selectedMapRow);
+                safe->sampleMap->setEnabled(!safe->sampleBrowseQueryPending);
+            }), true);
+    }
     sampleBrowseWorkers.addJob(new PluginSampleBrowseJob(databaseFile, std::move(options), 250, offset,
         [safe, requestGeneration, reset](bool opened, SampleBrowsePage result)
         {
@@ -3088,7 +3156,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
 
             safe->sampleBrowseQueryPending = false;
             safe->indexedList.setEnabled(true);
-            safe->sampleMap->setEnabled(true);
+            safe->sampleMap->setEnabled(!safe->sampleMapQueryPending);
             safe->previewButton.setEnabled(true);
             safe->assignButton.setEnabled(true);
             safe->libraryToolsButton.setEnabled(true);
@@ -3106,6 +3174,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             {
                 safe->samples.clear();
                 safe->sampleOffset = 0;
+                safe->sampleMapSelectedFile = {};
                 safe->indexedList.deselectAllRows();
             }
             for (const auto& record : result.records)
@@ -3113,7 +3182,6 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             safe->sampleOffset = safe->samples.size();
             safe->hasMoreSamples = result.hasMore;
             safe->indexedList.updateContent();
-            safe->sampleMap->setSamples(safe->samples, -1);
             safe->refreshSampleAssignmentLabels();
             safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
             safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
@@ -3122,7 +3190,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
                                  juce::dontSendNotification);
         }), true);
 }
-juce::File MagDrumAudioProcessorEditor::selectedSample()const{const int row=indexedList.getSelectedRow();return juce::isPositiveAndBelow(row,samples.size())?samples.getReference(row).file:juce::File();}
+juce::File MagDrumAudioProcessorEditor::selectedSample()const{if(sampleMapSelectedFile!=juce::File())return sampleMapSelectedFile;const int row=indexedList.getSelectedRow();return juce::isPositiveAndBelow(row,samples.size())?samples.getReference(row).file:juce::File();}
 
 void MagDrumAudioProcessorEditor::chooseSampleFolder(bool chooseDifferentFolder)
 {
@@ -3212,15 +3280,22 @@ void MagDrumAudioProcessorEditor::launchInstrumentScanner()
 
 void MagDrumAudioProcessorEditor::openSourceKitForSelectedSample()
 {
+    const SampleBrowseRecord* sample = nullptr;
+    if (sampleMapSelectedFile != juce::File())
+    {
+        const auto found = std::find_if(sampleMapSamples.begin(), sampleMapSamples.end(), [this](const auto& item)
+        { return item.file == sampleMapSelectedFile; });
+        if (found != sampleMapSamples.end()) sample = &*found;
+    }
     const int row = indexedList.getSelectedRow();
-    if (! juce::isPositiveAndBelow(row, samples.size()))
+    if (sample == nullptr && juce::isPositiveAndBelow(row, samples.size())) sample = &samples.getReference(row);
+    if (sample == nullptr)
     {
         status.setText(magdrum::ui::localisedText("Select a sample first."), juce::dontSendNotification);
         return;
     }
 
-    const auto& sample = samples.getReference(row);
-    PluginSourceKitRequest request{ sample.pluginIdentifier, sample.kitName };
+    PluginSourceKitRequest request{ sample->pluginIdentifier, sample->kitName };
     if (! request.isValid())
     {
         status.setText(magdrum::ui::localisedText("The selected sample has no saved source kit."), juce::dontSendNotification);

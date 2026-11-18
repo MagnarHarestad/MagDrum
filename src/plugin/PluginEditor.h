@@ -64,6 +64,7 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void refreshSamples();
+    void selectSampleMapSample(int index);
     void refreshSampleAssignmentLabels();
     void previewSampleAsync(const juce::File&);
     void stopSamplePreview();
@@ -157,6 +158,8 @@ private:
     SampleDatabase database;
     juce::File databaseFile;
     juce::Array<SampleBrowseRecord> samples;
+    juce::Array<SampleBrowseRecord> sampleMapSamples;
+    juce::File sampleMapSelectedFile;
     std::unordered_map<std::string, juce::String> sampleAssignmentLabels;
     int page = 0, selectedNote = 36, sequenceStep = 0, sequenceTempo = 120;
     int sampleOffset = 0, previousMeterId = 404, previousPatternBars = 16;
@@ -164,6 +167,9 @@ private:
     bool sampleBrowseQueryPending = false;
     std::uint64_t sampleBrowseGeneration = 0;
     juce::ThreadPool sampleBrowseWorkers{1};
+    std::uint64_t sampleMapGeneration = 0;
+    bool sampleMapQueryPending = false;
+    juce::ThreadPool sampleMapWorkers{1};
     std::atomic<std::uint64_t> samplePreviewGeneration{0};
     juce::ThreadPool samplePreviewWorkers{1};
     std::atomic<bool> sampleLoadCancellation{false};

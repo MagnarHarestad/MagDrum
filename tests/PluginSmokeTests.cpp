@@ -236,6 +236,65 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksSampleMapCoversBeyondFirstListPage(MagDrumAudioProcessorEditor& editor)
+    {
+        constexpr int fixtureCount = 400;
+        for (int index = 0; index < fixtureCount; ++index)
+        {
+            ScannedSample sample;
+            sample.file = juce::File("C:/MagDrumTestFixtures/Map/Map Fixture "
+                                     + juce::String(index).paddedLeft('0', 3) + ".wav");
+            sample.durationSeconds = 0.18 + 0.001 * index;
+            sample.channels = 1;
+            sample.sampleRate = 44100.0;
+            sample.format = "WAV";
+            sample.spectralCentroidHz = 900.0 + index;
+            sample.category = index % 2 == 0 ? "Kick" : "Snare";
+            if (!editor.database.insertSample(sample))
+            {
+                std::cerr << "Could not seed the sample map paging fixture.\n";
+                return 1;
+            }
+        }
+
+        editor.sampleSearch.setText("Map Fixture", juce::dontSendNotification);
+        editor.refreshSamples();
+        const auto deadline = juce::Time::getMillisecondCounter() + 10000;
+        auto pollForMap = std::make_shared<std::function<void()>>();
+        *pollForMap = [&editor, deadline, pollForMap]
+        {
+            const bool ready = !editor.sampleBrowseQueryPending && !editor.sampleMapQueryPending
+                && editor.samples.size() == 250 && editor.sampleMapSamples.size() == fixtureCount;
+            if (ready || juce::Time::getMillisecondCounter() >= deadline)
+            {
+                juce::MessageManager::getInstance()->stopDispatchLoop();
+                return;
+            }
+            juce::Timer::callAfterDelay(20, *pollForMap);
+        };
+        juce::Timer::callAfterDelay(20, *pollForMap);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        *pollForMap = {};
+        pollForMap.reset();
+        if (editor.samples.size() != 250 || !editor.hasMoreSamples
+            || editor.sampleMapSamples.size() != fixtureCount)
+        {
+            std::cerr << "The sample map did not load the complete filtered library independently of list paging.\n";
+            return 2;
+        }
+
+        constexpr int offPageMapIndex = 300;
+        const auto expectedFile = editor.sampleMapSamples.getReference(offPageMapIndex).file;
+        editor.selectSampleMapSample(offPageMapIndex);
+        if (editor.selectedSample() != expectedFile || editor.sampleMapSelectedFile != expectedFile
+            || editor.indexedList.getSelectedRow() != -1)
+        {
+            std::cerr << "Selecting a map point beyond the first list page did not select that sample.\n";
+            return 3;
+        }
+        return 0;
+    }
+
     static bool mappingNotePlaceholderMatchesLanguage(const MagDrumAudioProcessorEditor& editor)
     {
         return editor.mappingNote.getTextToShowWhenEmpty() == magdrum::ui::localisedText("MIDI 0-127");
@@ -1067,6 +1126,8 @@ int main(int argc, char** argv)
         if (padActivityCheck != 0) return 59 + padActivityCheck;
         const int dr660LaneCheck = MagDrumAudioProcessorEditorTestAccess::checksDr660ImportedNotesReachTheirOwnSequencerLanes(editor);
         if (dr660LaneCheck != 0) return 300 + dr660LaneCheck;
+        const int sampleMapPagingCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleMapCoversBeyondFirstListPage(editor);
+        if (sampleMapPagingCheck != 0) return 320 + sampleMapPagingCheck;
     }
 #endif
 
