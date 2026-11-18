@@ -23,6 +23,7 @@ public:
         juce::String path;
         int roundRobinIndex = 1;
         int roundRobinCount = 1;
+        int slotIndex = -1;
     };
 
     struct SampleAssignmentInfo
@@ -88,6 +89,8 @@ public:
     bool loadSampleForNote(int midiNote, const juce::File&);
     bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&,
                                     const std::function<bool()>& shouldCancel = {});
+    bool updateSampleLayerVelocityRange(int midiNote, int slotIndex, int minimumVelocity, int maximumVelocity);
+    bool removeSampleLayer(int midiNote, int slotIndex);
     bool clearSamplesForNote(int midiNote);
     bool previewSample(const juce::File&, const std::function<bool()>& shouldCancel = {});
     void stopSamplePreview();

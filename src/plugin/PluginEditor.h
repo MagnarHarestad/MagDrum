@@ -63,6 +63,8 @@ private:
     void updatePadActivity();
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
+    void manageSampleLayers();
+    void editSampleLayerVelocityRange(const MagDrumAudioProcessor::SampleLayerInfo&);
     void refreshSamples();
     void selectSampleMapSample(int index);
     void refreshSampleAssignmentLabels();
@@ -222,6 +224,7 @@ private:
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
     juce::Label chokeGroupLabel;
     juce::ComboBox chokeGroupSelect;
+    juce::TextButton manageLayersButton{"Layers"};
     juce::Label padMixHeading, padShapeHeading, padEqHeading, padFxHeading;
     juce::Rectangle<int> drumPadTrayBounds, drumEditorPanelBounds, drumWaveformPanelBounds;
     juce::Rectangle<int> padMixPanelBounds, padShapePanelBounds, padEqPanelBounds, padFxPanelBounds;

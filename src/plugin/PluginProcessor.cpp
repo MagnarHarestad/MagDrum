@@ -380,6 +380,66 @@ bool MagDrumAudioProcessor::clearSamplesForNote(int note)
     return removedAny;
 }
 
+bool MagDrumAudioProcessor::updateSampleLayerVelocityRange(int note, int slotIndex,
+    int minimumVelocity, int maximumVelocity)
+{
+    if (note < 0 || note > 127 || slotIndex < 0 || slotIndex >= maxVelocityLayers
+        || minimumVelocity < 1 || maximumVelocity > 127 || minimumVelocity > maximumVelocity)
+        return false;
+
+    const juce::ScopedLock sampleGuard(sampleLock);
+    const juce::ScopedLock stateGuard(stateLock);
+    auto& target = ownedSamples[static_cast<size_t>(note)][static_cast<size_t>(slotIndex)];
+    if (target == nullptr)
+        return false;
+
+    for (int layer = 0; layer < maxVelocityLayers; ++layer)
+    {
+        if (layer == slotIndex)
+            continue;
+        const auto& existing = ownedSamples[static_cast<size_t>(note)][static_cast<size_t>(layer)];
+        if (existing == nullptr)
+            continue;
+        const bool overlaps = minimumVelocity <= existing->maximumVelocity
+            && maximumVelocity >= existing->minimumVelocity;
+        if (overlaps)
+            return false;
+    }
+
+    target->minimumVelocity = minimumVelocity;
+    target->maximumVelocity = maximumVelocity;
+    for (auto& counter : roundRobinCounters[static_cast<size_t>(note)])
+        counter.store(0, std::memory_order_relaxed);
+    return true;
+}
+
+bool MagDrumAudioProcessor::removeSampleLayer(int note, int slotIndex)
+{
+    if (note < 0 || note > 127 || slotIndex < 0 || slotIndex >= maxVelocityLayers)
+        return false;
+
+    std::unique_ptr<SampleData> retiredSample;
+    const juce::ScopedLock sampleGuard(sampleLock);
+    const juce::ScopedLock stateGuard(stateLock);
+    const auto noteIndex = static_cast<size_t>(note);
+    const auto layerIndex = static_cast<size_t>(slotIndex);
+    auto& target = ownedSamples[noteIndex][layerIndex];
+    if (target == nullptr)
+        return false;
+
+    const auto* oldPointer = target.get();
+    for (auto& voice : voices)
+        if (voice.sample == oldPointer)
+            voice = {};
+    sampleSlots[noteIndex][layerIndex].store(nullptr, std::memory_order_release);
+    samplePaths[noteIndex][layerIndex].clear();
+    retiredSample = std::move(target);
+    for (auto& counter : roundRobinCounters[noteIndex])
+        counter.store(0, std::memory_order_relaxed);
+    recalculateTailLengthSeconds();
+    return true;
+}
+
 bool MagDrumAudioProcessor::previewSample(const juce::File& file, const std::function<bool()>& shouldCancel)
 {
     if ((shouldCancel && shouldCancel()) || !file.existsAsFile()) return false;
@@ -821,7 +881,8 @@ std::vector<MagDrumAudioProcessor::SampleLayerInfo> MagDrumAudioProcessor::getSa
         if (samplePaths[noteIndex][layerIndex].isEmpty() || ownedSamples[noteIndex][layerIndex] == nullptr)
             continue;
         const auto& sample = ownedSamples[noteIndex][layerIndex];
-        layers.push_back({sample->minimumVelocity, sample->maximumVelocity, samplePaths[noteIndex][layerIndex], 1, 1});
+        layers.push_back({sample->minimumVelocity, sample->maximumVelocity,
+                          samplePaths[noteIndex][layerIndex], 1, 1, layer});
     }
     std::stable_sort(layers.begin(), layers.end(), [](const auto& left, const auto& right)
     {

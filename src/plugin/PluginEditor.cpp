@@ -1464,6 +1464,10 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     chokeGroupSelect.setTooltip(magdrum::ui::localisedText(
         "Pads in the same choke group stop one another when triggered."));
     addAndMakeVisible(chokeGroupSelect);
+    manageLayersButton.setTooltip(magdrum::ui::localisedText(
+        "Manage velocity layers for the selected pad."));
+    manageLayersButton.addListener(this);
+    addAndMakeVisible(manageLayersButton);
     chokeGroupSelect.onChange = [this]
     {
         if (updatingPadControls || chokeGroupSelect.getSelectedId() < 1) return;
@@ -1995,7 +1999,7 @@ void MagDrumAudioProcessorEditor::resized()
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
-    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);chokeGroupLabel.setVisible(page==1);chokeGroupSelect.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);chokeGroupLabel.setVisible(page==1);chokeGroupSelect.setVisible(page==1);manageLayersButton.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
     filterResonanceLabel.setVisible(page==1);
     filterResonanceSlider.setVisible(page==1);
     for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel})label->setVisible(page==1&&!showPhaserControls);
@@ -2072,7 +2076,9 @@ void MagDrumAudioProcessorEditor::resized()
         chokeGroupLabel.setBounds(chokeArea.removeFromRight(50));
         selectedPadTitle.setBounds(selectedPadRow);
         bounds.removeFromTop(2);
-        sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
+        auto sampleDetailsRow = bounds.removeFromTop(36);
+        manageLayersButton.setBounds(sampleDetailsRow.removeFromRight(92).reduced(0, 2));
+        sampleDetails.setBounds(sampleDetailsRow);bounds.removeFromTop(3);
         drumWaveformPanelBounds = bounds.removeFromTop(waveformHeight).expanded(5, 3);
         waveform->setBounds(drumWaveformPanelBounds.reduced(5, 5));
         bounds.removeFromTop(5);
@@ -2236,7 +2242,7 @@ void MagDrumAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster
 
 void MagDrumAudioProcessorEditor::applyLanguage()
 {
-    libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));pluginScannerTab.setButtonText(magdrum::ui::localisedText("PLUGIN SCANNER"));languageButton.setTooltip(magdrum::ui::localisedText("Menu"));
+    libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));pluginScannerTab.setButtonText(magdrum::ui::localisedText("PLUGIN SCANNER"));manageLayersButton.setButtonText(magdrum::ui::localisedText("Layers"));manageLayersButton.setTooltip(magdrum::ui::localisedText("Manage velocity layers for the selected pad."));languageButton.setTooltip(magdrum::ui::localisedText("Menu"));
     sampleSearch.setTextToShowWhenEmpty(magdrum::ui::localisedText("Search indexed samples"),Palette::Muted);
     const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());
     midiFallbackPolicy.clear(juce::dontSendNotification);
@@ -4536,6 +4542,107 @@ void MagDrumAudioProcessorEditor::updateLayerSummary()
     waveform->setFile(layers.empty()?juce::File():juce::File(layers.front().path));
 }
 
+void MagDrumAudioProcessorEditor::manageSampleLayers()
+{
+    const auto layers = processor.getSampleLayersForNote(selectedNote);
+    if (layers.empty())
+    {
+        status.setText(magdrum::ui::localisedText("No sample layers are assigned to this pad."),
+                       juce::dontSendNotification);
+        return;
+    }
+
+    juce::PopupMenu menu;
+    for (size_t index = 0; index < layers.size(); ++index)
+    {
+        const auto& layer = layers[index];
+        juce::PopupMenu actions;
+        const int editAction = 100 + static_cast<int>(index) * 2;
+        actions.addItem(editAction, magdrum::ui::localisedText("Edit velocity range"));
+        actions.addItem(editAction + 1, magdrum::ui::localisedText("Remove layer"));
+        auto label = magdrum::ui::localisedText("Velocity") + " "
+            + juce::String(layer.minimumVelocity) + "-" + juce::String(layer.maximumVelocity)
+            + " - " + juce::File(layer.path).getFileName();
+        if (layer.roundRobinCount > 1)
+            label += " · RR " + juce::String(layer.roundRobinIndex) + "/"
+                + juce::String(layer.roundRobinCount);
+        menu.addSubMenu(label, actions);
+    }
+
+    const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    const int note = selectedNote;
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&manageLayersButton),
+        [safe, layers, note](int action)
+        {
+            if (safe == nullptr || action < 100)
+                return;
+            const size_t index = static_cast<size_t>((action - 100) / 2);
+            if (index >= layers.size())
+                return;
+            const auto& layer = layers[index];
+            if ((action - 100) % 2 == 0)
+            {
+                safe->editSampleLayerVelocityRange(layer);
+                return;
+            }
+            if (!safe->processor.removeSampleLayer(note, layer.slotIndex))
+            {
+                safe->status.setText(magdrum::ui::localisedText("Could not remove sample layer."),
+                                     juce::dontSendNotification);
+                return;
+            }
+            safe->processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+            safe->updateLayerSummary();
+            safe->refreshSampleAssignmentLabels();
+            safe->status.setText(magdrum::ui::localisedText("Layer removed."), juce::dontSendNotification);
+        });
+}
+
+void MagDrumAudioProcessorEditor::editSampleLayerVelocityRange(
+    const MagDrumAudioProcessor::SampleLayerInfo& layer)
+{
+    if (layer.slotIndex < 0)
+        return;
+    auto* dialog = new juce::AlertWindow(magdrum::ui::localisedText("Edit velocity range"),
+        magdrum::ui::localisedText("Enter an inclusive velocity range, for example 1-63."),
+        juce::AlertWindow::NoIcon);
+    dialog->addTextEditor("range", juce::String(layer.minimumVelocity) + "-"
+        + juce::String(layer.maximumVelocity), magdrum::ui::localisedText("Velocity range"));
+    if (auto* rangeEditor = dialog->getTextEditor("range"))
+    {
+        rangeEditor->setInputRestrictions(7, "0123456789-");
+        rangeEditor->setJustification(juce::Justification::centred);
+    }
+    dialog->addButton(magdrum::ui::localisedText("Apply range"), 1);
+    dialog->addButton(magdrum::ui::localisedText("Cancel"), 0);
+    dialog->setSize(440, 190);
+    const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    const juce::Component::SafePointer<juce::AlertWindow> safeDialog(dialog);
+    const int note = selectedNote;
+    const int slotIndex = layer.slotIndex;
+    dialog->enterModalState(true, juce::ModalCallbackFunction::create(
+        [safe, safeDialog, note, slotIndex](int result)
+        {
+            if (result != 1 || safe == nullptr || safeDialog == nullptr)
+                return;
+            const auto range = safeDialog->getTextEditorContents("range");
+            const int minimumVelocity = velocityMinimum(range);
+            const int maximumVelocity = velocityMaximum(range);
+            if (!safe->processor.updateSampleLayerVelocityRange(note, slotIndex,
+                    minimumVelocity, maximumVelocity))
+            {
+                safe->status.setText(magdrum::ui::localisedText(
+                    "Velocity range overlaps another layer or is invalid."), juce::dontSendNotification);
+                return;
+            }
+            safe->processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+            safe->updateLayerSummary();
+            safe->refreshSampleAssignmentLabels();
+            safe->status.setText(magdrum::ui::localisedText("Velocity range updated."),
+                                 juce::dontSendNotification);
+        }), true);
+}
+
 juce::String MagDrumAudioProcessorEditor::currentWaveformTooltip() const
 {
     return waveform->getTooltip();
@@ -4543,6 +4650,7 @@ juce::String MagDrumAudioProcessorEditor::currentWaveformTooltip() const
 
 void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 {
+    if(button==&manageLayersButton){manageSampleLayers();return;}
     if(button==&compressorTab){showPhaserControls=false;resized();return;}
     if(button==&phaserTab){showPhaserControls=true;resized();return;}
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}

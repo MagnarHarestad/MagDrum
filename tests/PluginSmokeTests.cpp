@@ -638,6 +638,12 @@ public:
                 std::cerr << "Drum Machine instrument panels extend outside the editor.\n";
                 return 1;
             }
+            if (!editor.drumEditorPanelBounds.contains(editor.manageLayersButton.getBounds())
+                || editor.manageLayersButton.getBounds().intersects(editor.sampleDetails.getBounds()))
+            {
+                std::cerr << "The sample-layer editor button must fit beside the selected-pad sample details.\n";
+                return 6;
+            }
             if (editor.drumPadTrayBounds.intersects(editor.drumEditorPanelBounds)
             || !editor.drumEditorPanelBounds.contains(editor.drumWaveformPanelBounds)
             || !editor.drumEditorPanelBounds.contains(editor.padMixPanelBounds)
@@ -968,6 +974,8 @@ public:
         if (!editor.drumEditorPanelBounds.contains(editor.selectedPadTitle.getBounds())
             || !editor.drumEditorPanelBounds.contains(editor.chokeGroupLabel.getBounds())
             || !editor.drumEditorPanelBounds.contains(editor.chokeGroupSelect.getBounds())
+            || !editor.drumEditorPanelBounds.contains(editor.manageLayersButton.getBounds())
+            || editor.manageLayersButton.getBounds().intersects(editor.sampleDetails.getBounds())
             || editor.chokeGroupLabel.getBounds().getCentreY()
                 != editor.chokeGroupSelect.getBounds().getCentreY())
         {
@@ -1021,7 +1029,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 36> checks{{
+            const std::array<LabelCheck, 38> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1047,6 +1055,10 @@ public:
                 {"pad choke control", editor.chokeGroupLabel.getText(), magdrum::ui::localisedText("CHOKE")},
                 {"pad choke tooltip", editor.chokeGroupSelect.getTooltip(),
                     magdrum::ui::localisedText("Pads in the same choke group stop one another when triggered.")},
+                {"pad layers button", editor.manageLayersButton.getButtonText(),
+                    magdrum::ui::localisedText("Layers")},
+                {"pad layers tooltip", editor.manageLayersButton.getTooltip(),
+                    magdrum::ui::localisedText("Manage velocity layers for the selected pad.")},
                 {"pad drive control", editor.driveLabel.getText(), magdrum::ui::localisedText("PAD DRIVE")},
                 {"pad low EQ control", editor.eqLowLabel.getText(), magdrum::ui::localisedText("EQ LOW")},
                 {"pad mid EQ control", editor.eqMidLabel.getText(), magdrum::ui::localisedText("EQ MID")},
@@ -2304,10 +2316,33 @@ int main(int argc, char** argv)
     if (restoredLayers.getSamplePathForNote(36) != softLayer.getFullPathName() || restoredLayerInfo.size() != 2
         || restoredLayerInfo[0].minimumVelocity != 1 || restoredLayerInfo[0].maximumVelocity != 63
         || restoredLayerInfo[1].minimumVelocity != 64 || restoredLayerInfo[1].maximumVelocity != 127) return 17;
+    if (restoredLayerInfo[0].slotIndex < 0 || restoredLayerInfo[1].slotIndex < 0
+        || restoredLayerInfo[0].slotIndex == restoredLayerInfo[1].slotIndex
+        || !restoredLayers.updateSampleLayerVelocityRange(36, restoredLayerInfo[0].slotIndex, 1, 55)
+        || restoredLayers.updateSampleLayerVelocityRange(36, restoredLayerInfo[0].slotIndex, 55, 70)
+        || restoredLayers.updateSampleLayerVelocityRange(36, restoredLayerInfo[0].slotIndex, 0, 55)) return 44;
+    const auto editedLayerInfo = restoredLayers.getSampleLayersForNote(36);
+    if (editedLayerInfo.size() != 2 || editedLayerInfo[0].minimumVelocity != 1
+        || editedLayerInfo[0].maximumVelocity != 55 || editedLayerInfo[1].minimumVelocity != 64) return 45;
+    juce::MemoryBlock editedLayerState;
+    restoredLayers.getStateInformation(editedLayerState);
+    auto& restoredEditedLayers = makeTestProcessor();
+    restoredEditedLayers.setStateInformation(editedLayerState.getData(),
+        static_cast<int>(editedLayerState.getSize()));
+    if (!waitForSampleLayerCount(restoredEditedLayers, 36, 2)) return 46;
+    const auto roundTrippedLayerInfo = restoredEditedLayers.getSampleLayersForNote(36);
+    if (roundTrippedLayerInfo.size() != 2 || roundTrippedLayerInfo[0].minimumVelocity != 1
+        || roundTrippedLayerInfo[0].maximumVelocity != 55 || roundTrippedLayerInfo[1].minimumVelocity != 64)
+        return 47;
     restoredLayers.prepareToPlay(44100.0, 128);
     const double softPeak = renderPeak(restoredLayers, 36, 32);
     const double hardPeak = renderPeak(restoredLayers, 36, 96);
     if (softPeak <= 0.0 || hardPeak <= softPeak * 3.0) return 18;
+    if (!restoredLayers.removeSampleLayer(36, restoredLayerInfo[1].slotIndex)
+        || restoredLayers.removeSampleLayer(36, restoredLayerInfo[1].slotIndex)
+        || restoredLayers.getSampleLayersForNote(36).size() != 1) return 48;
+    MagDrumAudioProcessorTestAccess::stopVoices(restoredLayers);
+    if (renderPeak(restoredLayers, 36, 96) != 0.0) return 48;
     if (!restoredLayers.clearSamplesForNote(36) || restoredLayers.clearSamplesForNote(36)
         || restoredLayers.getSamplePathForNote(36).isNotEmpty() || renderPeak(restoredLayers, 36, 96) != 0.0) return 19;
 
