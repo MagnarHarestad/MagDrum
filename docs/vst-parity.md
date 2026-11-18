@@ -47,6 +47,8 @@ This ordering puts the playable instrument path first while preserving the reque
 
 **Windows .227 evaluation package:** SFZ hi-hat names such as `kickmic_hh_closed`, `kickmic_hh_open` and `kickmic_hh_pedal` now map to their specific categories. The 121-file CC0 Virtuosity filename-plus-audio result improved from 68.6% to 100%; the separate three-kit result stayed at 71.2% / 0.727 macro F1. Audio-only remained at 22.3% / 0.212 on the single-kit set, so no acoustic-classifier gain is claimed. Windows Release CTest passed 2/2, package verification passed, and the exact ZIP bundle passed isolated scanner/render validation for all 128 notes. Release [v0.1.2-test.227](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.227) is published for evaluation but not installed; .226 remains installed per-user while the broader Cubase acceptance pass is pending.
 
+**Windows .228 host-compatibility checks:** the installed .228 module passed Steinberg VST 3.8.1's standard validator suite (47/47) and extended suite (537/537). The exact package also passed Release CTest, package safeguards, hash matching and isolated rendering for MIDI notes 0–127 including C1. Follow-up Debug processor tests now simulate host tempo changes between blocks, a sequencer loop crossing the 4-beat boundary, seeking to the start, and stopping transport; Debug CTest passed 2/2. These checks do not replace opening the plugin and saving/reopening a real Cubase Pro 15 project; the manual host review remains pending.
+
 ## Windows development and installation loop
 
 Work Windows x64 only until the Cubase Pro 15 experience is accepted. Do not spend iteration time on Linux or macOS packages unless requested.

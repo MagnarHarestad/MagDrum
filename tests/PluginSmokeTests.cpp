@@ -1341,6 +1341,60 @@ int main(int argc, char** argv)
         return 39;
     }
 
+    auto& hostTempoChangeSequencer = makeTestProcessor();
+    if (!hostTempoChangeSequencer.loadSampleForNote(36, sample)) return 61;
+    hostTempoChangeSequencer.prepareToPlay(48000.0, 128);
+    const std::vector<DrumEvent> tempoChangeEvents{{DrumInstrument::Kick, DrumArticulation::Default, 100, 0.009, 0.1}};
+    if (hostTempoChangeSequencer.setSequencerPattern(tempoChangeEvents, generalMidi, 4.0) != 0) return 61;
+    TestAudioPlayHead changingTempoPlayHead;
+    changingTempoPlayHead.position.setIsPlaying(true);
+    changingTempoPlayHead.position.setPpqPosition(0.0);
+    changingTempoPlayHead.position.setBpm(120.0);
+    hostTempoChangeSequencer.setPlayHead(&changingTempoPlayHead);
+    hostTempoChangeSequencer.setSequencerPlaybackEnabled(true);
+    juce::AudioBuffer<float> hostTempoAudio(2, 128);
+    juce::MidiBuffer hostTempoMidi;
+    hostTempoChangeSequencer.processBlock(hostTempoAudio, hostTempoMidi);
+    if (hostTempoChangeSequencer.consumeNoteTriggerCount(36) != 0) return 61;
+    changingTempoPlayHead.position.setPpqPosition(128.0 * 120.0 / (60.0 * 48000.0));
+    changingTempoPlayHead.position.setBpm(60.0);
+    hostTempoChangeSequencer.processBlock(hostTempoAudio, hostTempoMidi);
+    if (hostTempoChangeSequencer.consumeNoteTriggerCount(36) != 0) return 61;
+    changingTempoPlayHead.position.setPpqPosition(0.008);
+    hostTempoChangeSequencer.processBlock(hostTempoAudio, hostTempoMidi);
+    if (hostTempoChangeSequencer.consumeNoteTriggerCount(36) != 1) return 61;
+    changingTempoPlayHead.position.setPpqPosition(0.010666666666666666);
+    hostTempoChangeSequencer.processBlock(hostTempoAudio, hostTempoMidi);
+    if (hostTempoChangeSequencer.consumeNoteTriggerCount(36) != 0) return 61;
+
+    auto& hostLoopSequencer = makeTestProcessor();
+    if (!hostLoopSequencer.loadSampleForNote(36, sample)) return 62;
+    hostLoopSequencer.prepareToPlay(48000.0, 128);
+    const std::vector<DrumEvent> hostLoopEvents{
+        {DrumInstrument::Kick, DrumArticulation::Default, 100, 0.0, 0.1},
+        {DrumInstrument::Kick, DrumArticulation::Default, 100, 3.998, 0.1}};
+    if (hostLoopSequencer.setSequencerPattern(hostLoopEvents, generalMidi, 4.0) != 0) return 62;
+    TestAudioPlayHead loopingPlayHead;
+    loopingPlayHead.position.setIsPlaying(true);
+    loopingPlayHead.position.setPpqPosition(3.997);
+    loopingPlayHead.position.setBpm(120.0);
+    hostLoopSequencer.setPlayHead(&loopingPlayHead);
+    hostLoopSequencer.setSequencerPlaybackEnabled(true);
+    juce::AudioBuffer<float> hostLoopAudio(2, 128);
+    juce::MidiBuffer hostLoopMidi;
+    hostLoopSequencer.processBlock(hostLoopAudio, hostLoopMidi);
+    if (hostLoopSequencer.consumeNoteTriggerCount(36) != 2) return 62;
+    loopingPlayHead.position.setPpqPosition(4.002333333333333);
+    hostLoopSequencer.processBlock(hostLoopAudio, hostLoopMidi);
+    if (hostLoopSequencer.consumeNoteTriggerCount(36) != 0) return 62;
+    loopingPlayHead.position.setPpqPosition(0.0);
+    hostLoopSequencer.processBlock(hostLoopAudio, hostLoopMidi);
+    if (hostLoopSequencer.consumeNoteTriggerCount(36) != 1) return 62;
+    loopingPlayHead.position.setIsPlaying(false);
+    hostLoopSequencer.processBlock(hostLoopAudio, hostLoopMidi);
+    if (hostLoopSequencer.isSequencerHostSynchronized()
+        || hostLoopSequencer.consumeNoteTriggerCount(36) != 0) return 62;
+
     hostPlayHead.position.setIsPlaying(false);
     juce::AudioBuffer<float> stoppedHostAudio(2, 128);
     juce::MidiBuffer stoppedHostMidi;
