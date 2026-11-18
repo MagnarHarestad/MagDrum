@@ -20,13 +20,13 @@ struct DrumPadDefinition
 // note together so a visual position cannot silently drift from its MIDI map.
 inline constexpr std::array<DrumPadDefinition, 16> bossDr660PadLayout{{
     {"Crash 1", 49, DrumInstrument::Crash, DrumArticulation::Default},
-    {"Crash 2", 57, DrumInstrument::Crash, DrumArticulation::Default},
+    {"Crash 2", 57, DrumInstrument::Crash, DrumArticulation::Edge},
     {"Bell", 53, DrumInstrument::Ride, DrumArticulation::Bell},
     {"Ride", 51, DrumInstrument::Ride, DrumArticulation::Bow},
     {"Tom 1", 50, DrumInstrument::Tom, DrumArticulation::High},
     {"Tom 2", 47, DrumInstrument::Tom, DrumArticulation::Mid},
     {"Tom 3", 45, DrumInstrument::Tom, DrumArticulation::Low},
-    {"Tom 4", 43, DrumInstrument::Tom, DrumArticulation::Low},
+    {"Tom 4", 43, DrumInstrument::Tom, DrumArticulation::Default},
     {"Side Stick", 37, DrumInstrument::Rimshot, DrumArticulation::SideStick},
     {"Clap", 39, DrumInstrument::Clap, DrumArticulation::Default},
     {"Closed HH", 42, DrumInstrument::HiHat, DrumArticulation::Closed},
@@ -75,5 +75,7 @@ static_assert(std::string_view(padNames[12]) == "Kick");
 static_assert(std::string_view(padNames[13]) == "Snare");
 static_assert(std::string_view(padNames[14]) == "Pedal HH");
 static_assert(std::string_view(padNames[15]) == "Cowbell");
+static_assert(padArticulations[1] == DrumArticulation::Edge);
+static_assert(padArticulations[7] == DrumArticulation::Default);
 static_assert(padArticulations[15] == DrumArticulation::Bell);
 }

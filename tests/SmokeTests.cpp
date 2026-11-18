@@ -832,6 +832,32 @@ int runSmokeTests(int argc,char** argv)
         std::cerr << "The General MIDI Cowbell event did not survive MIDI export and re-import.\n";
         return 293;
     }
+    constexpr std::array<int, 16> dr660MidiNotes{
+        49, 57, 53, 51, 50, 47, 45, 43, 37, 39, 42, 46, 36, 38, 44, 56};
+    MidiPattern dr660Pattern;
+    for (const int note : dr660MidiNotes)
+    {
+        const auto event = gm.fromMidi(static_cast<std::uint8_t>(note), 100, 1.0, 0.125);
+        if (!event || gm.toMidi(*event, MidiFallbackPolicy::disabled).note
+                != std::optional<std::uint8_t>(static_cast<std::uint8_t>(note)))
+        {
+            std::cerr << "The General MIDI profile did not map DR-660 pad note " << note << " both ways.\n";
+            return 294;
+        }
+        dr660Pattern.events.push_back(*event);
+    }
+    const auto dr660Midi = root.getChildFile("gm-dr660-pads-roundtrip.mid");
+    MidiPattern decodedDr660Pattern;
+    const auto dr660Report = MidiPatternIO{}.write(dr660Midi, dr660Pattern, gm, false)
+        ? MidiPatternIO{}.read(dr660Midi, gm, decodedDr660Pattern)
+        : MidiImportReport{};
+    if (!dr660Report.ok || !dr660Report.unmappedNotes.empty()
+        || compareMidiPatterns(dr660Pattern, decodedDr660Pattern).addedEvents.size() != 0
+        || compareMidiPatterns(dr660Pattern, decodedDr660Pattern).removedEvents.size() != 0)
+    {
+        std::cerr << "The full DR-660 pad set did not survive General MIDI file round-trip.\n";
+        return 295;
+    }
     const DrumEvent bell{DrumInstrument::Ride,DrumArticulation::Bell,100,0.0,0.1,53};
     if(gm.toMidi(bell,false).note!=std::optional<std::uint8_t>(53))return 287;
     if(gm.mappingsForMidiNote(42).size()!=1||gm.mappingsForMidiNote(38).size()!=2)return 133;

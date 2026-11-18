@@ -45,7 +45,7 @@ constexpr std::array<const char*, 16> laneNames{"KICK","SNARE","CLOSED HAT","OPE
 constexpr std::array<int, 16> defaultSequencerMidiNotes{36,38,42,46,43,51,49,39,53,57,50,47,45,37,44,56};
 using I=DrumInstrument;using A=DrumArticulation;
 constexpr std::array<I,16> laneInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Ride,I::Crash,I::Clap,I::Ride,I::Crash,I::Tom,I::Tom,I::Tom,I::Rimshot,I::HiHat,I::Percussion};
-constexpr std::array<A,16> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default,A::Bell,A::Default,A::High,A::Mid,A::Low,A::SideStick,A::Pedal,A::Bell};
+constexpr std::array<A,16> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Default,A::Bow,A::Default,A::Default,A::Bell,A::Edge,A::High,A::Mid,A::Low,A::SideStick,A::Pedal,A::Bell};
 juce::Colour categoryColour(const juce::String& value) { return Palette::forDrumCategory(value); }
 int sequencerLaneForEvent(const DrumEvent& event, const std::array<int, 16>& mappedNotes)
 {
@@ -56,12 +56,16 @@ int sequencerLaneForEvent(const DrumEvent& event, const std::array<int, 16>& map
     {
         case DrumInstrument::Kick: return 0;
         case DrumInstrument::Snare:
-            return 1;
+            return event.articulation == DrumArticulation::SideStick
+                || event.articulation == DrumArticulation::Rimshot ? 13 : 1;
         case DrumInstrument::Rimshot: return event.articulation == DrumArticulation::SideStick ? 13 : 1;
         case DrumInstrument::HiHat: return event.articulation == DrumArticulation::Open ? 3 : event.articulation == DrumArticulation::Pedal ? 14 : 2;
-        case DrumInstrument::Tom: return event.articulation == DrumArticulation::High ? 10 : event.articulation == DrumArticulation::Mid ? 11 : 4;
+        case DrumInstrument::Tom:
+            return event.articulation == DrumArticulation::High ? 10
+                : event.articulation == DrumArticulation::Mid ? 11
+                : event.articulation == DrumArticulation::Low ? 12 : 4;
         case DrumInstrument::Ride: return event.articulation == DrumArticulation::Bell ? 8 : 5;
-        case DrumInstrument::Crash: return 6;
+        case DrumInstrument::Crash: return event.articulation == DrumArticulation::Edge ? 9 : 6;
         case DrumInstrument::Clap: return 7;
         case DrumInstrument::Percussion: return 15;
         default: return -1;

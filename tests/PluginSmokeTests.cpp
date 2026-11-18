@@ -236,6 +236,36 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksDr660ImportedNotesReachTheirOwnSequencerLanes(MagDrumAudioProcessorEditor& editor)
+    {
+        constexpr std::array<int, 16> notes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
+        constexpr std::array<int, 16> lanes{6,9,8,5,10,11,12,4,13,7,2,3,0,1,14,15};
+        const auto generalMidi = MidiMappingProfile::generalMidi();
+        editor.sequenceEvents.clear();
+        for (size_t index = 0; index < notes.size(); ++index)
+        {
+            auto event = generalMidi.fromMidi(static_cast<std::uint8_t>(notes[index]), 100,
+                                              static_cast<double>(index) / 4.0, 0.125);
+            if (!event)
+            {
+                std::cerr << "A default DR-660 MIDI note was not recognized by the General MIDI profile.\n";
+                return 1;
+            }
+            editor.sequenceEvents.push_back(*event);
+        }
+        editor.syncSequencerGridFromEvents();
+        for (int step = 0; step < static_cast<int>(lanes.size()); ++step)
+            for (int lane = 0; lane < static_cast<int>(editor.sequenceStepActive.size()); ++lane)
+                if (editor.sequenceStepActive[static_cast<size_t>(lane)][static_cast<size_t>(step)]
+                    != (lane == lanes[static_cast<size_t>(step)]))
+                {
+                    std::cerr << "DR-660 MIDI note " << notes[static_cast<size_t>(step)]
+                              << " was routed to the wrong sequencer lane.\n";
+                    return 2;
+                }
+        return 0;
+    }
+
     static int checksIndependentPadSoundControls(MagDrumAudioProcessorEditor& editor,
                                                  MagDrumAudioProcessor& processor)
     {
@@ -780,6 +810,12 @@ public:
             std::cerr << "The Cowbell sequencer lane does not use the General MIDI Cowbell articulation.\n";
             return 10;
         }
+        if (magdrum::plugin::bossDr660PadLayout[1].articulation != DrumArticulation::Edge
+            || magdrum::plugin::bossDr660PadLayout[7].articulation != DrumArticulation::Default)
+        {
+            std::cerr << "Crash 2 and Tom 4 do not retain their distinct MIDI pad articulations.\n";
+            return 11;
+        }
         editor.pads[0].flash();
         if (editor.pads[0].getFlashAmount() < 0.9f) return 12;
         if (editor.getNumChildComponents() >= 800)
@@ -972,6 +1008,8 @@ int main(int argc, char** argv)
         if (smpteImportCheck != 0) return 288 + smpteImportCheck;
         const int padActivityCheck = MagDrumAudioProcessorEditorTestAccess::checksTriggeredMidiPadGlow(editor, editorProcessor);
         if (padActivityCheck != 0) return 59 + padActivityCheck;
+        const int dr660LaneCheck = MagDrumAudioProcessorEditorTestAccess::checksDr660ImportedNotesReachTheirOwnSequencerLanes(editor);
+        if (dr660LaneCheck != 0) return 300 + dr660LaneCheck;
     }
 #endif
 
