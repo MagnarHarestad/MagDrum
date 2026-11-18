@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -16,9 +17,25 @@ struct CachedVst3ModuleInfo
 };
 using CachedVst3ModuleIndex = std::unordered_map<std::string, CachedVst3ModuleInfo>;
 
+struct Vst3ModuleInstrumentCacheEntry
+{
+    juce::String metadataPath;
+    juce::int64 metadataSize = 0;
+    juce::int64 metadataModifiedMilliseconds = 0;
+    bool mayBeInstrument = true;
+};
+using Vst3ModuleInstrumentCache = std::unordered_map<std::string, Vst3ModuleInstrumentCacheEntry>;
+
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
 bool vst3ModuleMayBeInstrument(const juce::File& bundle);
+Vst3ModuleInstrumentCache loadVst3ModuleInstrumentCache(const juce::File& cacheFile);
+std::optional<bool> cachedVst3ModuleMayBeInstrument(const Vst3ModuleInstrumentCache& cache,
+                                                    const juce::File& bundle);
+void rememberVst3ModuleInstrumentStatus(Vst3ModuleInstrumentCache& cache, const juce::File& bundle,
+                                        bool mayBeInstrument);
+bool saveVst3ModuleInstrumentCache(const juce::File& cacheFile,
+                                  const Vst3ModuleInstrumentCache& cache);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
 bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);

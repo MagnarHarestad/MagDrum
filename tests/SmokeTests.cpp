@@ -322,6 +322,25 @@ int runSmokeTests(int argc,char** argv)
         std::cerr << "VST3 discovery did not filter known effects while retaining instruments and legacy modules.\n";
         return 218;
     }
+    const auto moduleFilterCacheFile = root.getChildFile("vst3-module-filter-cache.xml");
+    magdrum::plugins::Vst3ModuleInstrumentCache moduleFilterCache;
+    magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, effectBundle, false);
+    magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, instrumentBundle, true);
+    if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, effectBundle) != std::optional<bool>(false)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, instrumentBundle) != std::optional<bool>(true)
+        || !magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache)) return 220;
+    const auto restoredModuleFilterCache = magdrum::plugins::loadVst3ModuleInstrumentCache(moduleFilterCacheFile);
+    if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, effectBundle) != std::optional<bool>(false)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, instrumentBundle) != std::optional<bool>(true))
+        return 221;
+    if (!effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx","Dynamics","Updated"]}]})")
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, effectBundle).has_value()) return 222;
+    auto timestampInvalidationCache = restoredModuleFilterCache;
+    magdrum::plugins::rememberVst3ModuleInstrumentStatus(timestampInvalidationCache, effectBundle, false);
+    if (!effectManifest.setLastModificationTime(effectManifest.getLastModificationTime()
+            + juce::RelativeTime::seconds(5))
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(timestampInvalidationCache, effectBundle).has_value())
+        return 223;
     if (!mixedManifest.replaceWithText("not valid module metadata")
         || !magdrum::plugins::vst3ModuleMayBeInstrument(mixedBundle)) return 219;
     juce::Array<juce::PluginDescription> cachedPluginDescriptions;

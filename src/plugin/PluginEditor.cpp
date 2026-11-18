@@ -2874,13 +2874,17 @@ void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
         {
             const int completed = juce::jmax(0, static_cast<int>(progress->getProperty("completed")));
             const int total = juce::jmax(0, static_cast<int>(progress->getProperty("total")));
+            const auto currentModule = progress->getProperty("current").toString().trim();
             if (total > 0)
             {
                 const int percent = juce::jlimit(0, 100, juce::roundToInt(100.0 * completed / total));
                 pluginInventoryProgressValue = static_cast<double>(percent) / 100.0;
+                const auto moduleSuffix = currentModule.isNotEmpty() && currentModule != "discovering"
+                    && currentModule != "scanning" && currentModule != "complete"
+                    ? " — " + currentModule : juce::String();
                 status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…") + " "
                     + juce::String(percent) + "% (" + juce::String(completed) + "/"
-                    + juce::String(total) + ")", juce::dontSendNotification);
+                    + juce::String(total) + ")" + moduleSuffix, juce::dontSendNotification);
             }
         }
     }

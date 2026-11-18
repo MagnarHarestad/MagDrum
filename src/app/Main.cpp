@@ -753,6 +753,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto previouslyDiscoveredTypes = knownPlugins.getTypes();
     const auto cachedModuleIndex = magdrum::plugins::indexCachedVst3Modules(
         previouslyDiscoveredTypes);
+    const auto moduleFilterCacheFile = dataDirectory.getChildFile("vst3-module-filter-cache.xml");
+    auto moduleFilterCache = magdrum::plugins::loadVst3ModuleInstrumentCache(moduleFilterCacheFile);
     juce::StringArray instrumentCandidates;
     const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
     for (const auto& candidate : candidates)
@@ -767,7 +769,13 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             || module.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (hasSidecarManifest)
         {
-            if (magdrum::plugins::vst3ModuleMayBeInstrument(juce::File(candidate)))
+            auto mayBeInstrument = magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, module);
+            if (!mayBeInstrument.has_value())
+            {
+                mayBeInstrument = magdrum::plugins::vst3ModuleMayBeInstrument(module);
+                magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, module, *mayBeInstrument);
+            }
+            if (*mayBeInstrument)
                 instrumentCandidates.add(candidate);
             continue;
         }
@@ -780,6 +788,9 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         if (magdrum::plugins::vst3ModuleMayBeInstrument(module))
             instrumentCandidates.add(candidate);
     }
+    // Persist effect-module exclusions before loading any candidate binary, so
+    // a crash or cancellation during discovery still accelerates the next pass.
+    magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);
     const int overallTotal = juce::jmax(progressTotal,
         progressBase + instrumentCandidates.size());
     publishProgress(progressBase, overallTotal, "scanning");
@@ -789,6 +800,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     scanner.setFilesOrIdentifiersToScan(instrumentCandidates);
     for (int completed = 0; completed < instrumentCandidates.size(); ++completed)
     {
+        const auto candidateName = juce::File(instrumentCandidates[completed]).getFileNameWithoutExtension();
+        publishProgress(progressBase + completed, overallTotal, candidateName);
         juce::String name;
         scanner.scanNextFile(true, name);
         // Commit discoveries incrementally. If a third-party binary crashes

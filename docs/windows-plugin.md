@@ -39,3 +39,7 @@ For a per-user install, double-click `Install-MagDrum-User.cmd`. It writes to `%
 ## Instrument discovery progress and recovery
 
 Choose **Plugin Scanner** to search for VST3 instruments. The status area shows the discovered instrument candidates and scan percentage. MagDrum caches plugin descriptions and skips unchanged modules on later refreshes; effect-only bundles are excluded whenever their VST3 manifest or cached description identifies them as effects. Discovery runs in the bundled helper, outside Cubase. The helper saves each completed module and JUCE records any module that crashes; MagDrum automatically restarts the helper to continue with the remaining plugins. A failing third-party plugin therefore cannot close Cubase or erase already discovered instruments.
+
+## Instrument discovery cache
+
+The VST3 instrument scan reads each module's `moduleinfo.json` to skip effect-only plugins before loading binaries. It stores the decision alongside the metadata path, file size and modification time; subsequent scans reuse unchanged effect decisions, and changed manifests are checked again. This reduces repeat scans of large effect suites such as Waves while keeping discovery focused on instruments. During a scan, the progress line shows the current candidate module as well as the completion percentage.

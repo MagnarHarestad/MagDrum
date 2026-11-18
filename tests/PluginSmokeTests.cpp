@@ -701,12 +701,13 @@ public:
         }
         editor.pluginInventoryProgressFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
             .getChildFile("magdrum-vst3-progress-test-" + juce::Uuid().toString() + ".json");
-        editor.pluginInventoryProgressFile.replaceWithText("{\"completed\":40,\"total\":100}");
+        editor.pluginInventoryProgressFile.replaceWithText("{\"completed\":40,\"total\":100,\"current\":\"Waves Factory\"}");
         editor.pollPluginInventoryProgress();
         if (std::abs(editor.pluginInventoryProgressValue - 0.4) > 0.001
-            || !editor.status.getText().contains("40%"))
+            || !editor.status.getText().contains("40%")
+            || !editor.status.getText().contains("Waves Factory"))
         {
-            std::cerr << "Instrument-scan progress did not report its completion percentage.\n";
+            std::cerr << "Instrument-scan progress did not report its completion percentage and current module.\n";
             editor.pluginInventoryProgressFile.deleteFile();
             editor.pluginInventoryProgressFile = {};
             editor.pluginInventoryScanRunning = false;
