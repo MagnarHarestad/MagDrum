@@ -1,14 +1,13 @@
-# MagDrum local test package
+# MagDrum Windows x64 test package
 
-Windows x64 test release: v0.1.2-test.209 (VST3 version 0.1.2.209).
+Release: [v0.1.2-test.214](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.214) (VST3 version 0.1.2.214).
 
-- Windows x64 ZIP SHA-256: 50e6b869edbce793b2c81c87255e25fd62031c648ad7c3c1a3feedf28ea7ca5e
-- Packaged VST3 module SHA-256: ECB8F23482786050B3CCE7F7B08620CB6B0DF2464F1699C8301E5C0F992187BB
-- Release CTest: 2/2 passed.
-- Windows package verifier passed for contents, license notices, signatures and version 0.1.2.209.
-- Steinberg VST3 SDK validator: 47/47 checks passed; 1 VST parameter exposed, MIDI CC uses the VST3 event bus.
-- MIDI importer coverage from this build includes tempo-map conversion, 29.97 fps drop-frame timing and invalid SMPTE rate rejection.
-- Installed per-user at %LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3; package and installed module hashes match, and isolated rendering passed for all 128 MIDI notes including C1. The previous .208 bundle is backed up outside scan folders.
-- Cubase Pro 15 rescan and hands-on acceptance are pending.
+- ZIP SHA-256: `73da3117b55be48bd25b6266d40283e98d261da0baa539cc7f021228a387d9de`
+- VST3 module SHA-256: `679EB061FCA0DA70362B1DF0AC2379AD7DF2B06C5DF1E87C3D216740D2A42F05`
+- Windows x64 Release CTest: 2/2 passed.
+- Package verification passed for contents, license notices, signatures and version.
+- Isolated scanner/render test passed for all MIDI notes 0–127, including C1.
+- Installed per-user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; installed module hash matches the package.
+- Cubase Pro 15 rescan and hands-on acceptance remain pending.
 
-See the [Windows release package](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.209) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
+See the [release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.214) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
