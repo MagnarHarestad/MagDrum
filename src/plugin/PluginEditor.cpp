@@ -1725,6 +1725,33 @@ MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){padActivityTimer.sto
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
     magdrum::ui::paintTexturedBackground(g,getLocalBounds(),0.42f);g.setColour(Palette::Accent);g.setFont(juce::Font(juce::FontOptions(30.0f,juce::Font::bold)));g.drawText("MagDrum",24,14,260,40,juce::Justification::centredLeft);
+    if (page == 1)
+    {
+        const auto drawInstrumentPanel = [&g](juce::Rectangle<int> area, juce::Colour accent)
+        {
+            if (area.isEmpty()) return;
+            area = area.toFloat().getSmallestIntegerContainer();
+            juce::DropShadow(juce::Colours::black.withAlpha(0.34f), 7, { 0, 3 })
+                .drawForRectangle(g, area);
+            juce::ColourGradient surface(Palette::Panel.brighter(0.055f),
+                                         static_cast<float>(area.getX()), static_cast<float>(area.getY()),
+                                         Palette::Panel.darker(0.18f),
+                                         static_cast<float>(area.getX()), static_cast<float>(area.getBottom()), false);
+            g.setGradientFill(surface);
+            g.fillRoundedRectangle(area.toFloat(), 8.0f);
+            g.setColour(Palette::Border.withAlpha(0.82f));
+            g.drawRoundedRectangle(area.toFloat().reduced(0.5f), 8.0f, 1.0f);
+            g.setColour(accent.withAlpha(0.68f));
+            g.drawHorizontalLine(area.getY() + 1, static_cast<float>(area.getX() + 10),
+                                 static_cast<float>(area.getRight() - 10));
+        };
+        drawInstrumentPanel(drumPadTrayBounds, Palette::Accent);
+        drawInstrumentPanel(drumEditorPanelBounds, Palette::Accent);
+        drawInstrumentPanel(drumWaveformPanelBounds, Palette::Accent.brighter(0.15f));
+        drawInstrumentPanel(padMixPanelBounds, Palette::Accent);
+        drawInstrumentPanel(padShapePanelBounds, Palette::Accent.brighter(0.08f));
+        drawInstrumentPanel(padEqPanelBounds, Palette::Accent.brighter(0.15f));
+    }
     auto breadcrumb=magdrum::ui::localisedText("SAMPLE LIBRARY")+"  /  "+magdrum::ui::localisedText("DRUM MACHINE")+"  /  "+magdrum::ui::localisedText("SEQUENCER")+"  /  "+magdrum::ui::localisedText("MIDI MAPS");
     if(hasPluginScannerPage)breadcrumb+="  /  "+magdrum::ui::localisedText("PLUGIN SCANNER");
     g.setColour(Palette::Muted);g.setFont(13.0f);g.drawText(breadcrumb,26,51,960,22,juce::Justification::centredLeft);
@@ -1773,12 +1800,19 @@ void MagDrumAudioProcessorEditor::resized()
     }
     else if(page==1)
     {
+        drumPadTrayBounds = {};
+        drumEditorPanelBounds = {};
+        drumWaveformPanelBounds = {};
+        padMixPanelBounds = {};
+        padShapePanelBounds = {};
+        padEqPanelBounds = {};
         const auto fitValueBox = [](juce::Slider& slider, int columnWidth)
         {
             const int valueBoxWidth = juce::jlimit(1, 82, columnWidth - 4);
             slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, valueBoxWidth, 20);
         };
         auto grid=bounds.removeFromLeft(bounds.getWidth()*3/5);
+        drumPadTrayBounds = grid.expanded(7, 7);
         const int gap=10;
         const int padW=(grid.getWidth()-3*gap)/4,padH=(grid.getHeight()-3*gap)/4;
         for(size_t i=0;i<pads.size();++i)
@@ -1787,10 +1821,21 @@ void MagDrumAudioProcessorEditor::resized()
             pads[i].setBounds(grid.getX()+col*(padW+gap),grid.getY()+row*(padH+gap),padW,padH);
         }
         bounds.removeFromLeft(18);
+        drumEditorPanelBounds = bounds.expanded(8, 7);
+        bounds.reduce(8, 4);
+        const int controlGroupHeight = juce::jlimit(78, 94,
+            78 + juce::jlimit(0, 80, bounds.getHeight() - 413) * 16 / 80);
+        const int waveformHeight = juce::jmax(46,
+            bounds.getHeight() - 121 - 3 * controlGroupHeight);
         selectedPadTitle.setBounds(bounds.removeFromTop(26));bounds.removeFromTop(2);
         sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
-        padMixHeading.setBounds(bounds.removeFromTop(15));
-        auto controls=bounds.removeFromTop(78);
+        drumWaveformPanelBounds = bounds.removeFromTop(waveformHeight).expanded(5, 3);
+        waveform->setBounds(drumWaveformPanelBounds.reduced(5, 5));
+        bounds.removeFromTop(5);
+        padMixPanelBounds = bounds.removeFromTop(controlGroupHeight).expanded(5, 2);
+        auto mixPanel = padMixPanelBounds.reduced(5, 3);
+        padMixHeading.setBounds(mixPanel.removeFromTop(15));
+        auto controls=mixPanel.removeFromTop(controlGroupHeight - 21);
         const int controlWidth=controls.getWidth()/4;
         const std::array<std::pair<juce::Label*,juce::Slider*>,4> padMixControls{{
             {&gainLabel,&gainSlider},{&panLabel,&panSlider},{&tuneLabel,&tuneSlider},{&driveLabel,&driveSlider}}};
@@ -1801,9 +1846,11 @@ void MagDrumAudioProcessorEditor::resized()
             fitValueBox(*padMixControls[index].second, column.getWidth());
             padMixControls[index].second->setBounds(column);
         }
-        bounds.removeFromTop(2);
-        padShapeHeading.setBounds(bounds.removeFromTop(15));
-        controls=bounds.removeFromTop(78);
+        bounds.removeFromTop(4);
+        padShapePanelBounds = bounds.removeFromTop(controlGroupHeight).expanded(5, 2);
+        auto shapePanel = padShapePanelBounds.reduced(5, 3);
+        padShapeHeading.setBounds(shapePanel.removeFromTop(15));
+        controls=shapePanel.removeFromTop(controlGroupHeight - 21);
         const int shapeControlWidth=controls.getWidth()/5;
         const std::array<std::pair<juce::Label*,juce::Slider*>,5> padShapeControls{{
             {&attackLabel,&attackSlider},{&decayLabel,&decaySlider},{&sustainLabel,&sustainSlider},
@@ -1815,9 +1862,11 @@ void MagDrumAudioProcessorEditor::resized()
             fitValueBox(*padShapeControls[index].second, column.getWidth());
             padShapeControls[index].second->setBounds(column);
         }
-        bounds.removeFromTop(2);
-        padEqHeading.setBounds(bounds.removeFromTop(15));
-        controls=bounds.removeFromTop(78);
+        bounds.removeFromTop(4);
+        padEqPanelBounds = bounds.removeFromTop(controlGroupHeight).expanded(5, 2);
+        auto eqPanel = padEqPanelBounds.reduced(5, 3);
+        padEqHeading.setBounds(eqPanel.removeFromTop(15));
+        controls=eqPanel.removeFromTop(controlGroupHeight - 21);
         const int eqControlWidth=controls.getWidth()/3;
         const std::array<std::pair<juce::Label*,juce::Slider*>,3> padEqControls{{
             {&eqLowLabel,&eqLowSlider},{&eqMidLabel,&eqMidSlider},{&eqHighLabel,&eqHighSlider}}};
@@ -1829,7 +1878,6 @@ void MagDrumAudioProcessorEditor::resized()
             padEqControls[index].second->setBounds(column);
         }
         bounds.removeFromTop(3);
-        waveform->setBounds(bounds.removeFromTop(juce::jmin(104,bounds.getHeight()/2)));
         bounds.removeFromTop(4);
         auto row=bounds.removeFromBottom(34);velocityRange.setBounds(row.removeFromLeft(100));row.removeFromLeft(8);clearPadButton.setBounds(row.removeFromLeft(108));row.removeFromLeft(8);loadButton.setBounds(row);
         layerSummary.setBounds(bounds);

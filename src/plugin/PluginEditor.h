@@ -212,6 +212,8 @@ private:
     std::array<magdrum::ui::DrumPadButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
     juce::Label padMixHeading, padShapeHeading, padEqHeading;
+    juce::Rectangle<int> drumPadTrayBounds, drumEditorPanelBounds, drumWaveformPanelBounds;
+    juce::Rectangle<int> padMixPanelBounds, padShapePanelBounds, padEqPanelBounds;
     juce::Label gainLabel, panLabel, tuneLabel, driveLabel, attackLabel, decayLabel, sustainLabel, releaseLabel, filterCutoffLabel, eqLowLabel, eqMidLabel, eqHighLabel;
     juce::Slider gainSlider, panSlider, tuneSlider, driveSlider, attackSlider, decaySlider, sustainSlider, releaseSlider, filterCutoffSlider, eqLowSlider, eqMidSlider, eqHighSlider;
     bool updatingPadControls = false;

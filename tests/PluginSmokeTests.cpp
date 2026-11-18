@@ -236,6 +236,81 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksDrumMachineControlLayout(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.setPage(1);
+        const auto verifyCurrentSize = [&editor]()
+        {
+            editor.resized();
+            const auto local = editor.getLocalBounds();
+            const auto inside = [&local](juce::Rectangle<int> area)
+            {
+                return !area.isEmpty() && local.contains(area);
+            };
+            if (!inside(editor.drumPadTrayBounds) || !inside(editor.drumEditorPanelBounds)
+            || !inside(editor.drumWaveformPanelBounds) || !inside(editor.padMixPanelBounds)
+            || !inside(editor.padShapePanelBounds) || !inside(editor.padEqPanelBounds))
+            {
+                std::cerr << "Drum Machine instrument panels extend outside the editor.\n";
+                return 1;
+            }
+            if (editor.drumPadTrayBounds.intersects(editor.drumEditorPanelBounds)
+            || !editor.drumEditorPanelBounds.contains(editor.drumWaveformPanelBounds)
+            || !editor.drumEditorPanelBounds.contains(editor.padMixPanelBounds)
+            || !editor.drumEditorPanelBounds.contains(editor.padShapePanelBounds)
+            || !editor.drumEditorPanelBounds.contains(editor.padEqPanelBounds))
+            {
+                std::cerr << "Drum Machine instrument panels overlap or escape their editor panel.\n";
+                return 2;
+            }
+            if (editor.drumWaveformPanelBounds.getBottom() > editor.padMixHeading.getY()
+            || editor.padMixPanelBounds.getBottom() > editor.padShapePanelBounds.getY()
+            || editor.padShapePanelBounds.getBottom() > editor.padEqPanelBounds.getY())
+            {
+                std::cerr << "Drum Machine waveform and pad-control groups are out of order.\n";
+                return 3;
+            }
+            for (const auto& pad : editor.pads)
+                if (!editor.drumPadTrayBounds.contains(pad.getBounds()))
+                {
+                    std::cerr << "A DR-660 pad is outside the pad tray.\n";
+                    return 4;
+                }
+            const auto controlsFit = [](juce::Rectangle<int> panel,
+                                    std::initializer_list<const juce::Component*> controls)
+            {
+                return std::all_of(controls.begin(), controls.end(), [&panel](const auto* control)
+                {
+                    return control != nullptr && panel.contains(control->getBounds());
+                });
+            };
+            if (!controlsFit(editor.padMixPanelBounds,
+                         {&editor.padMixHeading, &editor.gainLabel, &editor.gainSlider,
+                          &editor.panLabel, &editor.panSlider, &editor.tuneLabel,
+                          &editor.tuneSlider, &editor.driveLabel, &editor.driveSlider})
+            || !controlsFit(editor.padShapePanelBounds,
+                            {&editor.padShapeHeading, &editor.attackLabel, &editor.attackSlider,
+                             &editor.decayLabel, &editor.decaySlider, &editor.sustainLabel,
+                             &editor.sustainSlider, &editor.releaseLabel, &editor.releaseSlider,
+                             &editor.filterCutoffLabel, &editor.filterCutoffSlider})
+            || !controlsFit(editor.padEqPanelBounds,
+                            {&editor.padEqHeading, &editor.eqLowLabel, &editor.eqLowSlider,
+                             &editor.eqMidLabel, &editor.eqMidSlider,
+                             &editor.eqHighLabel, &editor.eqHighSlider}))
+            {
+                std::cerr << "A per-pad instrument control is outside its visual group.\n";
+                return 5;
+            }
+            return 0;
+        };
+
+        editor.setSize(1000, 620);
+        if (const int minimumSizeResult = verifyCurrentSize(); minimumSizeResult != 0)
+            return minimumSizeResult;
+        editor.setSize(1120, 760);
+        return verifyCurrentSize();
+    }
+
     static int checksTriggeredMidiPadGlow(MagDrumAudioProcessorEditor& editor,
                                           MagDrumAudioProcessor& processor)
     {
@@ -664,6 +739,8 @@ int main(int argc, char** argv)
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
         const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
         if (folderButtonCheck != 0) return 44;
+        const int drumLayoutCheck = MagDrumAudioProcessorEditorTestAccess::checksDrumMachineControlLayout(editor);
+        if (drumLayoutCheck != 0) return 60 + drumLayoutCheck;
         const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);
         if(editorCheck!=0){std::cerr<<"Virtualized sequencer editor smoke stage "<<editorCheck<<" failed.\n";return 41;}
         const int languageCheck=MagDrumAudioProcessorEditorTestAccess::checksLiveLanguageSwitching(editor, sample, comparisonSample);
