@@ -236,6 +236,38 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksTriggeredMidiPadGlow(MagDrumAudioProcessorEditor& editor,
+                                          MagDrumAudioProcessor& processor)
+    {
+        editor.setPage(1);
+        processor.prepareToPlay(44100.0, 128);
+        juce::AudioBuffer<float> audio(2, 128);
+        juce::MidiBuffer midi;
+        midi.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0);
+        processor.processBlock(audio, midi);
+        editor.updatePadActivity();
+        if (editor.pads[12].getFlashAmount() <= 0.0f
+            || editor.pads[13].getFlashAmount() > 0.0f)
+        {
+            std::cerr << "Incoming MIDI did not glow only the matching DR-660 pad.\n";
+            return 1;
+        }
+
+        editor.setPage(0);
+        juce::MidiBuffer hiddenPageMidi;
+        hiddenPageMidi.addEvent(juce::MidiMessage::noteOn(10, 38, static_cast<juce::uint8>(100)), 0);
+        processor.processBlock(audio, hiddenPageMidi);
+        editor.updatePadActivity();
+        editor.setPage(1);
+        editor.updatePadActivity();
+        if (editor.pads[13].getFlashAmount() > 0.0f)
+        {
+            std::cerr << "MIDI received outside Drum Machine was replayed as a delayed pad glow.\n";
+            return 2;
+        }
+        return 0;
+    }
+
     static int checksPluginFolderChooserVisibility(MagDrumAudioProcessorEditor& editor)
     {
         if (editor.choosePluginFolderButton.isVisible())
@@ -640,6 +672,8 @@ int main(int argc, char** argv)
         if(midiSearchCancellationCheck!=0)return 43;
         const int smpteImportCheck = MagDrumAudioProcessorEditorTestAccess::checksSmpteMidiImport(editor, editorProcessor);
         if (smpteImportCheck != 0) return 288 + smpteImportCheck;
+        const int padActivityCheck = MagDrumAudioProcessorEditorTestAccess::checksTriggeredMidiPadGlow(editor, editorProcessor);
+        if (padActivityCheck != 0) return 59 + padActivityCheck;
     }
 #endif
 
@@ -901,6 +935,25 @@ int main(int argc, char** argv)
         std::cerr << "Queued UI trigger render check failed: peak=" << queuedPeak << '\n';
         return 33;
     }
+    if (queuedTrigger.consumeNoteTriggerCount(36) != 1
+        || queuedTrigger.consumeNoteTriggerCount(36) != 0)
+    {
+        std::cerr << "Queued UI trigger activity was not delivered exactly once to the editor.\n";
+        return 57;
+    }
+
+    auto& midiActivity = makeTestProcessor();
+    midiActivity.prepareToPlay(44100.0, 128);
+    juce::AudioBuffer<float> midiActivityAudio(2, 128);
+    juce::MidiBuffer midiActivityEvents;
+    midiActivityEvents.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0);
+    midiActivity.processBlock(midiActivityAudio, midiActivityEvents);
+    if (midiActivity.consumeNoteTriggerCount(36) != 1
+        || midiActivity.consumeNoteTriggerCount(36) != 0)
+    {
+        std::cerr << "Incoming host MIDI activity was not delivered exactly once to the editor.\n";
+        return 58;
+    }
 
     auto& hostSyncedSequencer = makeTestProcessor();
     if (!hostSyncedSequencer.loadSampleForNote(36, sample)) return 37;
@@ -916,6 +969,11 @@ int main(int argc, char** argv)
     juce::AudioBuffer<float> hostAudio(2, 128);
     juce::MidiBuffer hostMidi;
     hostSyncedSequencer.processBlock(hostAudio, hostMidi);
+    if (hostSyncedSequencer.consumeNoteTriggerCount(36) != 1)
+    {
+        std::cerr << "Host-synced sequencer activity was not delivered to the editor.\n";
+        return 59;
+    }
     double preHitPeak = 0.0;
     double postHitPeak = 0.0;
     for (int channel = 0; channel < hostAudio.getNumChannels(); ++channel)

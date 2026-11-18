@@ -56,6 +56,7 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         noteEqHighDb[note].store(0.0f, std::memory_order_relaxed);
         noteSampleStart[note].store(0.0f, std::memory_order_relaxed);
         noteSampleEnd[note].store(1.0f, std::memory_order_relaxed);
+        noteTriggerCounts[note].store(0, std::memory_order_relaxed);
     }
     for (auto& noteCounters : roundRobinCounters)
         for (auto& counter : noteCounters)
@@ -310,6 +311,13 @@ void MagDrumAudioProcessor::triggerNote(int note, int velocity)
         pendingTriggerFifo.finishedWrite(writeCount);
 }
 
+std::uint32_t MagDrumAudioProcessor::consumeNoteTriggerCount(int note) noexcept
+{
+    if (!juce::isPositiveAndBelow(note, static_cast<int>(noteTriggerCounts.size())))
+        return 0;
+    return noteTriggerCounts[static_cast<size_t>(note)].exchange(0, std::memory_order_acq_rel);
+}
+
 int MagDrumAudioProcessor::setSequencerPattern(const std::vector<DrumEvent>& events,
                                                 const MidiMappingProfile& mapping,
                                                 double patternLengthBeats)
@@ -411,6 +419,10 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
 
 void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
 {
+    if (!juce::isPositiveAndBelow(note, static_cast<int>(noteTriggerCounts.size())))
+        return;
+
+    noteTriggerCounts[static_cast<size_t>(note)].fetch_add(1, std::memory_order_release);
     const int clampedVelocity = juce::jlimit(1, 127, velocity);
     const SampleData* sample = nullptr;
     std::array<const SampleData*, maxVelocityLayers> matchingSamples{};

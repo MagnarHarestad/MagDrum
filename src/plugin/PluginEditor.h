@@ -28,6 +28,17 @@ public:
     }
 };
 
+class MagDrumPadActivityTimer final : private juce::Timer
+{
+public:
+    std::function<void()> onTick;
+    void start() { startTimerHz(30); }
+    void stop() { stopTimer(); }
+
+private:
+    void timerCallback() override { if (onTick) onTick(); }
+};
+
 class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Button::Listener,
                                           private juce::ListBoxModel,
@@ -49,6 +60,7 @@ private:
     friend class MagDrumAudioProcessorEditorTestAccess;
     void buttonClicked(juce::Button*) override;
     void timerCallback() override;
+    void updatePadActivity();
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void refreshSamples();
@@ -139,6 +151,7 @@ private:
 
     magdrum::ui::LookAndFeel theme;
     juce::TooltipWindow tooltipWindow;
+    MagDrumPadActivityTimer padActivityTimer;
     MagDrumAudioProcessor& processor;
     SampleDatabase database;
     juce::File databaseFile;

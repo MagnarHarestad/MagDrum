@@ -83,6 +83,9 @@ public:
     // UI-thread pad/sequencer triggers are queued for the next audio block.
     // The queue is bounded so this call never blocks the host's audio thread.
     void triggerNote(int midiNote, int velocity = 100);
+    // Audio-thread note activity is accumulated lock-free and consumed by the
+    // editor timer to animate the corresponding drum pad.
+    std::uint32_t consumeNoteTriggerCount(int midiNote) noexcept;
     int setSequencerPattern(const std::vector<DrumEvent>& events, const MidiMappingProfile& mapping,
                             double patternLengthBeats);
     void setSequencerPlaybackEnabled(bool enabled) noexcept;
@@ -176,6 +179,7 @@ private:
     std::array<std::atomic<float>, 128> noteDriveDb{};
     std::array<std::atomic<float>, 128> noteEqLowDb{}, noteEqMidDb{}, noteEqHighDb{};
     std::array<std::atomic<float>, 128> noteSampleStart{}, noteSampleEnd{};
+    std::array<std::atomic<std::uint32_t>, 128> noteTriggerCounts{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;
