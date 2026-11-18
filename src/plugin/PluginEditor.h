@@ -193,7 +193,7 @@ private:
     juce::ProgressBar sampleScanProgress{sampleScanProgressValue};
     juce::Label sampleScanProgressLabel;
     std::unique_ptr<MagDrumWaveform> waveform;
-    std::array<juce::TextButton, 16> pads;
+    std::array<magdrum::ui::DrumPadButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
     juce::Label gainLabel, panLabel, tuneLabel;
     juce::Slider gainSlider, panSlider, tuneSlider;

@@ -407,6 +407,8 @@ public:
         if (editor.steps.size() != 16 || editor.steps.front().size() != 32) return 1;
         if (editor.laneLabels[8].getText() != "Bell" || editor.laneLabels[15].getText() != "Cowbell") return 2;
         if (editor.mappedLaneNotes[8] != 53 || editor.mappedLaneNotes[15] != 56) return 9;
+        editor.pads[0].flash();
+        if (editor.pads[0].getFlashAmount() < 0.9f) return 12;
         if (editor.getNumChildComponents() >= 800)
         {
             std::cerr << "Unexpectedly high sequencer component count: " << editor.getNumChildComponents() << "\n";

@@ -331,4 +331,82 @@ public:
                                    width, 2.0f, 1.0f);
     }
 };
+
+class DrumPadButton final : public juce::TextButton, private juce::Timer
+{
+public:
+    DrumPadButton() = default;
+
+    void setPadGlowColour(juce::Colour colour) { padGlowColour = colour; }
+
+    void flash()
+    {
+        flashStarted = juce::Time::getMillisecondCounterHiRes();
+        startTimerHz(60);
+        repaint();
+    }
+
+    float getFlashAmount() const
+    {
+        if (flashStarted <= 0.0) return 0.0f;
+        const double elapsed = juce::Time::getMillisecondCounterHiRes() - flashStarted;
+        return juce::jlimit(0.0f, 1.0f, 1.0f - static_cast<float>(elapsed / 300.0));
+    }
+
+    void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
+    {
+        const auto baseColour = findColour(getToggleState() ? juce::TextButton::buttonOnColourId
+                                                            : juce::TextButton::buttonColourId);
+        getLookAndFeel().drawButtonBackground(g, *this, baseColour, isMouseOverButton, isButtonDown);
+
+        const float flashAmount = getFlashAmount();
+        const float lightAmount = juce::jmax(flashAmount, getToggleState() ? 0.34f : 0.0f);
+        if (lightAmount > 0.0f && isEnabled())
+        {
+            const auto face = getLocalBounds().toFloat().reduced(3.0f)
+                .translated(0.0f, isButtonDown ? 1.0f : 0.0f);
+            const float radius = juce::jmin(10.0f, face.getHeight() * 0.16f);
+            const auto glow = padGlowColour;
+
+            juce::Path halo;
+            halo.addRoundedRectangle(face.reduced(1.0f), radius);
+            juce::DropShadow(glow.withAlpha(0.88f * lightAmount), 14, {}).drawForPath(g, halo);
+
+            g.setColour(glow.withAlpha(0.42f * lightAmount));
+            g.fillRoundedRectangle(face.reduced(3.0f), radius - 1.0f);
+            g.setColour(glow.brighter(0.72f).withAlpha(0.82f * lightAmount));
+            g.drawRoundedRectangle(face.reduced(2.5f), radius - 1.5f, 1.8f + 1.0f * lightAmount);
+
+            const auto indicator = juce::Rectangle<float>(face.getCentreX() - face.getWidth() * 0.16f,
+                face.getBottom() - 6.0f, face.getWidth() * 0.32f, 2.5f);
+            juce::Path indicatorPath;
+            indicatorPath.addRoundedRectangle(indicator, 1.25f);
+            juce::DropShadow(glow.withAlpha(lightAmount), 8, {}).drawForPath(g, indicatorPath);
+            g.setColour(glow.brighter(0.9f).withAlpha(0.95f * lightAmount));
+            g.fillRoundedRectangle(indicator, 1.25f);
+        }
+
+        getLookAndFeel().drawButtonText(g, *this, isMouseOverButton, isButtonDown);
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        flash();
+        juce::TextButton::mouseDown(event);
+    }
+
+private:
+    void timerCallback() override
+    {
+        if (getFlashAmount() <= 0.0f)
+        {
+            stopTimer();
+            flashStarted = 0.0;
+        }
+        repaint();
+    }
+
+    juce::Colour padGlowColour = Palette::Accent;
+    double flashStarted = 0.0;
+};
 }
