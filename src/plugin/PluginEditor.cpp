@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <complex>
 #include <vector>
 #if JUCE_WINDOWS
 #ifndef NOMINMAX
@@ -1562,6 +1563,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         else parameters.eqHighDb = value;
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+        repaint(padEqPanelBounds);
     };
     eqLowSlider.onValueChange = [this, updateEq] { updateEq(0, static_cast<float>(eqLowSlider.getValue())); };
     eqMidSlider.onValueChange = [this, updateEq] { updateEq(1, static_cast<float>(eqMidSlider.getValue())); };
@@ -1637,6 +1639,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         parameters.filterCutoffHz = static_cast<float>(filterCutoffSlider.getValue());
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+        repaint(padShapePanelBounds);
     };
     filterResonanceSlider.onValueChange = [this]
     {
@@ -1645,6 +1648,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         parameters.filterResonance = static_cast<float>(filterResonanceSlider.getValue());
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+        repaint(padShapePanelBounds);
     };
     waveform->onTrimRangeChanged = [this](float start, float end)
     {
@@ -1833,6 +1837,98 @@ void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
         drawInstrumentPanel(padShapePanelBounds, Palette::Accent.brighter(0.08f));
         drawInstrumentPanel(padEqPanelBounds, Palette::Accent.brighter(0.15f));
         drawInstrumentPanel(padFxPanelBounds, Palette::Accent.brighter(0.22f));
+
+        const auto parameters = processor.getNoteParameters(selectedNote);
+        const double sampleRate = processor.getSampleRate() > 1000.0 ? processor.getSampleRate() : 48000.0;
+        const auto drawResponse = [&g](juce::Rectangle<int> panel, juce::Colour accent,
+                                      float minDb, float maxDb, const auto& responseAt)
+        {
+            if (panel.isEmpty()) return;
+            auto graph = panel.reduced(8, 0).withHeight(16).removeFromRight(142);
+            graph.setY(panel.getY() + 1);
+            if (graph.getWidth() < 48) return;
+            g.setColour(juce::Colour(0xff10151b).withAlpha(0.96f));
+            g.fillRoundedRectangle(graph.toFloat(), 2.5f);
+            g.setColour(Palette::Border.withAlpha(0.8f));
+            g.drawRoundedRectangle(graph.toFloat().reduced(0.5f), 2.5f, 0.7f);
+            g.setColour(Palette::Border.withAlpha(0.42f));
+            for (int division = 1; division < 4; ++division)
+            {
+                const float x = static_cast<float>(graph.getX())
+                    + static_cast<float>(graph.getWidth()) * division / 4.0f;
+                g.drawVerticalLine(juce::roundToInt(x), static_cast<float>(graph.getY() + 2),
+                                   static_cast<float>(graph.getBottom() - 2));
+            }
+            const float zeroY = juce::jmap(0.0f, minDb, maxDb,
+                                           static_cast<float>(graph.getBottom() - 1),
+                                           static_cast<float>(graph.getY() + 1));
+            g.setColour(Palette::Muted.withAlpha(0.58f));
+            g.drawHorizontalLine(juce::roundToInt(zeroY), static_cast<float>(graph.getX() + 2),
+                                 static_cast<float>(graph.getRight() - 2));
+            juce::Path curve;
+            for (int x = 0; x < graph.getWidth(); ++x)
+            {
+                const double proportion = static_cast<double>(x) / juce::jmax(1, graph.getWidth() - 1);
+                const double frequency = 20.0 * std::pow(1000.0, proportion);
+                const float db = juce::jlimit(minDb, maxDb, responseAt(frequency));
+                const float y = juce::jmap(db, minDb, maxDb,
+                                           static_cast<float>(graph.getBottom() - 1),
+                                           static_cast<float>(graph.getY() + 1));
+                if (x == 0) curve.startNewSubPath(static_cast<float>(graph.getX() + x), y);
+                else curve.lineTo(static_cast<float>(graph.getX() + x), y);
+            }
+            g.setColour(accent.withAlpha(0.18f));
+            g.strokePath(curve, juce::PathStrokeType(3.0f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+            g.setColour(accent.brighter(0.25f));
+            g.strokePath(curve, juce::PathStrokeType(1.25f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+        };
+        const auto onePole = [](double frequency, double cutoff, double sampleRateHz)
+        {
+            const double coefficient = 1.0 - std::exp(-2.0 * juce::MathConstants<double>::pi * cutoff / sampleRateHz);
+            const double angle = -2.0 * juce::MathConstants<double>::pi * frequency / sampleRateHz;
+            const std::complex<double> denominator(1.0 - (1.0 - coefficient) * std::cos(angle),
+                                                    -(1.0 - coefficient) * std::sin(angle));
+            return std::complex<double>(coefficient, 0.0) / denominator;
+        };
+        const auto dbFromMagnitude = [](double magnitude)
+        {
+            return static_cast<float>(juce::Decibels::gainToDecibels(
+                static_cast<float>(std::max(magnitude, 1.0e-5)), -100.0f));
+        };
+        drawResponse(padShapePanelBounds, Palette::Accent.brighter(0.08f), -36.0f, 18.0f,
+                     [parameters, sampleRate, dbFromMagnitude](double frequency)
+        {
+            const double cutoff = std::min<double>(parameters.filterCutoffHz, sampleRate * 0.49);
+            if (parameters.filterCutoffHz >= 19999.0f || cutoff >= sampleRate * 0.45) return 0.0f;
+            const double omega = 2.0 * juce::MathConstants<double>::pi * cutoff / sampleRate;
+            const double alpha = std::sin(omega) / (2.0 * juce::jlimit(0.5f, 10.0f, parameters.filterResonance));
+            const double cosine = std::cos(omega);
+            const double inverseA0 = 1.0 / (1.0 + alpha);
+            const double b0 = (1.0 - cosine) * 0.5 * inverseA0;
+            const double b1 = (1.0 - cosine) * inverseA0;
+            const double b2 = b0;
+            const double a1 = -2.0 * cosine * inverseA0;
+            const double a2 = (1.0 - alpha) * inverseA0;
+            const double angle = -2.0 * juce::MathConstants<double>::pi * frequency / sampleRate;
+            const std::complex<double> z1(std::cos(angle), std::sin(angle));
+            const auto z2 = z1 * z1;
+            const auto numerator = b0 + b1 * z1 + b2 * z2;
+            const auto denominator = 1.0 + a1 * z1 + a2 * z2;
+            return dbFromMagnitude(std::abs(numerator / denominator));
+        });
+        drawResponse(padEqPanelBounds, Palette::Accent.brighter(0.15f), -18.0f, 18.0f,
+                     [parameters, sampleRate, onePole, dbFromMagnitude](double frequency)
+        {
+            const auto low = onePole(frequency, 200.0, sampleRate);
+            const auto broad = onePole(frequency, 4000.0, sampleRate);
+            const auto response = low * static_cast<double>(juce::Decibels::decibelsToGain(parameters.eqLowDb))
+                + (broad - low) * static_cast<double>(juce::Decibels::decibelsToGain(parameters.eqMidDb))
+                + (std::complex<double>(1.0, 0.0) - broad)
+                    * static_cast<double>(juce::Decibels::decibelsToGain(parameters.eqHighDb));
+            return dbFromMagnitude(std::abs(response));
+        });
     }
     auto breadcrumb=magdrum::ui::localisedText("SAMPLE LIBRARY")+"  /  "+magdrum::ui::localisedText("DRUM MACHINE")+"  /  "+magdrum::ui::localisedText("SEQUENCER")+"  /  "+magdrum::ui::localisedText("MIDI MAPS");
     if(hasPluginScannerPage)breadcrumb+="  /  "+magdrum::ui::localisedText("PLUGIN SCANNER");
@@ -4171,6 +4267,7 @@ void MagDrumAudioProcessorEditor::setNote(int note)
     updateLayerSummary();
     const auto layers=processor.getSampleLayersForNote(selectedNote);
     sampleDetails.setText(layers.empty()?magdrum::ui::localisedText("Selected pad sound")+"\n"+magdrum::ui::localisedText("No sample loaded"):magdrum::ui::localisedText("PAD SAMPLE")+"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path,juce::dontSendNotification);
+    repaint(padShapePanelBounds.getUnion(padEqPanelBounds));
 }
 void MagDrumAudioProcessorEditor::updateDrumNotes()
 {
