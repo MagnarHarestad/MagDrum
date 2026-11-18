@@ -1509,6 +1509,14 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"), juce::dontSendNotification);
     padEqHeading.setText(magdrum::ui::localisedText("PAD EQUALIZER"), juce::dontSendNotification);
     padFxHeading.setText(magdrum::ui::localisedText("COMPRESSOR / PHASER"), juce::dontSendNotification);
+    compressorTab.setButtonText(magdrum::ui::localisedText("COMPRESSOR"));
+    phaserTab.setButtonText(magdrum::ui::localisedText("PHASER"));
+    compressorTab.setClickingTogglesState(false);
+    phaserTab.setClickingTogglesState(false);
+    compressorTab.addListener(this);
+    phaserTab.addListener(this);
+    addAndMakeVisible(compressorTab);
+    addAndMakeVisible(phaserTab);
     gainSlider.onValueChange = [this]
     {
         if (updatingPadControls) return;
@@ -1831,8 +1839,13 @@ void MagDrumAudioProcessorEditor::resized()
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
     for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
-    for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel,&phaserRateLabel,&phaserDepthLabel,&phaserFeedbackLabel,&phaserMixLabel})label->setVisible(page==1);
-    for(auto* slider:{&compressorThresholdSlider,&compressorRatioSlider,&compressorAttackSlider,&compressorReleaseSlider,&compressorMakeupSlider,&phaserRateSlider,&phaserDepthSlider,&phaserFeedbackSlider,&phaserMixSlider})slider->setVisible(page==1);
+    for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel})label->setVisible(page==1&&!showPhaserControls);
+    for(auto* label:{&phaserRateLabel,&phaserDepthLabel,&phaserFeedbackLabel,&phaserMixLabel})label->setVisible(page==1&&showPhaserControls);
+    for(auto* slider:{&compressorThresholdSlider,&compressorRatioSlider,&compressorAttackSlider,&compressorReleaseSlider,&compressorMakeupSlider})slider->setVisible(page==1&&!showPhaserControls);
+    for(auto* slider:{&phaserRateSlider,&phaserDepthSlider,&phaserFeedbackSlider,&phaserMixSlider})slider->setVisible(page==1&&showPhaserControls);
+    compressorTab.setVisible(page==1);phaserTab.setVisible(page==1);
+    compressorTab.setColour(juce::TextButton::buttonColourId,showPhaserControls?Palette::Surface:Palette::Accent.withAlpha(0.82f));
+    phaserTab.setColour(juce::TextButton::buttonColourId,showPhaserControls?Palette::Accent.withAlpha(0.82f):Palette::Surface);
     const auto barMap=currentBarMap();
     const int selectedBar=juce::jlimit(1,barMap.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
     const auto& visibleBar=barMap.bars[static_cast<size_t>(selectedBar-1)];
@@ -1889,11 +1902,10 @@ void MagDrumAudioProcessorEditor::resized()
         bounds.removeFromLeft(18);
         drumEditorPanelBounds = bounds.expanded(8, 7);
         bounds.reduce(8, 4);
-        const int controlGroupHeight = juce::jlimit(70, 94,
-            70 + juce::jlimit(0, 120, bounds.getHeight() - 413) * 24 / 120);
-        constexpr int effectsPanelHeight = 106;
-        const int waveformHeight = juce::jmax(40,
-            bounds.getHeight() - 121 - 3 * controlGroupHeight - effectsPanelHeight);
+        const int controlGroupHeight = juce::jlimit(64, 94,
+            64 + juce::jlimit(0, 120, bounds.getHeight() - 413) * 30 / 120);
+        const int waveformHeight = juce::jmax(28,
+            bounds.getHeight() - 128 - 4 * controlGroupHeight);
         selectedPadTitle.setBounds(bounds.removeFromTop(26));bounds.removeFromTop(2);
         sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
         drumWaveformPanelBounds = bounds.removeFromTop(waveformHeight).expanded(5, 3);
@@ -1944,29 +1956,34 @@ void MagDrumAudioProcessorEditor::resized()
             fitValueBox(*padEqControls[index].second, column.getWidth());
             padEqControls[index].second->setBounds(column);
         }
-        bounds.removeFromTop(3);
-        padFxPanelBounds = bounds.removeFromTop(effectsPanelHeight).expanded(5, 2);
+        bounds.removeFromTop(4);
+        padFxPanelBounds = bounds.removeFromTop(controlGroupHeight).expanded(5, 2);
         auto fxPanel = padFxPanelBounds.reduced(5, 3);
-        padFxHeading.setBounds(fxPanel.removeFromTop(14));
-        auto compressorRow = fxPanel.removeFromTop(42);
+        auto fxHeader = fxPanel.removeFromTop(16);
+        padFxHeading.setBounds(fxHeader.removeFromLeft(144));
+        fxHeader.removeFromLeft(4);
+        compressorTab.setBounds(fxHeader.removeFromLeft(86));
+        fxHeader.removeFromLeft(4);
+        phaserTab.setBounds(fxHeader.removeFromLeft(70));
+        auto effectControls = fxPanel;
         const std::array<std::pair<juce::Label*,juce::Slider*>,5> compressorControls{{
             {&compressorThresholdLabel,&compressorThresholdSlider},{&compressorRatioLabel,&compressorRatioSlider},
             {&compressorAttackLabel,&compressorAttackSlider},{&compressorReleaseLabel,&compressorReleaseSlider},
             {&compressorMakeupLabel,&compressorMakeupSlider}}};
         for(size_t index=0;index<compressorControls.size();++index)
         {
-            auto column=compressorRow.removeFromLeft(index+1==compressorControls.size()?compressorRow.getWidth():compressorRow.getWidth()/(static_cast<int>(compressorControls.size()-index)));
+            auto column=effectControls.removeFromLeft(index+1==compressorControls.size()?effectControls.getWidth():effectControls.getWidth()/(static_cast<int>(compressorControls.size()-index)));
             compressorControls[index].first->setBounds(column.removeFromTop(13));
             fitValueBox(*compressorControls[index].second, column.getWidth());
             compressorControls[index].second->setBounds(column);
         }
-        auto phaserRow = fxPanel;
+        effectControls = fxPanel;
         const std::array<std::pair<juce::Label*,juce::Slider*>,4> phaserControls{{
             {&phaserRateLabel,&phaserRateSlider},{&phaserDepthLabel,&phaserDepthSlider},
             {&phaserFeedbackLabel,&phaserFeedbackSlider},{&phaserMixLabel,&phaserMixSlider}}};
         for(size_t index=0;index<phaserControls.size();++index)
         {
-            auto column=phaserRow.removeFromLeft(index+1==phaserControls.size()?phaserRow.getWidth():phaserRow.getWidth()/(static_cast<int>(phaserControls.size()-index)));
+            auto column=effectControls.removeFromLeft(index+1==phaserControls.size()?effectControls.getWidth():effectControls.getWidth()/(static_cast<int>(phaserControls.size()-index)));
             phaserControls[index].first->setBounds(column.removeFromTop(13));
             fitValueBox(*phaserControls[index].second, column.getWidth());
             phaserControls[index].second->setBounds(column);
@@ -2121,6 +2138,8 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"),juce::dontSendNotification);
     padEqHeading.setText(magdrum::ui::localisedText("PAD EQUALIZER"),juce::dontSendNotification);
     padFxHeading.setText(magdrum::ui::localisedText("COMPRESSOR / PHASER"),juce::dontSendNotification);
+    compressorTab.setButtonText(magdrum::ui::localisedText("COMPRESSOR"));
+    phaserTab.setButtonText(magdrum::ui::localisedText("PHASER"));
     playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));playSequenceButton.setTooltip(magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
     importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));
@@ -4317,6 +4336,8 @@ juce::String MagDrumAudioProcessorEditor::currentWaveformTooltip() const
 
 void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
 {
+    if(button==&compressorTab){showPhaserControls=false;resized();return;}
+    if(button==&phaserTab){showPhaserControls=true;resized();return;}
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}
     if(button==&refreshPluginInventoryButton){refreshPluginInventory();return;}if(button==&scanPluginInventoryButton){startPluginInventoryScan();return;}if(button==&choosePluginFolderButton){choosePluginFolder();return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){choosePluginPreset();return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}
      for(size_t lane=0;lane<steps.size();++lane)for(size_t localStep=0;localStep<steps[lane].size();++localStep)if(button==&steps[lane][localStep]){const int globalStep=visibleStepIndex(static_cast<int>(localStep));if(globalStep<0)return;sequenceStepActive[lane][static_cast<size_t>(globalStep)]=steps[lane][localStep].getToggleState();const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),globalStep);if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}

@@ -503,7 +503,15 @@ public:
     static int checksDrumMachineControlLayout(MagDrumAudioProcessorEditor& editor)
     {
         editor.setPage(1);
-        const auto verifyCurrentSize = [&editor]()
+        const auto controlsFit = [](juce::Rectangle<int> panel,
+                                    std::initializer_list<const juce::Component*> controls)
+        {
+            return std::all_of(controls.begin(), controls.end(), [&panel](const auto* control)
+            {
+                return control != nullptr && panel.contains(control->getBounds());
+            });
+        };
+        const auto verifyCurrentSize = [&editor, &controlsFit]()
         {
             editor.resized();
             const auto local = editor.getLocalBounds();
@@ -513,7 +521,8 @@ public:
             };
             if (!inside(editor.drumPadTrayBounds) || !inside(editor.drumEditorPanelBounds)
             || !inside(editor.drumWaveformPanelBounds) || !inside(editor.padMixPanelBounds)
-            || !inside(editor.padShapePanelBounds) || !inside(editor.padEqPanelBounds))
+            || !inside(editor.padShapePanelBounds) || !inside(editor.padEqPanelBounds)
+            || !inside(editor.padFxPanelBounds))
             {
                 std::cerr << "Drum Machine instrument panels extend outside the editor.\n";
                 return 1;
@@ -522,14 +531,16 @@ public:
             || !editor.drumEditorPanelBounds.contains(editor.drumWaveformPanelBounds)
             || !editor.drumEditorPanelBounds.contains(editor.padMixPanelBounds)
             || !editor.drumEditorPanelBounds.contains(editor.padShapePanelBounds)
-            || !editor.drumEditorPanelBounds.contains(editor.padEqPanelBounds))
+            || !editor.drumEditorPanelBounds.contains(editor.padEqPanelBounds)
+            || !editor.drumEditorPanelBounds.contains(editor.padFxPanelBounds))
             {
                 std::cerr << "Drum Machine instrument panels overlap or escape their editor panel.\n";
                 return 2;
             }
             if (editor.drumWaveformPanelBounds.getBottom() > editor.padMixHeading.getY()
             || editor.padMixPanelBounds.getBottom() > editor.padShapePanelBounds.getY()
-            || editor.padShapePanelBounds.getBottom() > editor.padEqPanelBounds.getY())
+            || editor.padShapePanelBounds.getBottom() > editor.padEqPanelBounds.getY()
+            || editor.padEqPanelBounds.getBottom() > editor.padFxPanelBounds.getY())
             {
                 std::cerr << "Drum Machine waveform and pad-control groups are out of order.\n";
                 return 3;
@@ -540,14 +551,6 @@ public:
                     std::cerr << "A DR-660 pad is outside the pad tray.\n";
                     return 4;
                 }
-            const auto controlsFit = [](juce::Rectangle<int> panel,
-                                    std::initializer_list<const juce::Component*> controls)
-            {
-                return std::all_of(controls.begin(), controls.end(), [&panel](const auto* control)
-                {
-                    return control != nullptr && panel.contains(control->getBounds());
-                });
-            };
             if (!controlsFit(editor.padMixPanelBounds,
                          {&editor.padMixHeading, &editor.gainLabel, &editor.gainSlider,
                           &editor.panLabel, &editor.panSlider, &editor.tuneLabel,
@@ -560,7 +563,14 @@ public:
             || !controlsFit(editor.padEqPanelBounds,
                             {&editor.padEqHeading, &editor.eqLowLabel, &editor.eqLowSlider,
                              &editor.eqMidLabel, &editor.eqMidSlider,
-                             &editor.eqHighLabel, &editor.eqHighSlider}))
+                             &editor.eqHighLabel, &editor.eqHighSlider})
+            || !controlsFit(editor.padFxPanelBounds,
+                            {&editor.padFxHeading, &editor.compressorTab, &editor.phaserTab,
+                             &editor.compressorThresholdLabel, &editor.compressorThresholdSlider,
+                             &editor.compressorRatioLabel, &editor.compressorRatioSlider,
+                             &editor.compressorAttackLabel, &editor.compressorAttackSlider,
+                             &editor.compressorReleaseLabel, &editor.compressorReleaseSlider,
+                             &editor.compressorMakeupLabel, &editor.compressorMakeupSlider}))
             {
                 std::cerr << "A per-pad instrument control is outside its visual group.\n";
                 return 5;
@@ -571,8 +581,29 @@ public:
         editor.setSize(1000, 620);
         if (const int minimumSizeResult = verifyCurrentSize(); minimumSizeResult != 0)
             return minimumSizeResult;
+        editor.buttonClicked(&editor.phaserTab);
+        if (!editor.phaserRateLabel.isVisible() || !editor.phaserDepthSlider.isVisible()
+            || !controlsFit(editor.padFxPanelBounds,
+                            {&editor.padFxHeading, &editor.compressorTab, &editor.phaserTab,
+                             &editor.phaserRateLabel, &editor.phaserRateSlider,
+                             &editor.phaserDepthLabel, &editor.phaserDepthSlider,
+                             &editor.phaserFeedbackLabel, &editor.phaserFeedbackSlider,
+                             &editor.phaserMixLabel, &editor.phaserMixSlider}))
+        {
+            std::cerr << "Phaser tab controls are hidden or outside their panel: visible="
+                      << editor.phaserRateLabel.isVisible() << "," << editor.phaserDepthSlider.isVisible()
+                      << " panel=" << editor.padFxPanelBounds.toString().toStdString()
+                      << " rate=" << editor.phaserRateLabel.getBounds().toString().toStdString()
+                      << " depth=" << editor.phaserDepthSlider.getBounds().toString().toStdString()
+                      << " header=" << editor.padFxHeading.getBounds().toString().toStdString()
+                      << " tabs=" << editor.compressorTab.getBounds().toString().toStdString() << ","
+                      << editor.phaserTab.getBounds().toString().toStdString() << "\n";
+            return 6;
+        }
         editor.setSize(1120, 760);
-        return verifyCurrentSize();
+        if (const int standardSizeResult = verifyCurrentSize(); standardSizeResult != 0)
+            return standardSizeResult;
+        return 0;
     }
 
     static int checksTriggeredMidiPadGlow(MagDrumAudioProcessorEditor& editor,
@@ -868,7 +899,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 27> checks{{
+            const std::array<LabelCheck, 32> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -895,6 +926,11 @@ public:
                 {"pad mix heading", editor.padMixHeading.getText(), magdrum::ui::localisedText("PAD MIX")},
                 {"pad envelope heading", editor.padShapeHeading.getText(), magdrum::ui::localisedText("ENVELOPE / FILTER")},
                 {"pad EQ heading", editor.padEqHeading.getText(), magdrum::ui::localisedText("PAD EQUALIZER")},
+                {"pad effects heading", editor.padFxHeading.getText(), magdrum::ui::localisedText("COMPRESSOR / PHASER")},
+                {"compressor selector", editor.compressorTab.getButtonText(), magdrum::ui::localisedText("COMPRESSOR")},
+                {"phaser selector", editor.phaserTab.getButtonText(), magdrum::ui::localisedText("PHASER")},
+                {"compressor threshold", editor.compressorThresholdLabel.getText(), magdrum::ui::localisedText("COMP THRESHOLD")},
+                {"phaser rate", editor.phaserRateLabel.getText(), magdrum::ui::localisedText("PHASER RATE")},
                 {"sample trim tooltip", editor.currentWaveformTooltip(), magdrum::ui::localisedText("Drag waveform markers to set the sample playback range. Double-click to reset.")}
             }};
             for (const auto& check : checks)
