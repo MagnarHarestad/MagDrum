@@ -2,12 +2,18 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace magdrum::plugins
 {
+using CachedVst3InstrumentDecisions = std::unordered_map<std::string, bool>;
+
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
+CachedVst3InstrumentDecisions indexCachedVst3InstrumentDecisions(
+    const juce::Array<juce::PluginDescription>& cachedDescriptions);
 }
 
 struct PluginScanProcessCapture

@@ -299,6 +299,21 @@ int runSmokeTests(int argc,char** argv)
     const juce::FileSearchPath defaultsWithCustom(defaultPluginPath+";"+customPluginRoot.getFullPathName());
     const auto duplicatePluginSearch=magdrum::plugins::createVst3DiscoverySearchPath(defaultsWithCustom,customPluginRoot);
     if(duplicatePluginSearch.getNumPaths()!=3)return 209;
+    juce::Array<juce::PluginDescription> cachedPluginDescriptions;
+    juce::PluginDescription cachedEffect;cachedEffect.fileOrIdentifier="effect-module";cachedEffect.pluginFormatName="VST3";cachedEffect.isInstrument=false;cachedPluginDescriptions.add(cachedEffect);
+    juce::PluginDescription cachedInstrument;cachedInstrument.fileOrIdentifier="instrument-module";cachedInstrument.pluginFormatName="VST3";cachedInstrument.isInstrument=true;cachedPluginDescriptions.add(cachedInstrument);
+    juce::PluginDescription mixedEffect; mixedEffect.fileOrIdentifier="multi-class-module";mixedEffect.pluginFormatName="VST3";mixedEffect.isInstrument=false;cachedPluginDescriptions.add(mixedEffect);
+    juce::PluginDescription mixedInstrument=mixedEffect;mixedInstrument.isInstrument=true;cachedPluginDescriptions.add(mixedInstrument);
+    juce::PluginDescription otherFormat=cachedInstrument;otherFormat.fileOrIdentifier="other-format";otherFormat.pluginFormatName="AudioUnit";cachedPluginDescriptions.add(otherFormat);
+    for(int index=0;index<4096;++index)
+    {
+        juce::PluginDescription bulk;bulk.fileOrIdentifier="bulk-module-"+juce::String(index);bulk.pluginFormatName="VST3";bulk.isInstrument=(index%2)==0;cachedPluginDescriptions.add(bulk);
+    }
+    const auto cachedInstrumentIndex=magdrum::plugins::indexCachedVst3InstrumentDecisions(cachedPluginDescriptions);
+    if(cachedInstrumentIndex.size()!=4099||cachedInstrumentIndex.at("effect-module")
+        ||!cachedInstrumentIndex.at("instrument-module")||!cachedInstrumentIndex.at("multi-class-module")
+        ||cachedInstrumentIndex.count("other-format")!=0||!cachedInstrumentIndex.at("bulk-module-4094")
+        ||cachedInstrumentIndex.at("bulk-module-4095"))return 210;
     const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
     midiFixture.deleteRecursively();
     const auto midiRoot=midiFixture.getChildFile("midi-discovery");

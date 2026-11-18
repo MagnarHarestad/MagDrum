@@ -751,20 +751,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto searchPath = magdrum::plugins::createVst3DiscoverySearchPath(
         vst3->getDefaultLocationsToSearch(), additionalFolder);
     const auto previouslyDiscoveredTypes = knownPlugins.getTypes();
-    const auto cachedInstrumentDecision = [&previouslyDiscoveredTypes](const juce::String& identifier)
-        -> std::optional<bool>
-    {
-        bool found = false;
-        bool hasInstrument = false;
-        for (const auto& description : previouslyDiscoveredTypes)
-            if (description.fileOrIdentifier == identifier && description.pluginFormatName == "VST3")
-            {
-                found = true;
-                hasInstrument = hasInstrument || description.isInstrument;
-            }
-        if (!found) return {};
-        return hasInstrument;
-    };
+    const auto cachedInstrumentDecisions = magdrum::plugins::indexCachedVst3InstrumentDecisions(
+        previouslyDiscoveredTypes);
     const auto declaresInstrument = [](const juce::String& identifier)
     {
         const juce::File bundle(identifier);
@@ -809,8 +797,9 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         // Single-file VST3 modules do not expose a sidecar moduleinfo.json.
         // Reuse the cached description after the first isolated scan so later
         // instrument refreshes can skip effect modules without loading them.
-        const auto cachedDecision = cachedInstrumentDecision(candidate);
-        if (cachedDecision.has_value() ? *cachedDecision : declaresInstrument(candidate))
+        const auto cachedDecision = cachedInstrumentDecisions.find(candidate.toStdString());
+        if (cachedDecision != cachedInstrumentDecisions.end()
+                ? cachedDecision->second : declaresInstrument(candidate))
             instrumentCandidates.add(candidate);
     }
     const int overallTotal = juce::jmax(progressTotal,

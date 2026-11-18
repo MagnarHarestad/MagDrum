@@ -13,6 +13,22 @@ juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
     return result;
 }
 
+magdrum::plugins::CachedVst3InstrumentDecisions magdrum::plugins::indexCachedVst3InstrumentDecisions(
+    const juce::Array<juce::PluginDescription>& cachedDescriptions)
+{
+    CachedVst3InstrumentDecisions decisions;
+    decisions.reserve(static_cast<size_t>(cachedDescriptions.size()));
+    for (const auto& description : cachedDescriptions)
+    {
+        if (description.pluginFormatName != "VST3")
+            continue;
+
+        auto& hasInstrument = decisions[description.fileOrIdentifier.toStdString()];
+        hasInstrument = hasInstrument || description.isInstrument;
+    }
+    return decisions;
+}
+
 namespace
 {
 juce::var readJson(const juce::File& file)
