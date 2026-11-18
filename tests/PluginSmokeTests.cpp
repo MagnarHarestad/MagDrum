@@ -1038,7 +1038,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 38> checks{{
+            const std::array<LabelCheck, 39> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1052,6 +1052,7 @@ public:
                 {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
                 {"plugin-folder button", editor.choosePluginFolderButton.getButtonText(), magdrum::ui::localisedText("Choose VST3 folder")},
                 {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All sounds")},
+                {"sample content filter", editor.contentTypeFilter.getText(), magdrum::ui::localisedText("Drum one-shots")},
                 {"sample sort filter", editor.sortFilter.getText(), magdrum::ui::localisedText("Name A-Z")},
                 {"pad attack control", editor.attackLabel.getText(), magdrum::ui::localisedText("PAD ATTACK")},
                 {"pad decay control", editor.decayLabel.getText(), magdrum::ui::localisedText("PAD DECAY")},

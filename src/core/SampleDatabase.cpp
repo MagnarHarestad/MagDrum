@@ -2719,6 +2719,55 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
                            "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
                            "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
                            "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0))");
+    const auto contentCorpus = juce::String("lower(' '||replace(replace(replace(replace(replace(replace(replace(sample.name||' '||sample.path||' '||COALESCE(NULLIF(sample.user_category,''),sample.category)||' '||COALESCE(tag_index.tags,''),'/', ' '),char(92),' '),'_',' '),'-',' '),'.',' '),'(',' '),')',' ')||' ')");
+    const auto contentSource = juce::String("content_samples AS MATERIALIZED (SELECT sample.*,sample.rowid AS rowid,") + contentCorpus
+        + " AS content_tokens FROM samples sample LEFT JOIN (SELECT path,group_concat(tag,' ') AS tags FROM sample_classification_tags GROUP BY path) tag_index ON tag_index.path=sample.path)";
+    const auto contentTable = filter.contentKind == 0 ? juce::String("samples") : juce::String("content_samples");
+    const auto containsContentTerm = [](const char* term)
+    {
+        return juce::String("instr(s.content_tokens, ' ") + term + " ' )>0";
+    };
+    const auto drumCategory = juce::String("COALESCE(NULLIF(s.user_category,''),s.category) COLLATE NOCASE IN ('Kick','Snare','Closed hi-hat','Open hi-hat','Pedal hi-hat','Tom','Ride','Crash','Clap','Percussion')");
+    const auto drumTerms = juce::String("(") + containsContentTerm("kick") + " OR " + containsContentTerm("kicks")
+        + " OR " + containsContentTerm("snare") + " OR " + containsContentTerm("snares")
+        + " OR " + containsContentTerm("hihat") + " OR " + containsContentTerm("hi hat")
+        + " OR " + containsContentTerm("cymbal") + " OR " + containsContentTerm("cymbals")
+        + " OR " + containsContentTerm("tom") + " OR " + containsContentTerm("toms")
+        + " OR " + containsContentTerm("rim") + " OR " + containsContentTerm("clap")
+        + " OR " + containsContentTerm("cowbell") + " OR " + containsContentTerm("drum")
+        + " OR " + containsContentTerm("drums") + " OR " + containsContentTerm("percussion")
+        + " OR " + containsContentTerm("shaker") + " OR " + containsContentTerm("tambourine")
+        + " OR " + containsContentTerm("breakbeat") + ")";
+    const auto beatTerms = juce::String("((") + containsContentTerm("beat") + " OR " + containsContentTerm("beats")
+        + ") AND NOT " + containsContentTerm("beat agent") + ")";
+    const auto loopTerms = juce::String("(") + containsContentTerm("loop") + " OR " + containsContentTerm("loops")
+        + " OR " + beatTerms
+        + " OR " + containsContentTerm("groove") + " OR " + containsContentTerm("grooves")
+        + " OR " + containsContentTerm("break") + " OR " + containsContentTerm("phrase")
+        + " OR " + containsContentTerm("phrases") + " OR " + containsContentTerm("pattern")
+        + " OR " + containsContentTerm("patterns") + " OR " + containsContentTerm("sequence")
+        + " OR " + containsContentTerm("sequences") + " OR " + containsContentTerm("riff")
+        + " OR " + containsContentTerm("riffs") + " OR " + containsContentTerm("rhythm")
+        + " OR " + containsContentTerm("rhythms") + " OR " + containsContentTerm("multisample")
+        + " OR " + containsContentTerm("multisampled") + " OR " + containsContentTerm("multi-sample") + ")";
+    const auto bassTerms = juce::String("(") + containsContentTerm("bass") + " OR " + containsContentTerm("bassline")
+        + " OR " + containsContentTerm("sub-bass") + " OR " + containsContentTerm("sub bass") + ")";
+    const auto synthTerms = juce::String("(") + containsContentTerm("synth") + " OR " + containsContentTerm("synthesizer")
+        + " OR " + containsContentTerm("arpeggio") + " OR " + containsContentTerm("arp") + " OR " + containsContentTerm("ambient pad")
+        + " OR " + containsContentTerm("synth pad") + ")";
+    juce::String contentPredicate("1");
+    switch (filter.contentKind)
+    {
+        case 1: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND NOT " + loopTerms
+                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8) AND NOT " + bassTerms + " AND NOT " + synthTerms; break;
+        case 2: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND (" + loopTerms
+                       + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT " + bassTerms + " AND NOT " + synthTerms; break;
+        case 3: contentPredicate = bassTerms; break;
+        case 4: contentPredicate = synthTerms + " AND (" + loopTerms + " OR s.duration>=1.0)"; break;
+        case 5: contentPredicate = loopTerms + " AND NOT (" + drumCategory + " OR " + drumTerms
+                       + " OR " + bassTerms + " OR " + synthTerms + ")"; break;
+        default: break;
+    }
     const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";
     switch (filter.sort)
     {
@@ -2739,26 +2788,26 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         "COALESCE(ps.articulation,'') AS articulation,COALESCE(rr.take_index,1) AS take_index,"
         "(SELECT group_concat(tag,char(31)) FROM sample_classification_tags ct WHERE ct.path=s.path) AS tags,"
         "COALESCE(s.acoustic_fingerprint,'') AS acoustic_fingerprint");
-    const auto fromAndWhere = juce::String(
-        "FROM samples s LEFT JOIN sample_sources src ON src.id=s.source_id "
-        "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
-        "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
-        "FROM plugin_round_robin_takes WHERE silent=0 AND preview_path<>'' GROUP BY preview_path) rr ON rr.preview_path=s.path "
-        "LEFT JOIN plugin_kits k ON k.id=COALESCE(ps.kit_id,rr.kit_id) "
-        "LEFT JOIN plugin_instruments p ON p.id=k.plugin_id "
-        "WHERE (") + queryPredicate + ") AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
-        "AND (?3='' OR src.source_type=?3) AND (?4='' OR src.identifier=?4) "
-        "AND (?5='' OR p.name=?5 COLLATE NOCASE) AND (?6='' OR k.name=?6 COLLATE NOCASE) "
-        "AND (?7=0 OR (s.user_category='' AND (s.category='Unknown' OR s.classification_confidence<0.75))) "
-        "AND (?8=1 OR (?8=2 AND s.duration<0.1) OR (?8=3 AND s.duration>=0.1 AND s.duration<0.5) "
-        "OR (?8=4 AND s.duration>=0.5 AND s.duration<2.0) OR (?8=5 AND s.duration>=2.0) "
-        "OR (?8=6 AND s.spectral_centroid>0 AND s.spectral_centroid<1000) "
-        "OR (?8=7 AND s.spectral_centroid>=1000 AND s.spectral_centroid<3000) "
-        "OR (?8=8 AND s.spectral_centroid>=3000))";
+    const auto fromAndWhere = juce::String("FROM ") + contentTable + " s LEFT JOIN sample_sources src ON src.id=s.source_id "
+        + "LEFT JOIN plugin_sounds ps ON ps.preview_path=s.path "
+        + "LEFT JOIN (SELECT preview_path,min(kit_id) kit_id,min(midi_note) midi_note,min(velocity) velocity,min(take_index) take_index "
+        + "FROM plugin_round_robin_takes WHERE silent=0 AND preview_path<>'' GROUP BY preview_path) rr ON rr.preview_path=s.path "
+        + "LEFT JOIN plugin_kits k ON k.id=COALESCE(ps.kit_id,rr.kit_id) "
+        + "LEFT JOIN plugin_instruments p ON p.id=k.plugin_id "
+        + "WHERE (" + queryPredicate + ") AND (?2='' OR COALESCE(NULLIF(s.user_category,''),s.category)=?2 COLLATE NOCASE) "
+        + "AND (?3='' OR src.source_type=?3) AND (?4='' OR src.identifier=?4) "
+        + "AND (?5='' OR p.name=?5 COLLATE NOCASE) AND (?6='' OR k.name=?6 COLLATE NOCASE) "
+        + "AND (?7=0 OR (s.user_category='' AND (s.category='Unknown' OR s.classification_confidence<0.75))) "
+        + "AND (?8=1 OR (?8=2 AND s.duration<0.1) OR (?8=3 AND s.duration>=0.1 AND s.duration<0.5) "
+        + "OR (?8=4 AND s.duration>=0.5 AND s.duration<2.0) OR (?8=5 AND s.duration>=2.0) "
+        + "OR (?8=6 AND s.spectral_centroid>0 AND s.spectral_centroid<1000) "
+        + "OR (?8=7 AND s.spectral_centroid>=1000 AND s.spectral_centroid<3000) "
+        + "OR (?8=8 AND s.spectral_centroid>=3000)) AND (" + contentPredicate + ")";
     juce::String sql;
     if (evenlySpacedRepresentative)
     {
-        sql = "WITH matched AS (SELECT " + selectColumns + " " + fromAndWhere
+        sql = "WITH " + (filter.contentKind == 0 ? juce::String() : contentSource + ", ")
+            + "matched AS (SELECT " + selectColumns + " " + fromAndWhere
             + "), ranked AS (SELECT *,ROW_NUMBER() OVER (ORDER BY path COLLATE NOCASE) AS map_row,"
               "COUNT(*) OVER() AS map_total FROM matched), sampled AS (SELECT * FROM ranked WHERE map_row=1 OR "
               "CAST((map_row-1)* (?9-1)/(map_total-1) AS INTEGER) "
@@ -2769,7 +2818,8 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
     }
     else
     {
-        sql = "SELECT " + selectColumns + " " + fromAndWhere + " ORDER BY " + ordering
+        sql = (filter.contentKind == 0 ? juce::String() : juce::String("WITH ") + contentSource + " ")
+            + "SELECT " + selectColumns + " " + fromAndWhere + " ORDER BY " + ordering
             + " LIMIT ?9 OFFSET ?10";
     }
 
