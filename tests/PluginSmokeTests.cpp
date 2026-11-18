@@ -423,6 +423,22 @@ public:
             }
             stream->flush();
         }
+        editor.setPage(1);
+        editor.buttonClicked(&editor.phaserTab);
+        const auto phaserImage = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
+        const auto phaserFile = outputDirectory.getChildFile("drum-machine-phaser.png");
+        if (!phaserImage.isValid() || (phaserFile.existsAsFile() && !phaserFile.deleteFile()))
+        {
+            std::cerr << "Offscreen Phaser-panel rendering failed.\n";
+            return 3;
+        }
+        std::unique_ptr<juce::FileOutputStream> phaserStream(phaserFile.createOutputStream());
+        if (phaserStream == nullptr || !phaserStream->openedOk() || !png.writeImageToStream(phaserImage, *phaserStream))
+        {
+            std::cerr << "Could not save the offscreen Phaser-panel image: " << phaserFile.getFullPathName() << ".\n";
+            return 3;
+        }
+        phaserStream->flush();
         return 0;
     }
 
