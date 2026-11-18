@@ -7,6 +7,8 @@ Release candidate: v0.1.2-test.220 (VST3 version 0.1.2.220).
 - Windows x64 Release CTest: 2/2 passed.
 - Package verification passed for contents, license notices, signatures and version.
 - Exact packaged VST3 passed isolated scanner/render for MIDI notes 0–127, including C1.
-- Release candidate is prepared for per-user Cubase installation and manual Cubase Pro 15 acceptance.
+- Installed per-user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; installed module hash matches the package.
+- Previous .219 bundle preserved outside VST3 scan paths at `%LOCALAPPDATA%\MagDrum\VST3-backups\MagDrum.vst3.backup-20261118-072136-c18eb058494b469988160c0d38286ad4`.
+- Cubase Pro 15 rescan and hands-on acceptance remain pending.
 
 See the [release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.220) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
