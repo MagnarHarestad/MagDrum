@@ -504,6 +504,28 @@ public:
             std::cerr << "Sample-scan progress remained visible after scanning stopped.\n";
             return 5;
         }
+
+        const auto resumeFolder = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("magdrum-sample-scan-resume-ui-test-" + juce::Uuid().toString());
+        if (!resumeFolder.createDirectory().wasOk()) return 6;
+        editor.lastSampleScanFolder = resumeFolder;
+        editor.scanningDefaultLibraries = false;
+        WavScanner::Stats cancelled;
+        cancelled.cancelled = true;
+        editor.finishSampleScan(cancelled, 0, {});
+        const bool canResume = editor.scanButton.isEnabled()
+            && editor.scanButton.getButtonText() == magdrum::ui::localisedText("Resume scan");
+        editor.lastSampleScanFolder = {};
+        editor.scanButton.setButtonText(magdrum::ui::localisedText("Add sample folder"));
+        editor.sampleScanProgressValue = 0.0;
+        editor.sampleScanProgressLabel.setText(juce::String{}, juce::dontSendNotification);
+        editor.status.setText(juce::String{}, juce::dontSendNotification);
+        resumeFolder.deleteRecursively();
+        if (!canResume)
+        {
+            std::cerr << "A cancelled sample-folder scan did not offer Resume scan.\n";
+            return 7;
+        }
         return 0;
     }
 
