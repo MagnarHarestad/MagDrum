@@ -236,6 +236,33 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksMidiFallbackPolicyPersists(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.midiFallbackPolicy.setSelectedId(2, juce::dontSendNotification);
+        if (editor.midiFallbackPolicy.onChange)
+            editor.midiFallbackPolicy.onChange();
+        const auto editorState = editor.processor.getPluginEditorState();
+        if (!editorState || editorState->getIntAttribute("fallbackPolicy", -1) != 1
+            || !editorState->getBoolAttribute("allowArticulationFallback", false))
+        {
+            std::cerr << "The selected MIDI fallback policy was not saved in the plug-in editor state.\n";
+            return 1;
+        }
+
+        juce::MemoryBlock serializedState;
+        editor.processor.getStateInformation(serializedState);
+        editor.midiFallbackPolicy.setSelectedId(3, juce::dontSendNotification);
+        editor.processor.setStateInformation(serializedState.getData(),
+                                             static_cast<int>(serializedState.getSize()));
+        editor.restorePluginEditorState();
+        if (editor.midiFallbackPolicy.getSelectedId() != 2)
+        {
+            std::cerr << "The MIDI fallback policy was not restored with the Cubase plug-in state.\n";
+            return 2;
+        }
+        return 0;
+    }
+
     static int checksSampleMapCoversBeyondFirstListPage(MagDrumAudioProcessorEditor& editor,
                                                          const juce::File& validSample)
     {
@@ -1160,6 +1187,8 @@ int main(int argc, char** argv)
         if (dr660LaneCheck != 0) return 300 + dr660LaneCheck;
         const int sampleMapPagingCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleMapCoversBeyondFirstListPage(editor, sample);
         if (sampleMapPagingCheck != 0) return 320 + sampleMapPagingCheck;
+        const int midiFallbackPersistenceCheck = MagDrumAudioProcessorEditorTestAccess::checksMidiFallbackPolicyPersists(editor);
+        if (midiFallbackPersistenceCheck != 0) return 325 + midiFallbackPersistenceCheck;
     }
 #endif
 
