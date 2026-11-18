@@ -49,9 +49,8 @@ if (-not $newBuildTree) {
     if ($cache -notmatch '(?m)^CMAKE_GENERATOR_PLATFORM:INTERNAL=x64\s*$' -or
         $cache -notmatch '(?m)^CMAKE_GENERATOR:INTERNAL=Visual Studio' -or
         $cache -notmatch '(?m)^MAGDRUM_BUILD_MOBILE_PREVIEW:BOOL=OFF\s*$' -or
-        $cache -notmatch '(?m)^BUILD_TESTING:BOOL=OFF\s*$' -or
         $cache -notmatch '(?m)^MAGDRUM_BUILD_CLASSIFIER_EVALUATION:BOOL=OFF\s*$') {
-        throw 'The development build tree must use Windows x64 Visual Studio with tests, mobile preview, and classifier evaluation disabled.'
+        throw 'The development build tree must use Windows x64 Visual Studio with mobile preview and classifier evaluation disabled.'
     }
 }
 

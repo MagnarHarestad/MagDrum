@@ -325,7 +325,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 14> checks{{
+            const std::array<LabelCheck, 21> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -339,7 +339,14 @@ public:
                 {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
                 {"plugin-folder button", editor.choosePluginFolderButton.getButtonText(), magdrum::ui::localisedText("Choose VST3 folder")},
                 {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All sounds")},
-                {"sample sort filter", editor.sortFilter.getText(), magdrum::ui::localisedText("Name A-Z")}
+                {"sample sort filter", editor.sortFilter.getText(), magdrum::ui::localisedText("Name A-Z")},
+                {"pad attack control", editor.attackLabel.getText(), magdrum::ui::localisedText("PAD ATTACK")},
+                {"pad decay control", editor.decayLabel.getText(), magdrum::ui::localisedText("PAD DECAY")},
+                {"pad sustain control", editor.sustainLabel.getText(), magdrum::ui::localisedText("PAD SUSTAIN")},
+                {"pad release control", editor.releaseLabel.getText(), magdrum::ui::localisedText("PAD RELEASE")},
+                {"pad filter control", editor.filterCutoffLabel.getText(), magdrum::ui::localisedText("FILTER CUTOFF")},
+                {"pad mix heading", editor.padMixHeading.getText(), magdrum::ui::localisedText("PAD MIX")},
+                {"pad envelope heading", editor.padShapeHeading.getText(), magdrum::ui::localisedText("ENVELOPE / FILTER")}
             }};
             for (const auto& check : checks)
             {
@@ -904,13 +911,15 @@ int main(int argc, char** argv)
 
     auto& controlStateSource = makeTestProcessor();
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
-    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 350.0f, 8000.0f});
-    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, 25000.0f});
+    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f});
+    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f});
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
         || std::abs(clampedParameters.pan + 1.0f) > 0.001f
         || std::abs(clampedParameters.tuneSemitones - 24.0f) > 0.001f
         || std::abs(clampedParameters.attackMs - 1000.0f) > 0.001f
+        || std::abs(clampedParameters.decayMs - 5000.0f) > 0.001f
+        || std::abs(clampedParameters.sustainLevel) > 0.001f
         || std::abs(clampedParameters.releaseMs - 5000.0f) > 0.001f
         || std::abs(clampedParameters.filterCutoffHz - 20000.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
@@ -923,6 +932,8 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.pan + 1.0f) > 0.001f
         || std::abs(restoredParameters.tuneSemitones - 12.0f) > 0.001f
         || std::abs(restoredParameters.attackMs - 25.0f) > 0.001f
+        || std::abs(restoredParameters.decayMs - 80.0f) > 0.001f
+        || std::abs(restoredParameters.sustainLevel - 0.4f) > 0.001f
         || std::abs(restoredParameters.releaseMs - 350.0f) > 0.001f
         || std::abs(restoredParameters.filterCutoffHz - 8000.0f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
@@ -931,11 +942,14 @@ int main(int argc, char** argv)
                                                -std::numeric_limits<float>::infinity(),
                                                std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
+                                               std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::infinity(),
                                                -std::numeric_limits<float>::infinity()});
     const auto finiteParameters = controlStateSource.getNoteParameters(38);
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
         || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
-    if (finiteParameters.attackMs != 0.0f || finiteParameters.releaseMs != 0.0f
+    if (finiteParameters.attackMs != 0.0f || finiteParameters.decayMs != 0.0f
+        || finiteParameters.sustainLevel != 1.0f || finiteParameters.releaseMs != 0.0f
         || finiteParameters.filterCutoffHz != 20000.0f) return 40;
 
     auto& gainReference = makeTestProcessor();
@@ -953,17 +967,48 @@ int main(int argc, char** argv)
     if (!attackReference.loadSampleForNote(36, sample) || !attackShaped.loadSampleForNote(36, sample)) return 41;
     attackReference.prepareToPlay(48000.0, 128);
     attackShaped.prepareToPlay(48000.0, 128);
-    attackShaped.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 100.0f, 0.0f, 20000.0f});
+    attackShaped.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 100.0f, 0.0f, 1.0f, 0.0f, 20000.0f});
     const double naturalAttackPeak = renderPeakInRange(attackReference, 36, 127, 0, 128);
     const double shapedAttackPeak = renderPeakInRange(attackShaped, 36, 127, 0, 128);
     if (naturalAttackPeak < 0.05 || shapedAttackPeak / naturalAttackPeak > 0.05) return 42;
+
+    auto& envelopeReference = makeTestProcessor();
+    auto& envelopeShaped = makeTestProcessor();
+    if (!envelopeReference.loadSampleForNote(36, sample) || !envelopeShaped.loadSampleForNote(36, sample)) return 45;
+    envelopeReference.prepareToPlay(48000.0, 128);
+    envelopeShaped.prepareToPlay(48000.0, 128);
+    envelopeShaped.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 8.0f, 0.25f, 0.0f, 20000.0f});
+    const double naturalSustainPeak = renderPeakInRange(envelopeReference, 36, 127, 600, 128);
+    const double shapedSustainPeak = renderPeakInRange(envelopeShaped, 36, 127, 600, 128);
+    if (naturalSustainPeak < 0.05 || std::abs(shapedSustainPeak / naturalSustainPeak - 0.25) > 0.03) return 46;
+
+    auto& releaseReference = makeTestProcessor();
+    auto& releasedPad = makeTestProcessor();
+    if (!releaseReference.loadSampleForNote(36, sample) || !releasedPad.loadSampleForNote(36, sample)) return 47;
+    releaseReference.prepareToPlay(48000.0, 128);
+    releasedPad.prepareToPlay(48000.0, 128);
+    releasedPad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 8.0f, 20000.0f});
+    const double naturalReleasePeak = renderPeakInRange(releaseReference, 36, 127, 900, 60);
+    const double shapedReleasePeak = renderPeakInRange(releasedPad, 36, 127, 900, 60);
+    if (naturalReleasePeak < 0.05 || shapedReleasePeak / naturalReleasePeak > 0.25) return 48;
+
+    auto& overlappingEnvelopeReference = makeTestProcessor();
+    auto& overlappingEnvelopePad = makeTestProcessor();
+    if (!overlappingEnvelopeReference.loadSampleForNote(36, sample)
+        || !overlappingEnvelopePad.loadSampleForNote(36, sample)) return 49;
+    overlappingEnvelopeReference.prepareToPlay(48000.0, 128);
+    overlappingEnvelopePad.prepareToPlay(48000.0, 128);
+    overlappingEnvelopePad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 1.0f, 100.0f, 20000.0f});
+    const double overlappingNaturalPeak = renderPeak(overlappingEnvelopeReference, 36, 127);
+    const double overlappingEnvelopePeak = renderPeak(overlappingEnvelopePad, 36, 127);
+    if (overlappingNaturalPeak < 0.05 || overlappingEnvelopePeak / overlappingNaturalPeak < 0.02) return 50;
 
     auto& filterReference = makeTestProcessor();
     auto& filteredPad = makeTestProcessor();
     if (!filterReference.loadSampleForNote(36, sample) || !filteredPad.loadSampleForNote(36, sample)) return 43;
     filterReference.prepareToPlay(48000.0, 128);
     filteredPad.prepareToPlay(48000.0, 128);
-    filteredPad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100.0f});
+    filteredPad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 100.0f});
     const double naturalFilterPeak = renderPeak(filterReference, 36, 127);
     const double filteredPeak = renderPeak(filteredPad, 36, 127);
     if (naturalFilterPeak < 0.05 || filteredPeak / naturalFilterPeak > 0.6) return 44;

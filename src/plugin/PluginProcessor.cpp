@@ -46,6 +46,8 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         notePan[note].store(0.0f, std::memory_order_relaxed);
         noteTuneSemitones[note].store(0.0f, std::memory_order_relaxed);
         noteAttackMs[note].store(0.0f, std::memory_order_relaxed);
+        noteDecayMs[note].store(0.0f, std::memory_order_relaxed);
+        noteSustainLevel[note].store(1.0f, std::memory_order_relaxed);
         noteReleaseMs[note].store(0.0f, std::memory_order_relaxed);
         noteFilterCutoffHz[note].store(20000.0f, std::memory_order_relaxed);
     }
@@ -361,6 +363,8 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             notePan[index].load(std::memory_order_relaxed),
             noteTuneSemitones[index].load(std::memory_order_relaxed),
             noteAttackMs[index].load(std::memory_order_relaxed),
+            noteDecayMs[index].load(std::memory_order_relaxed),
+            noteSustainLevel[index].load(std::memory_order_relaxed),
             noteReleaseMs[index].load(std::memory_order_relaxed),
             noteFilterCutoffHz[index].load(std::memory_order_relaxed)};
 }
@@ -375,6 +379,9 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
     notePan[index].store(juce::jlimit(-1.0f, 1.0f, finiteOrZero(parameters.pan)), std::memory_order_relaxed);
     noteTuneSemitones[index].store(juce::jlimit(-24.0f, 24.0f, finiteOrZero(parameters.tuneSemitones)), std::memory_order_relaxed);
     noteAttackMs[index].store(juce::jlimit(0.0f, 1000.0f, finiteOrZero(parameters.attackMs)), std::memory_order_relaxed);
+    noteDecayMs[index].store(juce::jlimit(0.0f, 5000.0f, finiteOrZero(parameters.decayMs)), std::memory_order_relaxed);
+    noteSustainLevel[index].store(juce::jlimit(0.0f, 1.0f,
+        std::isfinite(parameters.sustainLevel) ? parameters.sustainLevel : 1.0f), std::memory_order_relaxed);
     noteReleaseMs[index].store(juce::jlimit(0.0f, 5000.0f, finiteOrZero(parameters.releaseMs)), std::memory_order_relaxed);
     const float cutoff = std::isfinite(parameters.filterCutoffHz) ? parameters.filterCutoffHz : 20000.0f;
     noteFilterCutoffHz[index].store(juce::jlimit(20.0f, 20000.0f, cutoff), std::memory_order_relaxed);
@@ -428,6 +435,8 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         const double sourceAdvance = (sample->sampleRate / juce::jmax(1.0, outputSampleRate)) * playbackRate;
         voice.totalOutputSamples = sample->audio.getNumSamples() / juce::jmax(1.0e-9, sourceAdvance);
         voice.attackSamples = parameters.attackMs * 0.001 * outputSampleRate;
+        voice.decaySamples = parameters.decayMs * 0.001 * outputSampleRate;
+        voice.sustainLevel = parameters.sustainLevel;
         voice.releaseSamples = parameters.releaseMs * 0.001 * outputSampleRate;
         const float cutoff = juce::jmin(parameters.filterCutoffHz, static_cast<float>(outputSampleRate * 0.49));
         voice.lowPassCoefficient = cutoff >= outputSampleRate * 0.49
@@ -649,13 +658,25 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
                 const auto* data = audio.getReadPointer(juce::jmin(channel, audio.getNumChannels() - 1));
                 return data[index] + (data[next] - data[index]) * fraction;
             };
-            float envelope = voice.attackSamples > 0.0
-                ? juce::jmin(1.0f, static_cast<float>(voice.elapsedOutputSamples / voice.attackSamples)) : 1.0f;
+            float envelope = 1.0f;
+            if (voice.attackSamples > 0.0 && voice.elapsedOutputSamples < voice.attackSamples)
+                envelope = juce::jlimit(0.0f, 1.0f,
+                    static_cast<float>(voice.elapsedOutputSamples / voice.attackSamples));
+            else if (voice.decaySamples > 0.0
+                     && voice.elapsedOutputSamples < voice.attackSamples + voice.decaySamples)
+            {
+                const double decayPosition = voice.elapsedOutputSamples - voice.attackSamples;
+                envelope = juce::jlimit(voice.sustainLevel, 1.0f,
+                    1.0f + (voice.sustainLevel - 1.0f) * static_cast<float>(decayPosition / voice.decaySamples));
+            }
+            else
+                envelope = voice.sustainLevel;
             if (voice.releaseSamples > 0.0)
             {
                 const double remainingSamples = juce::jmax(0.0, voice.totalOutputSamples - voice.elapsedOutputSamples);
-                envelope = juce::jmin(envelope, juce::jlimit(0.0f, 1.0f,
-                    static_cast<float>(remainingSamples / voice.releaseSamples)));
+                if (remainingSamples < voice.releaseSamples)
+                    envelope *= juce::jlimit(0.0f, 1.0f,
+                        static_cast<float>(remainingSamples / voice.releaseSamples));
             }
             const float leftInput = readInterpolated(0);
             const float rightInput = readInterpolated(audio.getNumChannels() > 1 ? 1 : 0);
@@ -690,6 +711,7 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
             const auto parameters = getNoteParameters(note);
             if (std::abs(parameters.gainDb) > 0.000001f || std::abs(parameters.pan) > 0.000001f
                 || std::abs(parameters.tuneSemitones) > 0.000001f || std::abs(parameters.attackMs) > 0.000001f
+                || std::abs(parameters.decayMs) > 0.000001f || std::abs(parameters.sustainLevel - 1.0f) > 0.000001f
                 || std::abs(parameters.releaseMs) > 0.000001f || std::abs(parameters.filterCutoffHz - 20000.0f) > 0.001f)
             {
                 auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
@@ -698,6 +720,8 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("pan", parameters.pan);
                 savedParameters->setAttribute("tuneSemitones", parameters.tuneSemitones);
                 savedParameters->setAttribute("attackMs", parameters.attackMs);
+                savedParameters->setAttribute("decayMs", parameters.decayMs);
+                savedParameters->setAttribute("sustainLevel", parameters.sustainLevel);
                 savedParameters->setAttribute("releaseMs", parameters.releaseMs);
                 savedParameters->setAttribute("filterCutoffHz", parameters.filterCutoffHz);
             }
@@ -766,6 +790,8 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("pan", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("tuneSemitones", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("attackMs", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("decayMs", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("sustainLevel", 1.0)),
                     static_cast<float>(child->getDoubleAttribute("releaseMs", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("filterCutoffHz", 20000.0))};
             continue;

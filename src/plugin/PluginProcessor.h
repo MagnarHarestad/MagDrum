@@ -41,6 +41,8 @@ public:
         float pan = 0.0f;
         float tuneSemitones = 0.0f;
         float attackMs = 0.0f;
+        float decayMs = 0.0f;
+        float sustainLevel = 1.0f;
         float releaseMs = 0.0f;
         float filterCutoffHz = 20000.0f;
     };
@@ -124,6 +126,8 @@ private:
         double elapsedOutputSamples = 0.0;
         double totalOutputSamples = 0.0;
         double attackSamples = 0.0;
+        double decaySamples = 0.0;
+        float sustainLevel = 1.0f;
         double releaseSamples = 0.0;
         float lowPassCoefficient = 0.0f;
         float lowPassStateLeft = 0.0f;
@@ -153,6 +157,8 @@ private:
     std::array<std::atomic<float>, 128> notePan{};
     std::array<std::atomic<float>, 128> noteTuneSemitones{};
     std::array<std::atomic<float>, 128> noteAttackMs{};
+    std::array<std::atomic<float>, 128> noteDecayMs{};
+    std::array<std::atomic<float>, 128> noteSustainLevel{};
     std::array<std::atomic<float>, 128> noteReleaseMs{};
     std::array<std::atomic<float>, 128> noteFilterCutoffHz{};
     std::unique_ptr<SampleData> previewData;
