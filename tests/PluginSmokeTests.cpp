@@ -236,6 +236,50 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksIndependentPadSoundControls(MagDrumAudioProcessorEditor& editor,
+                                                 MagDrumAudioProcessor& processor)
+    {
+        auto kick = processor.getNoteParameters(36);
+        kick.gainDb = -8.0f;
+        kick.pan = -0.45f;
+        kick.tuneSemitones = 3.5f;
+        kick.driveDb = 5.0f;
+        processor.setNoteParameters(36, kick);
+        auto snare = processor.getNoteParameters(38);
+        snare.gainDb = 2.5f;
+        snare.pan = 0.65f;
+        snare.eqMidDb = 4.0f;
+        processor.setNoteParameters(38, snare);
+
+        editor.setNote(36);
+        if (std::abs(editor.gainSlider.getValue() + 8.0) > 0.05
+            || std::abs(editor.panSlider.getValue() + 0.45) > 0.02
+            || std::abs(editor.tuneSlider.getValue() - 3.5) > 0.1
+            || std::abs(editor.driveSlider.getValue() - 5.0) > 0.1)
+        {
+            std::cerr << "Kick controls did not load that pad's saved sound settings.\n";
+            return 1;
+        }
+
+        editor.gainSlider.setValue(-4.5, juce::sendNotificationSync);
+        if (std::abs(processor.getNoteParameters(36).gainDb + 4.5f) > 0.05f
+            || std::abs(processor.getNoteParameters(38).gainDb - 2.5f) > 0.05f)
+        {
+            std::cerr << "Editing Kick gain did not stay isolated to the selected pad.\n";
+            return 2;
+        }
+
+        editor.setNote(38);
+        if (std::abs(editor.gainSlider.getValue() - 2.5) > 0.05
+            || std::abs(editor.panSlider.getValue() - 0.65) > 0.02
+            || std::abs(editor.eqMidSlider.getValue() - 4.0) > 0.1)
+        {
+            std::cerr << "Snare controls did not load that pad's independent sound settings.\n";
+            return 3;
+        }
+        return 0;
+    }
+
     static int checksDrumMachineControlLayout(MagDrumAudioProcessorEditor& editor)
     {
         editor.setPage(1);
@@ -737,6 +781,8 @@ int main(int argc, char** argv)
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
+        const int independentPadCheck = MagDrumAudioProcessorEditorTestAccess::checksIndependentPadSoundControls(editor, editorProcessor);
+        if (independentPadCheck != 0) return 65 + independentPadCheck;
         const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
         if (folderButtonCheck != 0) return 44;
         const int drumLayoutCheck = MagDrumAudioProcessorEditorTestAccess::checksDrumMachineControlLayout(editor);
