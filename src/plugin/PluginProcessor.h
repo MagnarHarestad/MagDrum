@@ -51,6 +51,15 @@ public:
         float eqHighDb = 0.0f;
         float sampleStart = 0.0f;
         float sampleEnd = 1.0f;
+        float compressorThresholdDb = 0.0f;
+        float compressorRatio = 1.0f;
+        float compressorAttackMs = 10.0f;
+        float compressorReleaseMs = 100.0f;
+        float compressorMakeupDb = 0.0f;
+        float phaserRateHz = 0.0f;
+        float phaserDepth = 0.0f;
+        float phaserFeedback = 0.0f;
+        float phaserMix = 0.0f;
     };
 
     MagDrumAudioProcessor();
@@ -147,6 +156,13 @@ private:
         float eqLowCoefficient = 0.0f, eqHighCoefficient = 0.0f;
         float eqLowStateLeft = 0.0f, eqLowStateRight = 0.0f;
         float eqHighStateLeft = 0.0f, eqHighStateRight = 0.0f;
+        float compressorEnvelope = 0.0f;
+        float compressorAttackCoefficient = 0.0f, compressorReleaseCoefficient = 0.0f;
+        float compressorThresholdDb = 0.0f, compressorRatio = 1.0f, compressorMakeupGain = 1.0f;
+        float phaserRateHz = 0.0f, phaserDepth = 0.0f, phaserFeedback = 0.0f, phaserMix = 0.0f;
+        double phaserPhase = 0.0;
+        float phaserFeedbackLeft = 0.0f, phaserFeedbackRight = 0.0f;
+        std::array<float, 4> phaserStateLeft{}, phaserStateRight{};
     };
 
     static constexpr int maxVoices = 32;
@@ -179,6 +195,8 @@ private:
     std::array<std::atomic<float>, 128> noteDriveDb{};
     std::array<std::atomic<float>, 128> noteEqLowDb{}, noteEqMidDb{}, noteEqHighDb{};
     std::array<std::atomic<float>, 128> noteSampleStart{}, noteSampleEnd{};
+    std::array<std::atomic<float>, 128> noteCompressorThresholdDb{}, noteCompressorRatio{}, noteCompressorAttackMs{}, noteCompressorReleaseMs{}, noteCompressorMakeupDb{};
+    std::array<std::atomic<float>, 128> notePhaserRateHz{}, notePhaserDepth{}, notePhaserFeedback{}, notePhaserMix{};
     std::array<std::atomic<std::uint32_t>, 128> noteTriggerCounts{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;

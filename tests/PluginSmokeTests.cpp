@@ -182,6 +182,18 @@ double renderPeakInRange(MagDrumAudioProcessor& processor, int note, int velocit
     return peak;
 }
 
+std::vector<float> renderSamples(MagDrumAudioProcessor& processor, int note, int velocity, int sampleCount = 960)
+{
+    juce::AudioBuffer<float> audio(2, sampleCount);
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(10, note, static_cast<juce::uint8>(velocity)), 0);
+    processor.processBlock(audio, midi);
+    std::vector<float> output(static_cast<size_t>(sampleCount));
+    for (int sample = 0; sample < sampleCount; ++sample)
+        output[static_cast<size_t>(sample)] = audio.getSample(0, sample);
+    return output;
+}
+
 bool waitForSamplePath(MagDrumAudioProcessor& processor, int note, const juce::String& expectedPath)
 {
     for (int attempt = 0; attempt < 1000; ++attempt)
@@ -1605,6 +1617,28 @@ int main(int argc, char** argv)
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
     controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f, 12.5f, -6.0f, 3.0f, 4.0f, 0.2f, 0.9f});
     controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f, 99.0f, -99.0f, 99.0f, -99.0f, 1.2f, 0.5f});
+    auto configuredEffects = controlStateSource.getNoteParameters(36);
+    configuredEffects.compressorThresholdDb = -18.0f;
+    configuredEffects.compressorRatio = 4.0f;
+    configuredEffects.compressorAttackMs = 2.5f;
+    configuredEffects.compressorReleaseMs = 75.0f;
+    configuredEffects.compressorMakeupDb = 3.0f;
+    configuredEffects.phaserRateHz = 1.25f;
+    configuredEffects.phaserDepth = 0.65f;
+    configuredEffects.phaserFeedback = 0.3f;
+    configuredEffects.phaserMix = 0.8f;
+    controlStateSource.setNoteParameters(36, configuredEffects);
+    auto extremeEffects = controlStateSource.getNoteParameters(37);
+    extremeEffects.compressorThresholdDb = -100.0f;
+    extremeEffects.compressorRatio = 30.0f;
+    extremeEffects.compressorAttackMs = 0.0f;
+    extremeEffects.compressorReleaseMs = 1000.0f;
+    extremeEffects.compressorMakeupDb = 30.0f;
+    extremeEffects.phaserRateHz = 20.0f;
+    extremeEffects.phaserDepth = 2.0f;
+    extremeEffects.phaserFeedback = -2.0f;
+    extremeEffects.phaserMix = 2.0f;
+    controlStateSource.setNoteParameters(37, extremeEffects);
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
         || std::abs(clampedParameters.pan + 1.0f) > 0.001f
@@ -1619,7 +1653,16 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.eqMidDb - 18.0f) > 0.001f
         || std::abs(clampedParameters.eqHighDb + 18.0f) > 0.001f
         || std::abs(clampedParameters.sampleStart - 0.99f) > 0.001f
-        || std::abs(clampedParameters.sampleEnd - 1.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.sampleEnd - 1.0f) > 0.001f
+        || std::abs(clampedParameters.compressorThresholdDb + 36.0f) > 0.001f
+        || std::abs(clampedParameters.compressorRatio - 12.0f) > 0.001f
+        || std::abs(clampedParameters.compressorAttackMs - 0.1f) > 0.001f
+        || std::abs(clampedParameters.compressorReleaseMs - 500.0f) > 0.001f
+        || std::abs(clampedParameters.compressorMakeupDb - 12.0f) > 0.001f
+        || std::abs(clampedParameters.phaserRateHz - 8.0f) > 0.001f
+        || std::abs(clampedParameters.phaserDepth - 1.0f) > 0.001f
+        || std::abs(clampedParameters.phaserFeedback + 0.8f) > 0.001f
+        || std::abs(clampedParameters.phaserMix - 1.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -1640,6 +1683,15 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.eqHighDb - 4.0f) > 0.001f
         || std::abs(restoredParameters.sampleStart - 0.2f) > 0.001f
         || std::abs(restoredParameters.sampleEnd - 0.9f) > 0.001f
+        || std::abs(restoredParameters.compressorThresholdDb + 18.0f) > 0.001f
+        || std::abs(restoredParameters.compressorRatio - 4.0f) > 0.001f
+        || std::abs(restoredParameters.compressorAttackMs - 2.5f) > 0.001f
+        || std::abs(restoredParameters.compressorReleaseMs - 75.0f) > 0.001f
+        || std::abs(restoredParameters.compressorMakeupDb - 3.0f) > 0.001f
+        || std::abs(restoredParameters.phaserRateHz - 1.25f) > 0.001f
+        || std::abs(restoredParameters.phaserDepth - 0.65f) > 0.001f
+        || std::abs(restoredParameters.phaserFeedback - 0.3f) > 0.001f
+        || std::abs(restoredParameters.phaserMix - 0.8f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
@@ -1663,7 +1715,11 @@ int main(int argc, char** argv)
         || finiteParameters.filterCutoffHz != 20000.0f || finiteParameters.driveDb != 0.0f
         || finiteParameters.eqLowDb != 0.0f || finiteParameters.eqMidDb != 0.0f
         || finiteParameters.eqHighDb != 0.0f || finiteParameters.sampleStart != 0.0f
-        || finiteParameters.sampleEnd != 1.0f) return 40;
+        || finiteParameters.sampleEnd != 1.0f || finiteParameters.compressorThresholdDb != 0.0f
+        || finiteParameters.compressorRatio != 1.0f || finiteParameters.compressorAttackMs != 10.0f
+        || finiteParameters.compressorReleaseMs != 100.0f || finiteParameters.compressorMakeupDb != 0.0f
+        || finiteParameters.phaserRateHz != 0.0f || finiteParameters.phaserDepth != 0.0f
+        || finiteParameters.phaserFeedback != 0.0f || finiteParameters.phaserMix != 0.0f) return 40;
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
@@ -1745,6 +1801,38 @@ int main(int argc, char** argv)
     const double unfilteredEqPeak = renderPeak(eqReference, 36, 127);
     const double lowReducedPeak = renderPeak(eqLowReduced, 36, 127);
     if (unfilteredEqPeak < 0.05 || lowReducedPeak >= unfilteredEqPeak * 0.8) return 54;
+
+    auto& compressorReference = makeTestProcessor();
+    auto& compressedPad = makeTestProcessor();
+    if (!compressorReference.loadSampleForNote(36, sample) || !compressedPad.loadSampleForNote(36, sample)) return 65;
+    compressorReference.prepareToPlay(48000.0, 128);
+    compressedPad.prepareToPlay(48000.0, 128);
+    auto compressorParameters = compressedPad.getNoteParameters(36);
+    compressorParameters.compressorThresholdDb = -24.0f;
+    compressorParameters.compressorRatio = 8.0f;
+    compressorParameters.compressorAttackMs = 0.1f;
+    compressedPad.setNoteParameters(36, compressorParameters);
+    const double cleanCompressorPeak = renderPeak(compressorReference, 36, 127);
+    const double reducedCompressorPeak = renderPeak(compressedPad, 36, 127);
+    if (cleanCompressorPeak < 0.05 || reducedCompressorPeak >= cleanCompressorPeak * 0.8) return 66;
+
+    auto& phaserReference = makeTestProcessor();
+    auto& phasedPad = makeTestProcessor();
+    if (!phaserReference.loadSampleForNote(36, sample) || !phasedPad.loadSampleForNote(36, sample)) return 67;
+    phaserReference.prepareToPlay(48000.0, 128);
+    phasedPad.prepareToPlay(48000.0, 128);
+    auto phaserParameters = phasedPad.getNoteParameters(36);
+    phaserParameters.phaserRateHz = 1.2f;
+    phaserParameters.phaserDepth = 0.9f;
+    phaserParameters.phaserFeedback = 0.45f;
+    phaserParameters.phaserMix = 0.9f;
+    phasedPad.setNoteParameters(36, phaserParameters);
+    const auto drySignal = renderSamples(phaserReference, 36, 127);
+    const auto wetSignal = renderSamples(phasedPad, 36, 127);
+    double phaserDifference = 0.0;
+    for (size_t index = 0; index < drySignal.size(); ++index)
+        phaserDifference += std::abs(static_cast<double>(drySignal[index] - wetSignal[index]));
+    if (phaserDifference < 1.0) return 68;
 
     auto& trimmedPlayback = makeTestProcessor();
     if (!trimmedPlayback.loadSampleForNote(36, trimSample)) return 55;

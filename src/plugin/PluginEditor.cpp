@@ -1474,13 +1474,31 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     configurePadControl(eqLowSlider, eqLowLabel, "EQ LOW", -18.0, 18.0, 0.1, " dB");
     configurePadControl(eqMidSlider, eqMidLabel, "EQ MID", -18.0, 18.0, 0.1, " dB");
     configurePadControl(eqHighSlider, eqHighLabel, "EQ HIGH", -18.0, 18.0, 0.1, " dB");
+    configurePadControl(compressorThresholdSlider, compressorThresholdLabel, "COMP THRESHOLD", -36.0, 0.0, 0.1, " dB");
+    configurePadControl(compressorRatioSlider, compressorRatioLabel, "COMP RATIO", 1.0, 12.0, 0.1, ":1");
+    configurePadControl(compressorAttackSlider, compressorAttackLabel, "COMP ATTACK", 0.1, 100.0, 0.1, " ms");
+    configurePadControl(compressorReleaseSlider, compressorReleaseLabel, "COMP RELEASE", 5.0, 500.0, 1.0, " ms");
+    configurePadControl(compressorMakeupSlider, compressorMakeupLabel, "COMP MAKEUP", 0.0, 12.0, 0.1, " dB");
+    configurePadControl(phaserRateSlider, phaserRateLabel, "PHASER RATE", 0.0, 8.0, 0.01, " Hz");
+    configurePadControl(phaserDepthSlider, phaserDepthLabel, "PHASER DEPTH", 0.0, 100.0, 1.0, "%");
+    configurePadControl(phaserFeedbackSlider, phaserFeedbackLabel, "PHASER FEEDBACK", -0.8, 0.8, 0.01, {});
+    configurePadControl(phaserMixSlider, phaserMixLabel, "PHASER MIX", 0.0, 100.0, 1.0, "%");
+    compressorRatioSlider.setNumDecimalPlacesToDisplay(1);
+    compressorAttackSlider.setNumDecimalPlacesToDisplay(1);
+    compressorReleaseSlider.setNumDecimalPlacesToDisplay(0);
+    compressorThresholdSlider.setNumDecimalPlacesToDisplay(1);
+    phaserRateSlider.setNumDecimalPlacesToDisplay(2);
+    phaserDepthSlider.setNumDecimalPlacesToDisplay(0);
+    phaserFeedbackSlider.setNumDecimalPlacesToDisplay(2);
+    phaserMixSlider.setNumDecimalPlacesToDisplay(0);
+    phaserRateSlider.setSkewFactorFromMidPoint(0.5);
     attackSlider.setNumDecimalPlacesToDisplay(0);
     decaySlider.setNumDecimalPlacesToDisplay(0);
     sustainSlider.setNumDecimalPlacesToDisplay(0);
     releaseSlider.setNumDecimalPlacesToDisplay(0);
     filterCutoffSlider.setNumDecimalPlacesToDisplay(0);
     filterCutoffSlider.setSkewFactorFromMidPoint(4000.0);
-    for (auto* heading : {&padMixHeading, &padShapeHeading, &padEqHeading})
+    for (auto* heading : {&padMixHeading, &padShapeHeading, &padEqHeading, &padFxHeading})
     {
         heading->setJustificationType(juce::Justification::centredLeft);
         heading->setColour(juce::Label::textColourId, Palette::Accent);
@@ -1490,6 +1508,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     padMixHeading.setText(magdrum::ui::localisedText("PAD MIX"), juce::dontSendNotification);
     padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"), juce::dontSendNotification);
     padEqHeading.setText(magdrum::ui::localisedText("PAD EQUALIZER"), juce::dontSendNotification);
+    padFxHeading.setText(magdrum::ui::localisedText("COMPRESSOR / PHASER"), juce::dontSendNotification);
     gainSlider.onValueChange = [this]
     {
         if (updatingPadControls) return;
@@ -1535,6 +1554,38 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     eqLowSlider.onValueChange = [this, updateEq] { updateEq(0, static_cast<float>(eqLowSlider.getValue())); };
     eqMidSlider.onValueChange = [this, updateEq] { updateEq(1, static_cast<float>(eqMidSlider.getValue())); };
     eqHighSlider.onValueChange = [this, updateEq] { updateEq(2, static_cast<float>(eqHighSlider.getValue())); };
+    const auto updateDynamics = [this](int control, float value)
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        if (control == 0) parameters.compressorThresholdDb = value;
+        else if (control == 1) parameters.compressorRatio = value;
+        else if (control == 2) parameters.compressorAttackMs = value;
+        else if (control == 3) parameters.compressorReleaseMs = value;
+        else parameters.compressorMakeupDb = value;
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    compressorThresholdSlider.onValueChange = [this, updateDynamics] { updateDynamics(0, static_cast<float>(compressorThresholdSlider.getValue())); };
+    compressorRatioSlider.onValueChange = [this, updateDynamics] { updateDynamics(1, static_cast<float>(compressorRatioSlider.getValue())); };
+    compressorAttackSlider.onValueChange = [this, updateDynamics] { updateDynamics(2, static_cast<float>(compressorAttackSlider.getValue())); };
+    compressorReleaseSlider.onValueChange = [this, updateDynamics] { updateDynamics(3, static_cast<float>(compressorReleaseSlider.getValue())); };
+    compressorMakeupSlider.onValueChange = [this, updateDynamics] { updateDynamics(4, static_cast<float>(compressorMakeupSlider.getValue())); };
+    const auto updatePhaser = [this](int control, float value)
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        if (control == 0) parameters.phaserRateHz = value;
+        else if (control == 1) parameters.phaserDepth = value / 100.0f;
+        else if (control == 2) parameters.phaserFeedback = value;
+        else parameters.phaserMix = value / 100.0f;
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    phaserRateSlider.onValueChange = [this, updatePhaser] { updatePhaser(0, static_cast<float>(phaserRateSlider.getValue())); };
+    phaserDepthSlider.onValueChange = [this, updatePhaser] { updatePhaser(1, static_cast<float>(phaserDepthSlider.getValue())); };
+    phaserFeedbackSlider.onValueChange = [this, updatePhaser] { updatePhaser(2, static_cast<float>(phaserFeedbackSlider.getValue())); };
+    phaserMixSlider.onValueChange = [this, updatePhaser] { updatePhaser(3, static_cast<float>(phaserMixSlider.getValue())); };
     attackSlider.onValueChange = [this]
     {
         if (updatingPadControls) return;
@@ -1761,6 +1812,7 @@ void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
         drawInstrumentPanel(padMixPanelBounds, Palette::Accent);
         drawInstrumentPanel(padShapePanelBounds, Palette::Accent.brighter(0.08f));
         drawInstrumentPanel(padEqPanelBounds, Palette::Accent.brighter(0.15f));
+        drawInstrumentPanel(padFxPanelBounds, Palette::Accent.brighter(0.22f));
     }
     auto breadcrumb=magdrum::ui::localisedText("SAMPLE LIBRARY")+"  /  "+magdrum::ui::localisedText("DRUM MACHINE")+"  /  "+magdrum::ui::localisedText("SEQUENCER")+"  /  "+magdrum::ui::localisedText("MIDI MAPS");
     if(hasPluginScannerPage)breadcrumb+="  /  "+magdrum::ui::localisedText("PLUGIN SCANNER");
@@ -1778,7 +1830,9 @@ void MagDrumAudioProcessorEditor::resized()
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
-    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel,&phaserRateLabel,&phaserDepthLabel,&phaserFeedbackLabel,&phaserMixLabel})label->setVisible(page==1);
+    for(auto* slider:{&compressorThresholdSlider,&compressorRatioSlider,&compressorAttackSlider,&compressorReleaseSlider,&compressorMakeupSlider,&phaserRateSlider,&phaserDepthSlider,&phaserFeedbackSlider,&phaserMixSlider})slider->setVisible(page==1);
     const auto barMap=currentBarMap();
     const int selectedBar=juce::jlimit(1,barMap.barCount,barSelect.getSelectedId()>0?barSelect.getSelectedId():1);
     const auto& visibleBar=barMap.bars[static_cast<size_t>(selectedBar-1)];
@@ -1817,6 +1871,7 @@ void MagDrumAudioProcessorEditor::resized()
         padMixPanelBounds = {};
         padShapePanelBounds = {};
         padEqPanelBounds = {};
+        padFxPanelBounds = {};
         const auto fitValueBox = [](juce::Slider& slider, int columnWidth)
         {
             const int valueBoxWidth = juce::jlimit(1, 82, columnWidth - 4);
@@ -1834,10 +1889,11 @@ void MagDrumAudioProcessorEditor::resized()
         bounds.removeFromLeft(18);
         drumEditorPanelBounds = bounds.expanded(8, 7);
         bounds.reduce(8, 4);
-        const int controlGroupHeight = juce::jlimit(78, 94,
-            78 + juce::jlimit(0, 80, bounds.getHeight() - 413) * 16 / 80);
-        const int waveformHeight = juce::jmax(46,
-            bounds.getHeight() - 121 - 3 * controlGroupHeight);
+        const int controlGroupHeight = juce::jlimit(70, 94,
+            70 + juce::jlimit(0, 120, bounds.getHeight() - 413) * 24 / 120);
+        constexpr int effectsPanelHeight = 106;
+        const int waveformHeight = juce::jmax(40,
+            bounds.getHeight() - 121 - 3 * controlGroupHeight - effectsPanelHeight);
         selectedPadTitle.setBounds(bounds.removeFromTop(26));bounds.removeFromTop(2);
         sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
         drumWaveformPanelBounds = bounds.removeFromTop(waveformHeight).expanded(5, 3);
@@ -1887,6 +1943,33 @@ void MagDrumAudioProcessorEditor::resized()
             padEqControls[index].first->setBounds(column.removeFromTop(15));
             fitValueBox(*padEqControls[index].second, column.getWidth());
             padEqControls[index].second->setBounds(column);
+        }
+        bounds.removeFromTop(3);
+        padFxPanelBounds = bounds.removeFromTop(effectsPanelHeight).expanded(5, 2);
+        auto fxPanel = padFxPanelBounds.reduced(5, 3);
+        padFxHeading.setBounds(fxPanel.removeFromTop(14));
+        auto compressorRow = fxPanel.removeFromTop(42);
+        const std::array<std::pair<juce::Label*,juce::Slider*>,5> compressorControls{{
+            {&compressorThresholdLabel,&compressorThresholdSlider},{&compressorRatioLabel,&compressorRatioSlider},
+            {&compressorAttackLabel,&compressorAttackSlider},{&compressorReleaseLabel,&compressorReleaseSlider},
+            {&compressorMakeupLabel,&compressorMakeupSlider}}};
+        for(size_t index=0;index<compressorControls.size();++index)
+        {
+            auto column=compressorRow.removeFromLeft(index+1==compressorControls.size()?compressorRow.getWidth():compressorRow.getWidth()/(static_cast<int>(compressorControls.size()-index)));
+            compressorControls[index].first->setBounds(column.removeFromTop(13));
+            fitValueBox(*compressorControls[index].second, column.getWidth());
+            compressorControls[index].second->setBounds(column);
+        }
+        auto phaserRow = fxPanel;
+        const std::array<std::pair<juce::Label*,juce::Slider*>,4> phaserControls{{
+            {&phaserRateLabel,&phaserRateSlider},{&phaserDepthLabel,&phaserDepthSlider},
+            {&phaserFeedbackLabel,&phaserFeedbackSlider},{&phaserMixLabel,&phaserMixSlider}}};
+        for(size_t index=0;index<phaserControls.size();++index)
+        {
+            auto column=phaserRow.removeFromLeft(index+1==phaserControls.size()?phaserRow.getWidth():phaserRow.getWidth()/(static_cast<int>(phaserControls.size()-index)));
+            phaserControls[index].first->setBounds(column.removeFromTop(13));
+            fitValueBox(*phaserControls[index].second, column.getWidth());
+            phaserControls[index].second->setBounds(column);
         }
         bounds.removeFromTop(3);
         bounds.removeFromTop(4);
@@ -2025,9 +2108,19 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     eqLowLabel.setText(magdrum::ui::localisedText("EQ LOW"),juce::dontSendNotification);
     eqMidLabel.setText(magdrum::ui::localisedText("EQ MID"),juce::dontSendNotification);
     eqHighLabel.setText(magdrum::ui::localisedText("EQ HIGH"),juce::dontSendNotification);
+    compressorThresholdLabel.setText(magdrum::ui::localisedText("COMP THRESHOLD"),juce::dontSendNotification);
+    compressorRatioLabel.setText(magdrum::ui::localisedText("COMP RATIO"),juce::dontSendNotification);
+    compressorAttackLabel.setText(magdrum::ui::localisedText("COMP ATTACK"),juce::dontSendNotification);
+    compressorReleaseLabel.setText(magdrum::ui::localisedText("COMP RELEASE"),juce::dontSendNotification);
+    compressorMakeupLabel.setText(magdrum::ui::localisedText("COMP MAKEUP"),juce::dontSendNotification);
+    phaserRateLabel.setText(magdrum::ui::localisedText("PHASER RATE"),juce::dontSendNotification);
+    phaserDepthLabel.setText(magdrum::ui::localisedText("PHASER DEPTH"),juce::dontSendNotification);
+    phaserFeedbackLabel.setText(magdrum::ui::localisedText("PHASER FEEDBACK"),juce::dontSendNotification);
+    phaserMixLabel.setText(magdrum::ui::localisedText("PHASER MIX"),juce::dontSendNotification);
     padMixHeading.setText(magdrum::ui::localisedText("PAD MIX"),juce::dontSendNotification);
     padShapeHeading.setText(magdrum::ui::localisedText("ENVELOPE / FILTER"),juce::dontSendNotification);
     padEqHeading.setText(magdrum::ui::localisedText("PAD EQUALIZER"),juce::dontSendNotification);
+    padFxHeading.setText(magdrum::ui::localisedText("COMPRESSOR / PHASER"),juce::dontSendNotification);
     playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying ? "Stop" : "Play"));playSequenceButton.setTooltip(magdrum::ui::localisedText("While the host transport is playing, the sequencer follows its tempo and position."));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));
     importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     setMetadataButton.setButtonText(magdrum::ui::localisedText("Set event"));removeMetadataButton.setButtonText(magdrum::ui::localisedText("Remove event"));
@@ -4027,6 +4120,15 @@ void MagDrumAudioProcessorEditor::setNote(int note)
     eqLowSlider.setValue(parameters.eqLowDb,juce::dontSendNotification);
     eqMidSlider.setValue(parameters.eqMidDb,juce::dontSendNotification);
     eqHighSlider.setValue(parameters.eqHighDb,juce::dontSendNotification);
+    compressorThresholdSlider.setValue(parameters.compressorThresholdDb,juce::dontSendNotification);
+    compressorRatioSlider.setValue(parameters.compressorRatio,juce::dontSendNotification);
+    compressorAttackSlider.setValue(parameters.compressorAttackMs,juce::dontSendNotification);
+    compressorReleaseSlider.setValue(parameters.compressorReleaseMs,juce::dontSendNotification);
+    compressorMakeupSlider.setValue(parameters.compressorMakeupDb,juce::dontSendNotification);
+    phaserRateSlider.setValue(parameters.phaserRateHz,juce::dontSendNotification);
+    phaserDepthSlider.setValue(parameters.phaserDepth * 100.0f,juce::dontSendNotification);
+    phaserFeedbackSlider.setValue(parameters.phaserFeedback,juce::dontSendNotification);
+    phaserMixSlider.setValue(parameters.phaserMix * 100.0f,juce::dontSendNotification);
     updatingPadControls=false;
     updateLayerSummary();
     const auto layers=processor.getSampleLayersForNote(selectedNote);

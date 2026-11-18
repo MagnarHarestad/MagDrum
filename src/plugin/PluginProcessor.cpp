@@ -56,6 +56,15 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         noteEqHighDb[note].store(0.0f, std::memory_order_relaxed);
         noteSampleStart[note].store(0.0f, std::memory_order_relaxed);
         noteSampleEnd[note].store(1.0f, std::memory_order_relaxed);
+        noteCompressorThresholdDb[note].store(0.0f, std::memory_order_relaxed);
+        noteCompressorRatio[note].store(1.0f, std::memory_order_relaxed);
+        noteCompressorAttackMs[note].store(10.0f, std::memory_order_relaxed);
+        noteCompressorReleaseMs[note].store(100.0f, std::memory_order_relaxed);
+        noteCompressorMakeupDb[note].store(0.0f, std::memory_order_relaxed);
+        notePhaserRateHz[note].store(0.0f, std::memory_order_relaxed);
+        notePhaserDepth[note].store(0.0f, std::memory_order_relaxed);
+        notePhaserFeedback[note].store(0.0f, std::memory_order_relaxed);
+        notePhaserMix[note].store(0.0f, std::memory_order_relaxed);
         noteTriggerCounts[note].store(0, std::memory_order_relaxed);
     }
     for (auto& noteCounters : roundRobinCounters)
@@ -387,7 +396,16 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             noteEqMidDb[index].load(std::memory_order_relaxed),
             noteEqHighDb[index].load(std::memory_order_relaxed),
             noteSampleStart[index].load(std::memory_order_relaxed),
-            noteSampleEnd[index].load(std::memory_order_relaxed)};
+            noteSampleEnd[index].load(std::memory_order_relaxed),
+            noteCompressorThresholdDb[index].load(std::memory_order_relaxed),
+            noteCompressorRatio[index].load(std::memory_order_relaxed),
+            noteCompressorAttackMs[index].load(std::memory_order_relaxed),
+            noteCompressorReleaseMs[index].load(std::memory_order_relaxed),
+            noteCompressorMakeupDb[index].load(std::memory_order_relaxed),
+            notePhaserRateHz[index].load(std::memory_order_relaxed),
+            notePhaserDepth[index].load(std::memory_order_relaxed),
+            notePhaserFeedback[index].load(std::memory_order_relaxed),
+            notePhaserMix[index].load(std::memory_order_relaxed)};
 }
 
 void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters)
@@ -415,6 +433,15 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
         std::isfinite(parameters.sampleEnd) ? parameters.sampleEnd : 1.0f);
     noteSampleStart[index].store(sampleStart, std::memory_order_relaxed);
     noteSampleEnd[index].store(sampleEnd, std::memory_order_relaxed);
+    noteCompressorThresholdDb[index].store(juce::jlimit(-36.0f, 0.0f, finiteOrZero(parameters.compressorThresholdDb)), std::memory_order_relaxed);
+    noteCompressorRatio[index].store(juce::jlimit(1.0f, 12.0f, std::isfinite(parameters.compressorRatio) ? parameters.compressorRatio : 1.0f), std::memory_order_relaxed);
+    noteCompressorAttackMs[index].store(juce::jlimit(0.1f, 100.0f, std::isfinite(parameters.compressorAttackMs) ? parameters.compressorAttackMs : 10.0f), std::memory_order_relaxed);
+    noteCompressorReleaseMs[index].store(juce::jlimit(5.0f, 500.0f, std::isfinite(parameters.compressorReleaseMs) ? parameters.compressorReleaseMs : 100.0f), std::memory_order_relaxed);
+    noteCompressorMakeupDb[index].store(juce::jlimit(0.0f, 12.0f, finiteOrZero(parameters.compressorMakeupDb)), std::memory_order_relaxed);
+    notePhaserRateHz[index].store(juce::jlimit(0.0f, 8.0f, finiteOrZero(parameters.phaserRateHz)), std::memory_order_relaxed);
+    notePhaserDepth[index].store(juce::jlimit(0.0f, 1.0f, finiteOrZero(parameters.phaserDepth)), std::memory_order_relaxed);
+    notePhaserFeedback[index].store(juce::jlimit(-0.8f, 0.8f, finiteOrZero(parameters.phaserFeedback)), std::memory_order_relaxed);
+    notePhaserMix[index].store(juce::jlimit(0.0f, 1.0f, finiteOrZero(parameters.phaserMix)), std::memory_order_relaxed);
 }
 
 void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
@@ -488,6 +515,17 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         };
         voice.eqLowCoefficient = lowPassMix(200.0f);
         voice.eqHighCoefficient = lowPassMix(4000.0f);
+        voice.compressorThresholdDb = parameters.compressorThresholdDb;
+        voice.compressorRatio = parameters.compressorRatio;
+        voice.compressorAttackCoefficient = std::exp(-1.0f / juce::jmax(1.0f,
+            parameters.compressorAttackMs * 0.001f * static_cast<float>(outputSampleRate)));
+        voice.compressorReleaseCoefficient = std::exp(-1.0f / juce::jmax(1.0f,
+            parameters.compressorReleaseMs * 0.001f * static_cast<float>(outputSampleRate)));
+        voice.compressorMakeupGain = juce::Decibels::decibelsToGain(parameters.compressorMakeupDb);
+        voice.phaserRateHz = parameters.phaserRateHz;
+        voice.phaserDepth = parameters.phaserDepth;
+        voice.phaserFeedback = parameters.phaserFeedback;
+        voice.phaserMix = parameters.phaserMix;
     }
 }
 
@@ -752,8 +790,50 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             const float filterMix = 1.0f - voice.lowPassCoefficient;
             voice.lowPassStateLeft += filterMix * (equalizedLeft - voice.lowPassStateLeft);
             voice.lowPassStateRight += filterMix * (equalizedRight - voice.lowPassStateRight);
-            left += voice.lowPassStateLeft * voice.gain * envelope * voice.leftPanGain;
-            right += voice.lowPassStateRight * voice.gain * envelope * voice.rightPanGain;
+            float processedLeft = voice.lowPassStateLeft;
+            float processedRight = voice.lowPassStateRight;
+            if (voice.compressorRatio > 1.001f || voice.compressorMakeupGain > 1.0001f)
+            {
+                const float detector = juce::jmax(std::abs(processedLeft), std::abs(processedRight));
+                const float coefficient = detector > voice.compressorEnvelope
+                    ? voice.compressorAttackCoefficient : voice.compressorReleaseCoefficient;
+                voice.compressorEnvelope = coefficient * voice.compressorEnvelope + (1.0f - coefficient) * detector;
+                const float detectorDb = juce::Decibels::gainToDecibels(voice.compressorEnvelope, -120.0f);
+                float gainReductionDb = 0.0f;
+                if (detectorDb > voice.compressorThresholdDb && voice.compressorRatio > 1.001f)
+                    gainReductionDb = (voice.compressorThresholdDb
+                        + (detectorDb - voice.compressorThresholdDb) / voice.compressorRatio) - detectorDb;
+                const float compressorGain = juce::Decibels::decibelsToGain(gainReductionDb)
+                    * voice.compressorMakeupGain;
+                processedLeft *= compressorGain;
+                processedRight *= compressorGain;
+            }
+            if (voice.phaserRateHz > 0.0f && voice.phaserMix > 0.0f)
+            {
+                const float lfo = 0.5f + 0.5f * std::sin(static_cast<float>(voice.phaserPhase));
+                voice.phaserPhase += juce::MathConstants<double>::twoPi * voice.phaserRateHz / outputSampleRate;
+                if (voice.phaserPhase >= juce::MathConstants<double>::twoPi)
+                    voice.phaserPhase -= juce::MathConstants<double>::twoPi;
+                float wetLeft = processedLeft + voice.phaserFeedbackLeft * voice.phaserFeedback;
+                float wetRight = processedRight + voice.phaserFeedbackRight * voice.phaserFeedback;
+                const float coefficient = juce::jlimit(-0.92f, 0.92f,
+                    0.15f + lfo * voice.phaserDepth * 0.77f);
+                for (size_t stage = 0; stage < voice.phaserStateLeft.size(); ++stage)
+                {
+                    const float nextLeft = coefficient * wetLeft + voice.phaserStateLeft[stage];
+                    voice.phaserStateLeft[stage] = wetLeft - coefficient * nextLeft;
+                    wetLeft = nextLeft;
+                    const float nextRight = coefficient * wetRight + voice.phaserStateRight[stage];
+                    voice.phaserStateRight[stage] = wetRight - coefficient * nextRight;
+                    wetRight = nextRight;
+                }
+                voice.phaserFeedbackLeft = wetLeft;
+                voice.phaserFeedbackRight = wetRight;
+                processedLeft += (wetLeft - processedLeft) * voice.phaserMix;
+                processedRight += (wetRight - processedRight) * voice.phaserMix;
+            }
+            left += processedLeft * voice.gain * envelope * voice.leftPanGain;
+            right += processedRight * voice.gain * envelope * voice.rightPanGain;
             voice.position += (voice.sample->sampleRate / outputSampleRate) * voice.playbackRate;
             voice.elapsedOutputSamples += 1.0;
         }
@@ -785,7 +865,14 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 || std::abs(parameters.driveDb) > 0.000001f
                 || std::abs(parameters.eqLowDb) > 0.000001f || std::abs(parameters.eqMidDb) > 0.000001f
                 || std::abs(parameters.eqHighDb) > 0.000001f
-                || std::abs(parameters.sampleStart) > 0.000001f || std::abs(parameters.sampleEnd - 1.0f) > 0.000001f)
+                || std::abs(parameters.sampleStart) > 0.000001f || std::abs(parameters.sampleEnd - 1.0f) > 0.000001f
+                || std::abs(parameters.compressorThresholdDb) > 0.000001f
+                || std::abs(parameters.compressorRatio - 1.0f) > 0.000001f
+                || std::abs(parameters.compressorAttackMs - 10.0f) > 0.000001f
+                || std::abs(parameters.compressorReleaseMs - 100.0f) > 0.000001f
+                || std::abs(parameters.compressorMakeupDb) > 0.000001f
+                || std::abs(parameters.phaserRateHz) > 0.000001f || std::abs(parameters.phaserDepth) > 0.000001f
+                || std::abs(parameters.phaserFeedback) > 0.000001f || std::abs(parameters.phaserMix) > 0.000001f)
             {
                 auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
                 savedParameters->setAttribute("note", note);
@@ -803,6 +890,15 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("eqHighDb", parameters.eqHighDb);
                 savedParameters->setAttribute("sampleStart", parameters.sampleStart);
                 savedParameters->setAttribute("sampleEnd", parameters.sampleEnd);
+                savedParameters->setAttribute("compressorThresholdDb", parameters.compressorThresholdDb);
+                savedParameters->setAttribute("compressorRatio", parameters.compressorRatio);
+                savedParameters->setAttribute("compressorAttackMs", parameters.compressorAttackMs);
+                savedParameters->setAttribute("compressorReleaseMs", parameters.compressorReleaseMs);
+                savedParameters->setAttribute("compressorMakeupDb", parameters.compressorMakeupDb);
+                savedParameters->setAttribute("phaserRateHz", parameters.phaserRateHz);
+                savedParameters->setAttribute("phaserDepth", parameters.phaserDepth);
+                savedParameters->setAttribute("phaserFeedback", parameters.phaserFeedback);
+                savedParameters->setAttribute("phaserMix", parameters.phaserMix);
             }
             int layerCount = 0;
             const SampleData* onlyLayer = nullptr;
@@ -878,7 +974,16 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("eqMidDb", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("eqHighDb", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("sampleStart", 0.0)),
-                    static_cast<float>(child->getDoubleAttribute("sampleEnd", 1.0))};
+                    static_cast<float>(child->getDoubleAttribute("sampleEnd", 1.0)),
+                    static_cast<float>(child->getDoubleAttribute("compressorThresholdDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("compressorRatio", 1.0)),
+                    static_cast<float>(child->getDoubleAttribute("compressorAttackMs", 10.0)),
+                    static_cast<float>(child->getDoubleAttribute("compressorReleaseMs", 100.0)),
+                    static_cast<float>(child->getDoubleAttribute("compressorMakeupDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("phaserRateHz", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("phaserDepth", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("phaserFeedback", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("phaserMix", 0.0))};
             continue;
         }
         if (!child->hasTagName("SAMPLE_LAYER"))
