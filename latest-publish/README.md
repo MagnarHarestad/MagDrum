@@ -1,15 +1,14 @@
 # MagDrum Windows x64 test package
 
-Release candidate: v0.1.2-test.230 (VST3 version 0.1.2.230).
+Release candidate: v0.1.2-test.232 (VST3 version 0.1.2.232).
 
-- ZIP SHA-256: `165d7b3e0867feb6c85bc039c466bb94e13b1065704e0afb978331b11f6d43b6`
-- VST3 module SHA-256: `9f1e0772ffa3b778e97799321f1662a09ba18bae023a6ed098e553dd10ed6e5b`
-- Windows x64 Release CTest: 2/2 passed, including 250,000-row sample map selection across browser pages.
+- ZIP SHA-256: `e6f6f4a64a1a48fa36de68615d974af25afb43796016789c5466e2aa7d71194e`
+- VST3 module SHA-256: `4417BF0E0C8054C9E50826652BF7C5992C2228A87B707C4F1610B0FBA3D7DC46`
+- Windows x64 Release CTest: 2/2 passed, including per-pad compressor/phaser DSP and project-state persistence.
 - Package verification passed for contents, license notices, Microsoft runtime signature and version.
-- The sample map now covers filtered libraries beyond the current list page; map selection supports preview and assignment.
-- Sample-folder scans display 0–100% progress, completed file count and current filename.
-- Installed per-user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; the previous .229 bundle is backed up outside VST3 scan paths.
+- Per-pad compressor and four-stage phaser are selectable in the Drum Machine and fit the minimum editor size.
+- Installed per-user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; the previous .231 bundle is backed up outside VST3 scan paths.
 - Installed module matches the release package hash and passed isolated scanning/rendering for MIDI notes 0–127, including C1.
 - Cubase Pro 15 rescan and hands-on acceptance remain pending.
 
-See the [release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.230) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.
+See the [release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.232) and [Cubase test guide](../docs/cubase-testing.md). Linux and macOS remain paused until explicitly requested.

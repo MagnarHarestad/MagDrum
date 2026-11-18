@@ -4,7 +4,7 @@ MagDrum is a drum sample library, VST3 drum machine and semantic MIDI workspace.
 
 ## Current Windows build
 
-The latest test release is [v0.1.2-test.230](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.230), VST3 version 0.1.2.230. Release CTest passed 2/2 and package verification passed. Offscreen screenshots cover all five VST views. The MIDI Maps note field uses an ASCII `MIDI 0-127` placeholder; sample scans show percentage, completed file count and current filename. The acoustic map now loads representative results from the complete filtered library independently of the 250-row browser pages, and map selection can preview or assign a sound beyond the first page. Tests cover the 250,000-row database query and map selection outside the first page. Sequencer smoke coverage checks all 16 lane labels and General MIDI notes. VST text fields are vertically centered, and pads glow for mouse, sequencer and incoming host MIDI triggers. Version .230 is installed per user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; .229 is backed up under `%LOCALAPPDATA%\MagDrum\VST3-backups`, outside VST3 scan paths. Isolated scanning/rendering passed for all 128 MIDI notes, including C1. Cubase Pro 15 rescan and hands-on acceptance remain pending.
+The latest test release is [v0.1.2-test.232](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.232), VST3 version 0.1.2.232. It adds independent per-pad compressor and phaser DSP and saves those settings with the Cubase project. Release CTest passed 2/2, package verification passed, and the installed module matches the release ZIP SHA-256 (`4417BF0E0C8054C9E50826652BF7C5992C2228A87B707C4F1610B0FBA3D7DC46`). The bundle is installed per user at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; .231 is backed up outside VST3 scan paths. Isolated scanning and rendering passed for all 128 MIDI notes, including C1. Cubase Pro 15 rescan and hands-on acceptance remain pending.
 
 The VST has five views: Sample Library, Drum Machine, Sequencer, MIDI Maps and Plugin Scanner. The drum machine follows a DR-660-inspired 4×4 order and provides velocity layers, round-robin playback, per-pad gain, pan, tune, Drive, three-band EQ, ADSR, low-pass and editable sample-trim controls. These settings are saved with the Cubase project. The VST scans local sample libraries, previews and assigns sounds, edits semantic drum patterns and mappings, and can discover VST3 instruments and capture their MIDI notes in an isolated helper. Third-party plugin behavior still needs real host review; opening a vendor instrument's own editor uses a separate MagDrum window.
 
@@ -23,7 +23,7 @@ Requires CMake 3.22+, C++20, Git and a supported Visual Studio C++ toolchain. JU
 Use `Build-Windows-Plugin.ps1` for fast cached Debug iteration. Build and run the Windows Release checks once for a Cubase-ready milestone with `Build-Windows.ps1 -BuildRevision <test-number>`. The latter creates the package under `latest-publish`. For installed-package verification, run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-InstalledWindowsVST3.ps1 -ExpectedVersion 0.1.2.230
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-InstalledWindowsVST3.ps1 -ExpectedVersion 0.1.2.232
 ```
 
 See [`docs/vst-parity.md`](docs/vst-parity.md#windows-development-and-installation-loop) for the full workflow. Do not use `Build-Unix.sh` while Linux and macOS remain paused.
