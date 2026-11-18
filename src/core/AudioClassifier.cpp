@@ -114,11 +114,13 @@ DrumClassification classify(const ScannedSample& sample) const override
                                   "open hat", "open hats", "openhat", "pedal hat", "pedal hats", "pedalhat",
                                   "foot hat", "foot hats", "chh", "hhc", "ohh", "hho", "phh", "hhp"});
     const bool hasClosedHiHatCue = has({"closed hat", "closed hats", "closedhat", "closed hihat",
-                                        "closed hi hat", "closed hihats", "closed hi hats", "chh", "hhc"});
+                                        "closed hi hat", "closed hihats", "closed hi hats", "closed hh",
+                                        "hh closed", "chh", "hhc"});
     const bool hasOpenHiHatCue = has({"open hat", "open hats", "openhat", "open hihat", "open hi hat",
-                                      "open hihats", "open hi hats", "ohh", "hho"});
+                                      "open hihats", "open hi hats", "open hh", "hh open", "ohh", "hho"});
     const bool hasPedalHiHatCue = has({"pedal hat", "pedal hats", "pedalhat", "pedal hihat", "pedal hi hat",
-                                       "pedal hihats", "pedal hi hats", "foot hat", "foot hats", "phh", "hhp"});
+                                       "pedal hihats", "pedal hi hats", "pedal hh", "hh pedal",
+                                       "foot hat", "foot hats", "phh", "hhp"});
     if (hasHiHatCue)
         addTag("Hi-hat");
 

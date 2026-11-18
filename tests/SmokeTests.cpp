@@ -674,11 +674,17 @@ int runSmokeTests(int argc,char** argv)
     auto descriptiveTagSample=kickLike;descriptiveTagSample.file=juce::File("Distorted_909_Snare.wav");
     const auto descriptiveTags=AudioClassifier{}.classify(descriptiveTagSample);
     if(descriptiveTags.category!="Snare"||!descriptiveTags.tags.contains("Distorted")||!descriptiveTags.tags.contains("909"))return 196;
-    const std::array<std::pair<const char*, const char*>, 8> sfzNameClasses{{
+    const std::array<std::pair<const char*, const char*>, 14> sfzNameClasses{{
         {"hhc_vl1_rr1.flac", "Closed hi-hat"}, {"hho_vl1_rr1.flac", "Open hi-hat"},
         {"hhp_vl1_rr1.flac", "Pedal hi-hat"}, {"tomhi_vl1_rr1.flac", "Tom"},
         {"tomlo_vl1_rr1.flac", "Tom"}, {"ridebell_vl1_rr1.flac", "Ride"},
-        {"sidestick_vl1_rr1.flac", "Rimshot"}, {"kick_vl1_rr1.flac", "Kick"}}};
+        {"sidestick_vl1_rr1.flac", "Rimshot"}, {"kick_vl1_rr1.flac", "Kick"},
+        {"001_kickmic_hh_closed_vl1_rr1.flac", "Closed hi-hat"},
+        {"001_kickmic_hh_open_vl1_rr1.flac", "Open hi-hat"},
+        {"001_kickmic_hh_pedal_vl1_rr1.flac", "Pedal hi-hat"},
+        {"hh_closed_vl1_rr1.flac", "Closed hi-hat"},
+        {"hh_open_vl1_rr1.flac", "Open hi-hat"},
+        {"hh_pedal_vl1_rr1.flac", "Pedal hi-hat"}}};
     for (const auto& [filename, expectedCategory] : sfzNameClasses)
     {
         auto mappedName = kickLike; mappedName.file = juce::File(filename);
