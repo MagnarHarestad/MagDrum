@@ -103,6 +103,8 @@ public:
     int getSequencerUnmappedEventCount() const noexcept;
     NoteParameters getNoteParameters(int midiNote) const;
     void setNoteParameters(int midiNote, NoteParameters, bool notifyHost = true);
+    void beginNoteParameterGesture(int midiNote, size_t parameterIndex);
+    void endNoteParameterGesture(int midiNote, size_t parameterIndex);
     std::vector<SampleLayerInfo> getSampleLayersForNote(int midiNote) const;
     std::vector<SampleAssignmentInfo> getAllSampleAssignments() const;
     juce::String getSamplePathForNote(int midiNote) const;
@@ -202,6 +204,7 @@ private:
     std::array<std::atomic<float>, 128> noteCompressorThresholdDb{}, noteCompressorRatio{}, noteCompressorAttackMs{}, noteCompressorReleaseMs{}, noteCompressorMakeupDb{};
     std::array<std::atomic<float>, 128> notePhaserRateHz{}, notePhaserDepth{}, notePhaserFeedback{}, notePhaserMix{};
     std::array<std::array<juce::AudioParameterFloat*, padHostParameterCount>, 16> padHostParameters{};
+    std::array<std::array<bool, padHostParameterCount>, 16> activePadParameterGestures{};
     std::array<std::atomic<std::uint32_t>, 128> noteTriggerCounts{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;

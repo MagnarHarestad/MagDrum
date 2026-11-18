@@ -499,6 +499,7 @@ class MagDrumWaveform final : public juce::Component, public juce::TooltipClient
 {
 public:
     std::function<void(float, float)> onTrimRangeChanged;
+    std::function<void(int, bool)> onTrimGestureChanged;
     juce::String getTooltip() override { return tooltipText; }
     MagDrumWaveform() : thumbnail(512, formats, cache)
     {
@@ -534,14 +535,24 @@ public:
     {
         const auto wave=getLocalBounds().reduced(12,28).toFloat();if(!wave.contains(event.position))return;
         const float x=wave.getX()+trimStart*wave.getWidth(),endX=wave.getX()+trimEnd*wave.getWidth();draggedTrimHandle=std::abs(event.position.x-x)<=std::abs(event.position.x-endX)?0:1;
+        if(onTrimGestureChanged)onTrimGestureChanged(draggedTrimHandle==0?13:14,true);
     }
-    void mouseDoubleClick(const juce::MouseEvent&) override {setTrimRange(0.0f,1.0f);if(onTrimRangeChanged)onTrimRangeChanged(trimStart,trimEnd);}
+    void mouseDoubleClick(const juce::MouseEvent&) override
+    {
+        if(onTrimGestureChanged){onTrimGestureChanged(13,true);onTrimGestureChanged(14,true);}
+        setTrimRange(0.0f,1.0f);if(onTrimRangeChanged)onTrimRangeChanged(trimStart,trimEnd);
+        if(onTrimGestureChanged){onTrimGestureChanged(14,false);onTrimGestureChanged(13,false);}
+    }
     void mouseDrag(const juce::MouseEvent& event) override
     {
         if(draggedTrimHandle<0)return;const auto wave=getLocalBounds().reduced(12,28).toFloat();const float normalized=juce::jlimit(0.0f,1.0f,(event.position.x-wave.getX())/juce::jmax(1.0f,wave.getWidth()));
         if(draggedTrimHandle==0)trimStart=juce::jmin(normalized,trimEnd-0.01f);else trimEnd=juce::jmax(normalized,trimStart+0.01f);repaint();if(onTrimRangeChanged)onTrimRangeChanged(trimStart,trimEnd);
     }
-    void mouseUp(const juce::MouseEvent&) override {draggedTrimHandle=-1;}
+    void mouseUp(const juce::MouseEvent&) override
+    {
+        if(draggedTrimHandle>=0&&onTrimGestureChanged)onTrimGestureChanged(draggedTrimHandle==0?13:14,false);
+        draggedTrimHandle=-1;
+    }
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override
     {
@@ -1403,6 +1414,7 @@ private:
 MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& p, juce::File databaseFileOverride)
     : AudioProcessorEditor(p), tooltipWindow(this, 500), processor(p), indexedList("Samples",this), sampleMap(std::make_unique<MagDrumSampleMap>()), waveform(std::make_unique<MagDrumWaveform>())
 {
+    activePadParameterGestureNotes.fill(-1);
     magdrum::ui::initialiseMagDrumLocalization();magdrum::ui::languageChangeBroadcaster().addChangeListener(this);processor.addSampleStateListener(this);setLookAndFeel(&theme);setSize(1120,760);setResizable(true,true);setResizeLimits(1000,620,1800,1200);
     padActivityTimer.onTick=[this]{updatePadActivity();};padActivityTimer.start();
     languageButton.setTooltip(magdrum::ui::localisedText("Menu"));languageButton.onClick=[this]{magdrum::ui::showApplicationMenu(languageButton);};addAndMakeVisible(languageButton);
@@ -1488,6 +1500,21 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     configurePadControl(phaserDepthSlider, phaserDepthLabel, "PHASER DEPTH", 0.0, 100.0, 1.0, "%");
     configurePadControl(phaserFeedbackSlider, phaserFeedbackLabel, "PHASER FEEDBACK", -0.8, 0.8, 0.01, {});
     configurePadControl(phaserMixSlider, phaserMixLabel, "PHASER MIX", 0.0, 100.0, 1.0, "%");
+    const std::array<std::pair<juce::Slider*, size_t>, 22> hostAutomatedSliders{{
+        {&gainSlider, 0}, {&panSlider, 1}, {&tuneSlider, 2}, {&attackSlider, 3},
+        {&decaySlider, 4}, {&sustainSlider, 5}, {&releaseSlider, 6},
+        {&filterCutoffSlider, 7}, {&filterResonanceSlider, 8}, {&driveSlider, 9},
+        {&eqLowSlider, 10}, {&eqMidSlider, 11}, {&eqHighSlider, 12},
+        {&compressorThresholdSlider, 15}, {&compressorRatioSlider, 16},
+        {&compressorAttackSlider, 17}, {&compressorReleaseSlider, 18},
+        {&compressorMakeupSlider, 19}, {&phaserRateSlider, 20},
+        {&phaserDepthSlider, 21}, {&phaserFeedbackSlider, 22}, {&phaserMixSlider, 23}
+    }};
+    for (const auto& [slider, parameterIndex] : hostAutomatedSliders)
+    {
+        slider->onDragStart = [this, parameterIndex] { beginPadParameterGesture(parameterIndex); };
+        slider->onDragEnd = [this, parameterIndex] { endPadParameterGesture(parameterIndex); };
+    }
     compressorRatioSlider.setNumDecimalPlacesToDisplay(1);
     compressorAttackSlider.setNumDecimalPlacesToDisplay(1);
     compressorReleaseSlider.setNumDecimalPlacesToDisplay(0);
@@ -1658,6 +1685,13 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
     };
+    waveform->onTrimGestureChanged = [this](int parameterIndex, bool starting)
+    {
+        if (starting)
+            beginPadParameterGesture(static_cast<size_t>(parameterIndex));
+        else
+            endPadParameterGesture(static_cast<size_t>(parameterIndex));
+    };
     addAndMakeVisible(*waveform);
     velocityRange.setText(magdrum::ui::localisedText("1-127"));velocityRange.setInputRestrictions(7,"0123456789-");velocityRange.setJustification(juce::Justification::centred);velocityRange.setTooltip(magdrum::ui::localisedText("Inclusive velocity range for this sample layer (1–127)."));addAndMakeVisible(velocityRange);
     clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));for(auto* button:{&clearPadButton,&loadButton}){button->addListener(this);addAndMakeVisible(*button);}
@@ -1805,7 +1839,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleMapWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){for(size_t index=0;index<activePadParameterGestureNotes.size();++index)endPadParameterGesture(index);padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);midiEventWindow.reset();comparisonWindow.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleMapWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -4229,8 +4263,30 @@ void MagDrumAudioProcessorEditor::finishPortableMetadataArchive(
 }
 
 void MagDrumAudioProcessorEditor::setPage(int value){page=juce::jlimit(0,highestEditorPage,value);resized();repaint();}
+void MagDrumAudioProcessorEditor::beginPadParameterGesture(size_t parameterIndex)
+{
+    if (parameterIndex >= activePadParameterGestureNotes.size()
+        || activePadParameterGestureNotes[parameterIndex] >= 0)
+        return;
+    activePadParameterGestureNotes[parameterIndex] = selectedNote;
+    processor.beginNoteParameterGesture(selectedNote, parameterIndex);
+}
+
+void MagDrumAudioProcessorEditor::endPadParameterGesture(size_t parameterIndex)
+{
+    if (parameterIndex >= activePadParameterGestureNotes.size())
+        return;
+    const int note = activePadParameterGestureNotes[parameterIndex];
+    if (note < 0)
+        return;
+    activePadParameterGestureNotes[parameterIndex] = -1;
+    processor.endNoteParameterGesture(note, parameterIndex);
+}
+
 void MagDrumAudioProcessorEditor::setNote(int note)
 {
+    for (size_t index = 0; index < activePadParameterGestureNotes.size(); ++index)
+        endPadParameterGesture(index);
     selectedNote=juce::jlimit(0,127,note);
     const int index=static_cast<int>(std::find(mappedPadNotes.begin(),mappedPadNotes.end(),selectedNote)-mappedPadNotes.begin());
     const int safeIndex=juce::jlimit(0,static_cast<int>(padNames.size())-1,index);

@@ -72,6 +72,8 @@ private:
                          bool fromLibrary);
     void setPage(int);
     void setNote(int);
+    void beginPadParameterGesture(size_t parameterIndex);
+    void endPadParameterGesture(size_t parameterIndex);
     void updateDrumNotes();
     int patternStepCount() const;
     magdrum::sequencer::BarMap currentBarMap() const;
@@ -228,6 +230,7 @@ private:
     juce::Slider gainSlider, panSlider, tuneSlider, driveSlider, attackSlider, decaySlider, sustainSlider, releaseSlider, filterCutoffSlider, filterResonanceSlider, eqLowSlider, eqMidSlider, eqHighSlider;
     juce::Slider compressorThresholdSlider, compressorRatioSlider, compressorAttackSlider, compressorReleaseSlider, compressorMakeupSlider;
     juce::Slider phaserRateSlider, phaserDepthSlider, phaserFeedbackSlider, phaserMixSlider;
+    std::array<int, 24> activePadParameterGestureNotes{};
     bool showPhaserControls = false;
     bool updatingPadControls = false;
     juce::TextEditor velocityRange;

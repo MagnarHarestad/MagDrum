@@ -584,10 +584,58 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
             continue;
         const auto normalized = parameter->range.convertTo0to1(targetValue);
         if (notifyHost)
+        {
+            const bool ownGesture = !activePadParameterGestures[padIndex][parameterIndex];
+            if (ownGesture)
+                parameter->beginChangeGesture();
             parameter->setValueNotifyingHost(normalized);
+            if (ownGesture)
+                parameter->endChangeGesture();
+        }
         else
+        {
+            if (activePadParameterGestures[padIndex][parameterIndex])
+            {
+                parameter->endChangeGesture();
+                activePadParameterGestures[padIndex][parameterIndex] = false;
+            }
             static_cast<juce::AudioProcessorParameter*>(parameter)->setValue(normalized);
+        }
     }
+}
+
+void MagDrumAudioProcessor::beginNoteParameterGesture(int note, size_t parameterIndex)
+{
+    if (parameterIndex >= padHostParameterCount)
+        return;
+    const auto pad = std::find_if(magdrum::plugin::bossDr660PadLayout.begin(),
+        magdrum::plugin::bossDr660PadLayout.end(), [note](const auto& definition)
+        { return definition.midiNote == note; });
+    if (pad == magdrum::plugin::bossDr660PadLayout.end())
+        return;
+    const auto padIndex = static_cast<size_t>(std::distance(magdrum::plugin::bossDr660PadLayout.begin(), pad));
+    auto* parameter = padHostParameters[padIndex][parameterIndex];
+    if (parameter == nullptr || activePadParameterGestures[padIndex][parameterIndex])
+        return;
+    activePadParameterGestures[padIndex][parameterIndex] = true;
+    parameter->beginChangeGesture();
+}
+
+void MagDrumAudioProcessor::endNoteParameterGesture(int note, size_t parameterIndex)
+{
+    if (parameterIndex >= padHostParameterCount)
+        return;
+    const auto pad = std::find_if(magdrum::plugin::bossDr660PadLayout.begin(),
+        magdrum::plugin::bossDr660PadLayout.end(), [note](const auto& definition)
+        { return definition.midiNote == note; });
+    if (pad == magdrum::plugin::bossDr660PadLayout.end())
+        return;
+    const auto padIndex = static_cast<size_t>(std::distance(magdrum::plugin::bossDr660PadLayout.begin(), pad));
+    auto* parameter = padHostParameters[padIndex][parameterIndex];
+    if (parameter == nullptr || !activePadParameterGestures[padIndex][parameterIndex])
+        return;
+    activePadParameterGestures[padIndex][parameterIndex] = false;
+    parameter->endChangeGesture();
 }
 
 void MagDrumAudioProcessor::onPadHostParameterChanged(int note, size_t parameterIndex,

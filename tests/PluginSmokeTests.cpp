@@ -253,6 +253,22 @@ juce::AudioParameterFloat* findHostFloatParameter(MagDrumAudioProcessor& process
             return dynamic_cast<juce::AudioParameterFloat*>(parameter);
     return nullptr;
 }
+
+class ParameterGestureProbe final : public juce::AudioProcessorParameter::Listener
+{
+public:
+    void parameterValueChanged(int, float) override {}
+    void parameterGestureChanged(int, bool isStarting) override
+    {
+        if (isStarting)
+            ++starts;
+        else
+            ++ends;
+    }
+
+    int starts = 0;
+    int ends = 0;
+};
 }
 
 class MagDrumAudioProcessorEditorTestAccess
@@ -544,6 +560,31 @@ public:
             std::cerr << "Snare controls did not load that pad's independent sound settings.\n";
             return 3;
         }
+        return 0;
+    }
+
+    static int checksPadAutomationGesture(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.setNote(36);
+        auto* gain = findHostFloatParameter(editor.processor, "magdrum_pad_36_gain");
+        if (gain == nullptr || !editor.gainSlider.onDragStart || !editor.gainSlider.onDragEnd)
+            return 1;
+        ParameterGestureProbe gesture;
+        gain->addListener(&gesture);
+        editor.gainSlider.onDragStart();
+        editor.gainSlider.setValue(-3.5, juce::sendNotificationSync);
+        editor.gainSlider.onDragEnd();
+        gain->removeListener(&gesture);
+        if (gesture.starts != 1 || gesture.ends != 1
+            || std::abs(editor.processor.getNoteParameters(36).gainDb + 3.5f) > 0.05f)
+        {
+            std::cerr << "The Drum Machine slider did not record a complete Cubase automation gesture.\n";
+            return 2;
+        }
+        editor.gainSlider.setValue(-4.5, juce::dontSendNotification);
+        auto parameters = editor.processor.getNoteParameters(36);
+        parameters.gainDb = -4.5f;
+        editor.processor.setNoteParameters(36, parameters);
         return 0;
     }
 
@@ -1290,6 +1331,8 @@ int main(int argc, char** argv)
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
         const int independentPadCheck = MagDrumAudioProcessorEditorTestAccess::checksIndependentPadSoundControls(editor, editorProcessor);
         if (independentPadCheck != 0) return 65 + independentPadCheck;
+        const int automationGestureCheck = MagDrumAudioProcessorEditorTestAccess::checksPadAutomationGesture(editor);
+        if (automationGestureCheck != 0) return 330 + automationGestureCheck;
         const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
         if (folderButtonCheck != 0) return 44;
         const int sampleScanProgressCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleScanProgress(editor);
@@ -1505,6 +1548,88 @@ int main(int argc, char** argv)
         std::cerr << "Host-automated Kick gain did not produce the expected audio level.\n";
         return 263;
     }
+    ParameterGestureProbe dragGesture;
+    kickGainParameter->addListener(&dragGesture);
+    automatedPadProcessor.beginNoteParameterGesture(36, 0);
+    auto draggedKickParameters = automatedPadProcessor.getNoteParameters(36);
+    draggedKickParameters.gainDb = -15.0f;
+    automatedPadProcessor.setNoteParameters(36, draggedKickParameters);
+    if (dragGesture.starts != 1 || dragGesture.ends != 0)
+    {
+        std::cerr << "A pad-control drag must keep its host gesture open while values change.\n";
+        return 266;
+    }
+    automatedPadProcessor.endNoteParameterGesture(36, 0);
+    kickGainParameter->removeListener(&dragGesture);
+    if (dragGesture.starts != 1 || dragGesture.ends != 1)
+    {
+        std::cerr << "A pad-control drag did not close its host gesture.\n";
+        return 267;
+    }
+    auto* panParameter = findHostFloatParameter(automatedPadProcessor, "magdrum_pad_36_pan");
+    if (panParameter == nullptr) return 268;
+    ParameterGestureProbe singleEditGesture;
+    panParameter->addListener(&singleEditGesture);
+    draggedKickParameters = automatedPadProcessor.getNoteParameters(36);
+    draggedKickParameters.pan = 0.2f;
+    automatedPadProcessor.setNoteParameters(36, draggedKickParameters);
+    panParameter->removeListener(&singleEditGesture);
+    if (singleEditGesture.starts != 1 || singleEditGesture.ends != 1)
+    {
+        std::cerr << "A one-shot host parameter edit must be bracketed by a complete gesture.\n";
+        return 269;
+    }
+    struct HostAutomationProbe
+    {
+        const char* parameterSuffix;
+        float value;
+        float MagDrumAudioProcessor::NoteParameters::* field;
+    };
+    constexpr std::array<HostAutomationProbe, 24> hostAutomationProbes{{
+        {"gain", -6.0f, &MagDrumAudioProcessor::NoteParameters::gainDb},
+        {"pan", -0.35f, &MagDrumAudioProcessor::NoteParameters::pan},
+        {"tune", 7.0f, &MagDrumAudioProcessor::NoteParameters::tuneSemitones},
+        {"attack", 40.0f, &MagDrumAudioProcessor::NoteParameters::attackMs},
+        {"decay", 320.0f, &MagDrumAudioProcessor::NoteParameters::decayMs},
+        {"sustain", 0.55f, &MagDrumAudioProcessor::NoteParameters::sustainLevel},
+        {"release", 480.0f, &MagDrumAudioProcessor::NoteParameters::releaseMs},
+        {"filter_cutoff", 4321.0f, &MagDrumAudioProcessor::NoteParameters::filterCutoffHz},
+        {"filter_resonance", 3.4f, &MagDrumAudioProcessor::NoteParameters::filterResonance},
+        {"drive", 4.5f, &MagDrumAudioProcessor::NoteParameters::driveDb},
+        {"eq_low", -3.2f, &MagDrumAudioProcessor::NoteParameters::eqLowDb},
+        {"eq_mid", 2.3f, &MagDrumAudioProcessor::NoteParameters::eqMidDb},
+        {"eq_high", -1.4f, &MagDrumAudioProcessor::NoteParameters::eqHighDb},
+        {"sample_start", 0.2f, &MagDrumAudioProcessor::NoteParameters::sampleStart},
+        {"sample_end", 0.85f, &MagDrumAudioProcessor::NoteParameters::sampleEnd},
+        {"compressor_threshold", -18.0f, &MagDrumAudioProcessor::NoteParameters::compressorThresholdDb},
+        {"compressor_ratio", 5.5f, &MagDrumAudioProcessor::NoteParameters::compressorRatio},
+        {"compressor_attack", 25.0f, &MagDrumAudioProcessor::NoteParameters::compressorAttackMs},
+        {"compressor_release", 140.0f, &MagDrumAudioProcessor::NoteParameters::compressorReleaseMs},
+        {"compressor_makeup", 3.5f, &MagDrumAudioProcessor::NoteParameters::compressorMakeupDb},
+        {"phaser_rate", 1.75f, &MagDrumAudioProcessor::NoteParameters::phaserRateHz},
+        {"phaser_depth", 0.65f, &MagDrumAudioProcessor::NoteParameters::phaserDepth},
+        {"phaser_feedback", -0.25f, &MagDrumAudioProcessor::NoteParameters::phaserFeedback},
+        {"phaser_mix", 0.45f, &MagDrumAudioProcessor::NoteParameters::phaserMix}
+    }};
+    for (const auto& probe : hostAutomationProbes)
+    {
+        const auto parameterId = juce::String("magdrum_pad_36_") + probe.parameterSuffix;
+        auto* parameter = findHostFloatParameter(automatedPadProcessor, parameterId);
+        if (parameter == nullptr)
+        {
+            std::cerr << "Missing host automation parameter: " << parameterId << ".\n";
+            return 264;
+        }
+        parameter->setValueNotifyingHost(parameter->range.convertTo0to1(probe.value));
+    }
+    const auto automatedKickParameters = automatedPadProcessor.getNoteParameters(36);
+    for (const auto& probe : hostAutomationProbes)
+        if (std::abs(automatedKickParameters.*(probe.field) - probe.value) > 0.002f)
+        {
+            std::cerr << "Host automation parameter " << probe.parameterSuffix
+                      << " did not reach the matching Kick sound control.\n";
+            return 265;
+        }
     const auto sampleAssignments = processor.getAllSampleAssignments();
     if (sampleAssignments.size() != 1 || sampleAssignments.front().midiNote != 36
         || sampleAssignments.front().minimumVelocity != 1 || sampleAssignments.front().maximumVelocity != 127
