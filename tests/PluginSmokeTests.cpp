@@ -243,6 +243,16 @@ MagDrumAudioProcessor& makeTestProcessor()
     activeTestProcessors->push_back(std::move(processor));
     return result;
 }
+
+juce::AudioParameterFloat* findHostFloatParameter(MagDrumAudioProcessor& processor,
+                                                   const juce::String& parameterId)
+{
+    for (auto* parameter : processor.getParameters())
+        if (const auto* withId = dynamic_cast<const juce::AudioProcessorParameterWithID*>(parameter);
+            withId != nullptr && withId->paramID == parameterId)
+            return dynamic_cast<juce::AudioParameterFloat*>(parameter);
+    return nullptr;
+}
 }
 
 class MagDrumAudioProcessorEditorTestAccess
@@ -1452,7 +1462,49 @@ int main(int argc, char** argv)
     auto& processor = makeTestProcessor();
     if (processor.getNumPrograms() != 1 || processor.getCurrentProgram() != 0
         || processor.getProgramName(0) != "Default Kit") return 254;
+    auto& automatedPadProcessor = makeTestProcessor();
+    if (automatedPadProcessor.getParameters().size() != 16 * 24)
+    {
+        std::cerr << "Expected 384 host-automatable pad parameters, found "
+                  << automatedPadProcessor.getParameters().size() << ".\n";
+        return 257;
+    }
+    auto* kickGainParameter = findHostFloatParameter(automatedPadProcessor, "magdrum_pad_36_gain");
+    if (kickGainParameter == nullptr)
+    {
+        std::cerr << "The C1 Kick Gain parameter was not registered with the host.\n";
+        return 258;
+    }
+    kickGainParameter->setValueNotifyingHost(kickGainParameter->range.convertTo0to1(-12.0f));
+    if (std::abs(automatedPadProcessor.getNoteParameters(36).gainDb + 12.0f) > 0.001f)
+    {
+        std::cerr << "Host automation did not update the C1 Kick's audio parameter.\n";
+        return 259;
+    }
+    auto snareParameters = automatedPadProcessor.getNoteParameters(38);
+    snareParameters.gainDb = -8.0f;
+    automatedPadProcessor.setNoteParameters(38, snareParameters);
+    auto* snareGainParameter = findHostFloatParameter(automatedPadProcessor, "magdrum_pad_38_gain");
+    if (snareGainParameter == nullptr || std::abs(snareGainParameter->get() + 8.0f) > 0.001f
+        || std::abs(automatedPadProcessor.getNoteParameters(36).gainDb + 12.0f) > 0.001f)
+    {
+        std::cerr << "The editor-to-host parameter update or per-pad isolation failed.\n";
+        return 260;
+    }
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
+    auto& automationReference = makeTestProcessor();
+    if (!automationReference.loadSampleForNote(36, sample)
+        || !automatedPadProcessor.loadSampleForNote(36, sample)) return 262;
+    automationReference.prepareToPlay(48000.0, 128);
+    automatedPadProcessor.prepareToPlay(48000.0, 128);
+    const auto referenceAutomationPeak = renderPeak(automationReference, 36, 127);
+    const auto automatedKickPeak = renderPeak(automatedPadProcessor, 36, 127);
+    if (referenceAutomationPeak <= 0.0
+        || std::abs(automatedKickPeak / referenceAutomationPeak - std::pow(10.0, -12.0 / 20.0)) > 0.002)
+    {
+        std::cerr << "Host-automated Kick gain did not produce the expected audio level.\n";
+        return 263;
+    }
     const auto sampleAssignments = processor.getAllSampleAssignments();
     if (sampleAssignments.size() != 1 || sampleAssignments.front().midiNote != 36
         || sampleAssignments.front().minimumVelocity != 1 || sampleAssignments.front().maximumVelocity != 127
@@ -1531,7 +1583,12 @@ int main(int argc, char** argv)
         if(child->hasTagName("EVENT"))++restoredEventCount;
         else if(child->hasTagName("META"))++restoredMetadataCount;
     }
-    if(restoredEditorState->getIntAttribute("bars",0)!=2||restoredEventCount!=3||restoredMetadataCount!=2)return 40;
+    if(restoredEditorState->getIntAttribute("bars",0)!=2||restoredEventCount!=3||restoredMetadataCount!=2)
+    {
+        std::cerr << "Sequencer state restore mismatch: bars=" << restoredEditorState->getIntAttribute("bars",0)
+                  << ", events=" << restoredEventCount << ", metadata=" << restoredMetadataCount << ".\n";
+        return 40;
+    }
     restored.prepareToPlay(44100.0, 128);
     const double fullVelocityPeak = renderPeak(restored, 36, 127);
     auto& lowVelocity = makeTestProcessor();
@@ -1752,6 +1809,8 @@ int main(int argc, char** argv)
     controlStateRestored.setStateInformation(controlState.getData(), static_cast<int>(controlState.getSize()));
     if (!waitForSamplePath(controlStateRestored, 36, sample.getFullPathName())) return 24;
     const auto restoredParameters = controlStateRestored.getNoteParameters(36);
+    const auto* restoredGainParameter = findHostFloatParameter(controlStateRestored, "magdrum_pad_36_gain");
+    if (restoredGainParameter == nullptr || std::abs(restoredGainParameter->get() + 6.0f) > 0.001f) return 261;
     if (std::abs(restoredParameters.gainDb + 6.0f) > 0.001f
         || std::abs(restoredParameters.pan + 1.0f) > 0.001f
         || std::abs(restoredParameters.tuneSemitones - 12.0f) > 0.001f
@@ -1794,17 +1853,35 @@ int main(int argc, char** argv)
     const auto finiteParameters = controlStateSource.getNoteParameters(38);
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
         || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
-    if (finiteParameters.attackMs != 0.0f || finiteParameters.decayMs != 0.0f
-        || finiteParameters.sustainLevel != 1.0f || finiteParameters.releaseMs != 0.0f
-        || finiteParameters.filterCutoffHz != 20000.0f || finiteParameters.driveDb != 0.0f
-        || finiteParameters.eqLowDb != 0.0f || finiteParameters.eqMidDb != 0.0f
-        || finiteParameters.eqHighDb != 0.0f || finiteParameters.sampleStart != 0.0f
-        || finiteParameters.sampleEnd != 1.0f || finiteParameters.compressorThresholdDb != 0.0f
-        || finiteParameters.compressorRatio != 1.0f || finiteParameters.compressorAttackMs != 10.0f
-        || finiteParameters.compressorReleaseMs != 100.0f || finiteParameters.compressorMakeupDb != 0.0f
-        || finiteParameters.phaserRateHz != 0.0f || finiteParameters.phaserDepth != 0.0f
-        || finiteParameters.phaserFeedback != 0.0f || finiteParameters.phaserMix != 0.0f
-        || std::abs(finiteParameters.filterResonance - 0.707f) > 0.001f) return 40;
+    const auto differs = [](float actual, float expected)
+    { return std::abs(actual - expected) > 0.001f; };
+    if (differs(finiteParameters.attackMs, 0.0f) || differs(finiteParameters.decayMs, 0.0f)
+        || differs(finiteParameters.sustainLevel, 1.0f) || differs(finiteParameters.releaseMs, 0.0f)
+        || differs(finiteParameters.filterCutoffHz, 20000.0f) || differs(finiteParameters.driveDb, 0.0f)
+        || differs(finiteParameters.eqLowDb, 0.0f) || differs(finiteParameters.eqMidDb, 0.0f)
+        || differs(finiteParameters.eqHighDb, 0.0f) || differs(finiteParameters.sampleStart, 0.0f)
+        || differs(finiteParameters.sampleEnd, 1.0f) || differs(finiteParameters.compressorThresholdDb, 0.0f)
+        || differs(finiteParameters.compressorRatio, 1.0f) || differs(finiteParameters.compressorAttackMs, 10.0f)
+        || differs(finiteParameters.compressorReleaseMs, 100.0f) || differs(finiteParameters.compressorMakeupDb, 0.0f)
+        || differs(finiteParameters.phaserRateHz, 0.0f) || differs(finiteParameters.phaserDepth, 0.0f)
+        || differs(finiteParameters.phaserFeedback, 0.0f) || differs(finiteParameters.phaserMix, 0.0f)
+        || std::abs(finiteParameters.filterResonance - 0.707f) > 0.001f)
+    {
+        std::cerr << "Non-finite parameter normalization mismatch: gain=" << finiteParameters.gainDb
+                  << ", pan=" << finiteParameters.pan << ", tune=" << finiteParameters.tuneSemitones
+                  << ", attack=" << finiteParameters.attackMs << ", decay=" << finiteParameters.decayMs
+                  << ", sustain=" << finiteParameters.sustainLevel << ", release=" << finiteParameters.releaseMs
+                  << ", cutoff=" << finiteParameters.filterCutoffHz << ", resonance=" << finiteParameters.filterResonance
+                  << ", drive=" << finiteParameters.driveDb << ", eq=" << finiteParameters.eqLowDb << '/'
+                  << finiteParameters.eqMidDb << '/' << finiteParameters.eqHighDb << ", trim="
+                  << finiteParameters.sampleStart << '/' << finiteParameters.sampleEnd << ", comp="
+                  << finiteParameters.compressorThresholdDb << '/' << finiteParameters.compressorRatio << '/'
+                  << finiteParameters.compressorAttackMs << '/' << finiteParameters.compressorReleaseMs << '/'
+                  << finiteParameters.compressorMakeupDb << ", phaser=" << finiteParameters.phaserRateHz << '/'
+                  << finiteParameters.phaserDepth << '/' << finiteParameters.phaserFeedback << '/'
+                  << finiteParameters.phaserMix << ".\n";
+        return 40;
+    }
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
