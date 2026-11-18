@@ -221,11 +221,11 @@ private:
     juce::Label padMixHeading, padShapeHeading, padEqHeading, padFxHeading;
     juce::Rectangle<int> drumPadTrayBounds, drumEditorPanelBounds, drumWaveformPanelBounds;
     juce::Rectangle<int> padMixPanelBounds, padShapePanelBounds, padEqPanelBounds, padFxPanelBounds;
-    juce::Label gainLabel, panLabel, tuneLabel, driveLabel, attackLabel, decayLabel, sustainLabel, releaseLabel, filterCutoffLabel, eqLowLabel, eqMidLabel, eqHighLabel;
+    juce::Label gainLabel, panLabel, tuneLabel, driveLabel, attackLabel, decayLabel, sustainLabel, releaseLabel, filterCutoffLabel, filterResonanceLabel, eqLowLabel, eqMidLabel, eqHighLabel;
     juce::Label compressorThresholdLabel, compressorRatioLabel, compressorAttackLabel, compressorReleaseLabel, compressorMakeupLabel;
     juce::Label phaserRateLabel, phaserDepthLabel, phaserFeedbackLabel, phaserMixLabel;
     juce::TextButton compressorTab, phaserTab;
-    juce::Slider gainSlider, panSlider, tuneSlider, driveSlider, attackSlider, decaySlider, sustainSlider, releaseSlider, filterCutoffSlider, eqLowSlider, eqMidSlider, eqHighSlider;
+    juce::Slider gainSlider, panSlider, tuneSlider, driveSlider, attackSlider, decaySlider, sustainSlider, releaseSlider, filterCutoffSlider, filterResonanceSlider, eqLowSlider, eqMidSlider, eqHighSlider;
     juce::Slider compressorThresholdSlider, compressorRatioSlider, compressorAttackSlider, compressorReleaseSlider, compressorMakeupSlider;
     juce::Slider phaserRateSlider, phaserDepthSlider, phaserFeedbackSlider, phaserMixSlider;
     bool showPhaserControls = false;

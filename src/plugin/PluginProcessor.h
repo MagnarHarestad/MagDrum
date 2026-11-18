@@ -60,6 +60,7 @@ public:
         float phaserDepth = 0.0f;
         float phaserFeedback = 0.0f;
         float phaserMix = 0.0f;
+        float filterResonance = 0.707f;
     };
 
     MagDrumAudioProcessor();
@@ -148,9 +149,10 @@ private:
         double decaySamples = 0.0;
         float sustainLevel = 1.0f;
         double releaseSamples = 0.0;
-        float lowPassCoefficient = 0.0f;
-        float lowPassStateLeft = 0.0f;
-        float lowPassStateRight = 0.0f;
+        float filterB0 = 1.0f, filterB1 = 0.0f, filterB2 = 0.0f;
+        float filterA1 = 0.0f, filterA2 = 0.0f;
+        float filterState1Left = 0.0f, filterState2Left = 0.0f;
+        float filterState1Right = 0.0f, filterState2Right = 0.0f;
         float driveGain = 1.0f;
         float eqLowGain = 1.0f, eqMidGain = 1.0f, eqHighGain = 1.0f;
         float eqLowCoefficient = 0.0f, eqHighCoefficient = 0.0f;
@@ -192,6 +194,7 @@ private:
     std::array<std::atomic<float>, 128> noteSustainLevel{};
     std::array<std::atomic<float>, 128> noteReleaseMs{};
     std::array<std::atomic<float>, 128> noteFilterCutoffHz{};
+    std::array<std::atomic<float>, 128> noteFilterResonance{};
     std::array<std::atomic<float>, 128> noteDriveDb{};
     std::array<std::atomic<float>, 128> noteEqLowDb{}, noteEqMidDb{}, noteEqHighDb{};
     std::array<std::atomic<float>, 128> noteSampleStart{}, noteSampleEnd{};

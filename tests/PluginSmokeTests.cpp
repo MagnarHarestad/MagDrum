@@ -108,12 +108,12 @@ public:
     PositionInfo position;
 };
 
-bool writeFixture(const juce::File& file, float amplitude = 0.25f, int sampleCount = 960)
+bool writeFixture(const juce::File& file, float amplitude = 0.25f, int sampleCount = 960, double frequencyHz = 220.0)
 {
     constexpr double sampleRate = 48000.0;
     juce::AudioBuffer<float> audio(1, sampleCount);
     for (int sample = 0; sample < audio.getNumSamples(); ++sample)
-        audio.setSample(0, sample, static_cast<float>(amplitude * std::sin(2.0 * juce::MathConstants<double>::pi * 220.0 * sample / sampleRate)));
+        audio.setSample(0, sample, static_cast<float>(amplitude * std::sin(2.0 * juce::MathConstants<double>::pi * frequencyHz * sample / sampleRate)));
 
     juce::WavAudioFormat format;
     std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());
@@ -596,7 +596,8 @@ public:
                             {&editor.padShapeHeading, &editor.attackLabel, &editor.attackSlider,
                              &editor.decayLabel, &editor.decaySlider, &editor.sustainLabel,
                              &editor.sustainSlider, &editor.releaseLabel, &editor.releaseSlider,
-                             &editor.filterCutoffLabel, &editor.filterCutoffSlider})
+                             &editor.filterCutoffLabel, &editor.filterCutoffSlider,
+                             &editor.filterResonanceLabel, &editor.filterResonanceSlider})
             || !controlsFit(editor.padEqPanelBounds,
                             {&editor.padEqHeading, &editor.eqLowLabel, &editor.eqLowSlider,
                              &editor.eqMidLabel, &editor.eqMidSlider,
@@ -936,7 +937,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 32> checks{{
+            const std::array<LabelCheck, 34> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -956,6 +957,9 @@ public:
                 {"pad sustain control", editor.sustainLabel.getText(), magdrum::ui::localisedText("PAD SUSTAIN")},
                 {"pad release control", editor.releaseLabel.getText(), magdrum::ui::localisedText("PAD RELEASE")},
                 {"pad filter control", editor.filterCutoffLabel.getText(), magdrum::ui::localisedText("FILTER CUTOFF")},
+                {"pad filter resonance", editor.filterResonanceLabel.getText(), magdrum::ui::localisedText("FILTER Q")},
+                {"pad filter resonance tooltip", editor.filterResonanceSlider.getTooltip(),
+                    magdrum::ui::localisedText("Filter Q controls resonance. Higher Q emphasizes frequencies near the cutoff.")},
                 {"pad drive control", editor.driveLabel.getText(), magdrum::ui::localisedText("PAD DRIVE")},
                 {"pad low EQ control", editor.eqLowLabel.getText(), magdrum::ui::localisedText("EQ LOW")},
                 {"pad mid EQ control", editor.eqMidLabel.getText(), magdrum::ui::localisedText("EQ MID")},
@@ -1254,6 +1258,8 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+    const auto resonantFilterSample = root.getChildFile("filter-resonance.wav");
+    if (!writeFixture(resonantFilterSample, 0.15f, 48000, 4000.0)) return 2;
     const auto trimSample = root.getChildFile("trim-impulses.wav");
     if (!writeTrimImpulseFixture(trimSample)) return 2;
     const auto comparisonSample = root.getChildFile("comparison.wav");
@@ -1700,6 +1706,7 @@ int main(int argc, char** argv)
     configuredEffects.phaserDepth = 0.65f;
     configuredEffects.phaserFeedback = 0.3f;
     configuredEffects.phaserMix = 0.8f;
+    configuredEffects.filterResonance = 4.75f;
     controlStateSource.setNoteParameters(36, configuredEffects);
     auto extremeEffects = controlStateSource.getNoteParameters(37);
     extremeEffects.compressorThresholdDb = -100.0f;
@@ -1711,6 +1718,7 @@ int main(int argc, char** argv)
     extremeEffects.phaserDepth = 2.0f;
     extremeEffects.phaserFeedback = -2.0f;
     extremeEffects.phaserMix = 2.0f;
+    extremeEffects.filterResonance = 99.0f;
     controlStateSource.setNoteParameters(37, extremeEffects);
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
@@ -1735,7 +1743,8 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.phaserRateHz - 8.0f) > 0.001f
         || std::abs(clampedParameters.phaserDepth - 1.0f) > 0.001f
         || std::abs(clampedParameters.phaserFeedback + 0.8f) > 0.001f
-        || std::abs(clampedParameters.phaserMix - 1.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.phaserMix - 1.0f) > 0.001f
+        || std::abs(clampedParameters.filterResonance - 10.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -1765,6 +1774,7 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.phaserDepth - 0.65f) > 0.001f
         || std::abs(restoredParameters.phaserFeedback - 0.3f) > 0.001f
         || std::abs(restoredParameters.phaserMix - 0.8f) > 0.001f
+        || std::abs(restoredParameters.filterResonance - 4.75f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
@@ -1792,7 +1802,8 @@ int main(int argc, char** argv)
         || finiteParameters.compressorRatio != 1.0f || finiteParameters.compressorAttackMs != 10.0f
         || finiteParameters.compressorReleaseMs != 100.0f || finiteParameters.compressorMakeupDb != 0.0f
         || finiteParameters.phaserRateHz != 0.0f || finiteParameters.phaserDepth != 0.0f
-        || finiteParameters.phaserFeedback != 0.0f || finiteParameters.phaserMix != 0.0f) return 40;
+        || finiteParameters.phaserFeedback != 0.0f || finiteParameters.phaserMix != 0.0f
+        || std::abs(finiteParameters.filterResonance - 0.707f) > 0.001f) return 40;
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
@@ -1874,6 +1885,34 @@ int main(int argc, char** argv)
     const double unfilteredEqPeak = renderPeak(eqReference, 36, 127);
     const double lowReducedPeak = renderPeak(eqLowReduced, 36, 127);
     if (unfilteredEqPeak < 0.05 || lowReducedPeak >= unfilteredEqPeak * 0.8) return 54;
+
+    auto& neutralFilter = makeTestProcessor();
+    auto& resonantFilter = makeTestProcessor();
+    if (!neutralFilter.loadSampleForNote(36, resonantFilterSample)
+        || !resonantFilter.loadSampleForNote(36, resonantFilterSample)) return 75;
+    neutralFilter.prepareToPlay(48000.0, 128);
+    resonantFilter.prepareToPlay(48000.0, 128);
+    auto neutralFilterParameters = neutralFilter.getNoteParameters(36);
+    neutralFilterParameters.filterCutoffHz = 4000.0f;
+    neutralFilterParameters.filterResonance = 0.707f;
+    neutralFilter.setNoteParameters(36, neutralFilterParameters);
+    auto resonantFilterParameters = resonantFilter.getNoteParameters(36);
+    resonantFilterParameters.filterCutoffHz = 4000.0f;
+    resonantFilterParameters.filterResonance = 8.0f;
+    resonantFilter.setNoteParameters(36, resonantFilterParameters);
+    const auto neutralFilterSignal = renderSamples(neutralFilter, 36, 127, 48000);
+    const auto resonantFilterSignal = renderSamples(resonantFilter, 36, 127, 48000);
+    double neutralFilterEnergy = 0.0, resonantFilterEnergy = 0.0;
+    for (size_t index = 0; index < neutralFilterSignal.size(); ++index)
+    {
+        neutralFilterEnergy += neutralFilterSignal[index] * neutralFilterSignal[index];
+        resonantFilterEnergy += resonantFilterSignal[index] * resonantFilterSignal[index];
+    }
+    if (neutralFilterEnergy <= 0.0 || resonantFilterEnergy < neutralFilterEnergy * 16.0)
+    {
+        std::cerr << "Per-pad filter resonance did not emphasize frequencies around the cutoff.\n";
+        return 76;
+    }
 
     auto& compressorReference = makeTestProcessor();
     auto& compressedPad = makeTestProcessor();

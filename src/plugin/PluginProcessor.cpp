@@ -50,6 +50,7 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         noteSustainLevel[note].store(1.0f, std::memory_order_relaxed);
         noteReleaseMs[note].store(0.0f, std::memory_order_relaxed);
         noteFilterCutoffHz[note].store(20000.0f, std::memory_order_relaxed);
+        noteFilterResonance[note].store(0.707f, std::memory_order_relaxed);
         noteDriveDb[note].store(0.0f, std::memory_order_relaxed);
         noteEqLowDb[note].store(0.0f, std::memory_order_relaxed);
         noteEqMidDb[note].store(0.0f, std::memory_order_relaxed);
@@ -405,7 +406,8 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             notePhaserRateHz[index].load(std::memory_order_relaxed),
             notePhaserDepth[index].load(std::memory_order_relaxed),
             notePhaserFeedback[index].load(std::memory_order_relaxed),
-            notePhaserMix[index].load(std::memory_order_relaxed)};
+            notePhaserMix[index].load(std::memory_order_relaxed),
+            noteFilterResonance[index].load(std::memory_order_relaxed)};
 }
 
 void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters)
@@ -424,6 +426,8 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
     noteReleaseMs[index].store(juce::jlimit(0.0f, 5000.0f, finiteOrZero(parameters.releaseMs)), std::memory_order_relaxed);
     const float cutoff = std::isfinite(parameters.filterCutoffHz) ? parameters.filterCutoffHz : 20000.0f;
     noteFilterCutoffHz[index].store(juce::jlimit(20.0f, 20000.0f, cutoff), std::memory_order_relaxed);
+    noteFilterResonance[index].store(juce::jlimit(0.5f, 10.0f,
+        std::isfinite(parameters.filterResonance) ? parameters.filterResonance : 0.707f), std::memory_order_relaxed);
     noteDriveDb[index].store(juce::jlimit(0.0f, 24.0f, finiteOrZero(parameters.driveDb)), std::memory_order_relaxed);
     noteEqLowDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqLowDb)), std::memory_order_relaxed);
     noteEqMidDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqMidDb)), std::memory_order_relaxed);
@@ -502,8 +506,23 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         voice.sustainLevel = parameters.sustainLevel;
         voice.releaseSamples = parameters.releaseMs * 0.001 * outputSampleRate;
         const float cutoff = juce::jmin(parameters.filterCutoffHz, static_cast<float>(outputSampleRate * 0.49));
-        voice.lowPassCoefficient = cutoff >= outputSampleRate * 0.49
-            ? 0.0f : std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / static_cast<float>(outputSampleRate));
+        if (parameters.filterCutoffHz < 19999.0f && cutoff < outputSampleRate * 0.45)
+        {
+            const float omega = 2.0f * juce::MathConstants<float>::pi * cutoff / static_cast<float>(outputSampleRate);
+            const float cosine = std::cos(omega);
+            const float alpha = std::sin(omega) / (2.0f * juce::jlimit(0.5f, 10.0f, parameters.filterResonance));
+            const float inverseA0 = 1.0f / (1.0f + alpha);
+            voice.filterB0 = (1.0f - cosine) * 0.5f * inverseA0;
+            voice.filterB1 = (1.0f - cosine) * inverseA0;
+            voice.filterB2 = voice.filterB0;
+            voice.filterA1 = -2.0f * cosine * inverseA0;
+            voice.filterA2 = (1.0f - alpha) * inverseA0;
+        }
+        else
+        {
+            voice.filterB0 = 1.0f;
+            voice.filterB1 = voice.filterB2 = voice.filterA1 = voice.filterA2 = 0.0f;
+        }
         voice.driveGain = juce::Decibels::decibelsToGain(parameters.driveDb);
         voice.eqLowGain = juce::Decibels::decibelsToGain(parameters.eqLowDb);
         voice.eqMidGain = juce::Decibels::decibelsToGain(parameters.eqMidDb);
@@ -787,11 +806,18 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             const float equalizedRight = voice.eqLowStateRight * voice.eqLowGain
                 + (drivenRight - voice.eqLowStateRight - (drivenRight - voice.eqHighStateRight)) * voice.eqMidGain
                 + (drivenRight - voice.eqHighStateRight) * voice.eqHighGain;
-            const float filterMix = 1.0f - voice.lowPassCoefficient;
-            voice.lowPassStateLeft += filterMix * (equalizedLeft - voice.lowPassStateLeft);
-            voice.lowPassStateRight += filterMix * (equalizedRight - voice.lowPassStateRight);
-            float processedLeft = voice.lowPassStateLeft;
-            float processedRight = voice.lowPassStateRight;
+            const auto filterSample = [](float input, float b0, float b1, float b2, float a1, float a2,
+                                         float& state1, float& state2)
+            {
+                const float output = b0 * input + state1;
+                state1 = b1 * input - a1 * output + state2;
+                state2 = b2 * input - a2 * output;
+                return output;
+            };
+            float processedLeft = filterSample(equalizedLeft, voice.filterB0, voice.filterB1, voice.filterB2,
+                voice.filterA1, voice.filterA2, voice.filterState1Left, voice.filterState2Left);
+            float processedRight = filterSample(equalizedRight, voice.filterB0, voice.filterB1, voice.filterB2,
+                voice.filterA1, voice.filterA2, voice.filterState1Right, voice.filterState2Right);
             if (voice.compressorRatio > 1.001f || voice.compressorMakeupGain > 1.0001f)
             {
                 const float detector = juce::jmax(std::abs(processedLeft), std::abs(processedRight));
@@ -862,6 +888,7 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 || std::abs(parameters.tuneSemitones) > 0.000001f || std::abs(parameters.attackMs) > 0.000001f
                 || std::abs(parameters.decayMs) > 0.000001f || std::abs(parameters.sustainLevel - 1.0f) > 0.000001f
                 || std::abs(parameters.releaseMs) > 0.000001f || std::abs(parameters.filterCutoffHz - 20000.0f) > 0.001f
+                || std::abs(parameters.filterResonance - 0.707f) > 0.001f
                 || std::abs(parameters.driveDb) > 0.000001f
                 || std::abs(parameters.eqLowDb) > 0.000001f || std::abs(parameters.eqMidDb) > 0.000001f
                 || std::abs(parameters.eqHighDb) > 0.000001f
@@ -884,6 +911,7 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("sustainLevel", parameters.sustainLevel);
                 savedParameters->setAttribute("releaseMs", parameters.releaseMs);
                 savedParameters->setAttribute("filterCutoffHz", parameters.filterCutoffHz);
+                savedParameters->setAttribute("filterResonance", parameters.filterResonance);
                 savedParameters->setAttribute("driveDb", parameters.driveDb);
                 savedParameters->setAttribute("eqLowDb", parameters.eqLowDb);
                 savedParameters->setAttribute("eqMidDb", parameters.eqMidDb);
@@ -983,7 +1011,8 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("phaserRateHz", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("phaserDepth", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("phaserFeedback", 0.0)),
-                    static_cast<float>(child->getDoubleAttribute("phaserMix", 0.0))};
+                    static_cast<float>(child->getDoubleAttribute("phaserMix", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("filterResonance", 0.707))};
             continue;
         }
         if (!child->hasTagName("SAMPLE_LAYER"))

@@ -1471,6 +1471,10 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     configurePadControl(sustainSlider, sustainLabel, "PAD SUSTAIN", 0.0, 100.0, 1.0, "%");
     configurePadControl(releaseSlider, releaseLabel, "PAD RELEASE", 0.0, 5000.0, 1.0, " ms");
     configurePadControl(filterCutoffSlider, filterCutoffLabel, "FILTER CUTOFF", 20.0, 20000.0, 1.0, " Hz");
+    configurePadControl(filterResonanceSlider, filterResonanceLabel, "FILTER Q", 0.5, 10.0, 0.01, {});
+    filterResonanceSlider.setTooltip(magdrum::ui::localisedText(
+        "Filter Q controls resonance. Higher Q emphasizes frequencies near the cutoff."));
+    filterResonanceSlider.setSkewFactorFromMidPoint(2.0);
     configurePadControl(eqLowSlider, eqLowLabel, "EQ LOW", -18.0, 18.0, 0.1, " dB");
     configurePadControl(eqMidSlider, eqMidLabel, "EQ MID", -18.0, 18.0, 0.1, " dB");
     configurePadControl(eqHighSlider, eqHighLabel, "EQ HIGH", -18.0, 18.0, 0.1, " dB");
@@ -1631,6 +1635,14 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         if (updatingPadControls) return;
         auto parameters = processor.getNoteParameters(selectedNote);
         parameters.filterCutoffHz = static_cast<float>(filterCutoffSlider.getValue());
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    filterResonanceSlider.onValueChange = [this]
+    {
+        if (updatingPadControls) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.filterResonance = static_cast<float>(filterResonanceSlider.getValue());
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
     };
@@ -1839,6 +1851,8 @@ void MagDrumAudioProcessorEditor::resized()
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
     for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    filterResonanceLabel.setVisible(page==1);
+    filterResonanceSlider.setVisible(page==1);
     for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel})label->setVisible(page==1&&!showPhaserControls);
     for(auto* label:{&phaserRateLabel,&phaserDepthLabel,&phaserFeedbackLabel,&phaserMixLabel})label->setVisible(page==1&&showPhaserControls);
     for(auto* slider:{&compressorThresholdSlider,&compressorRatioSlider,&compressorAttackSlider,&compressorReleaseSlider,&compressorMakeupSlider})slider->setVisible(page==1&&!showPhaserControls);
@@ -1930,10 +1944,11 @@ void MagDrumAudioProcessorEditor::resized()
         auto shapePanel = padShapePanelBounds.reduced(5, 3);
         padShapeHeading.setBounds(shapePanel.removeFromTop(15));
         controls=shapePanel.removeFromTop(controlGroupHeight - 21);
-        const int shapeControlWidth=controls.getWidth()/5;
-        const std::array<std::pair<juce::Label*,juce::Slider*>,5> padShapeControls{{
+        const int shapeControlWidth=controls.getWidth()/6;
+        const std::array<std::pair<juce::Label*,juce::Slider*>,6> padShapeControls{{
             {&attackLabel,&attackSlider},{&decayLabel,&decaySlider},{&sustainLabel,&sustainSlider},
-            {&releaseLabel,&releaseSlider},{&filterCutoffLabel,&filterCutoffSlider}}};
+            {&releaseLabel,&releaseSlider},{&filterCutoffLabel,&filterCutoffSlider},
+            {&filterResonanceLabel,&filterResonanceSlider}}};
         for(size_t index=0;index<padShapeControls.size();++index)
         {
             auto column=controls.removeFromLeft(index+1==padShapeControls.size()?controls.getWidth():shapeControlWidth);
@@ -2122,6 +2137,9 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     sustainLabel.setText(magdrum::ui::localisedText("PAD SUSTAIN"),juce::dontSendNotification);
     releaseLabel.setText(magdrum::ui::localisedText("PAD RELEASE"),juce::dontSendNotification);
     filterCutoffLabel.setText(magdrum::ui::localisedText("FILTER CUTOFF"),juce::dontSendNotification);
+    filterResonanceLabel.setText(magdrum::ui::localisedText("FILTER Q"),juce::dontSendNotification);
+    filterResonanceSlider.setTooltip(magdrum::ui::localisedText(
+        "Filter Q controls resonance. Higher Q emphasizes frequencies near the cutoff."));
     eqLowLabel.setText(magdrum::ui::localisedText("EQ LOW"),juce::dontSendNotification);
     eqMidLabel.setText(magdrum::ui::localisedText("EQ MID"),juce::dontSendNotification);
     eqHighLabel.setText(magdrum::ui::localisedText("EQ HIGH"),juce::dontSendNotification);
@@ -4136,6 +4154,7 @@ void MagDrumAudioProcessorEditor::setNote(int note)
     sustainSlider.setValue(parameters.sustainLevel * 100.0f,juce::dontSendNotification);
     releaseSlider.setValue(parameters.releaseMs,juce::dontSendNotification);
     filterCutoffSlider.setValue(parameters.filterCutoffHz,juce::dontSendNotification);
+    filterResonanceSlider.setValue(parameters.filterResonance,juce::dontSendNotification);
     eqLowSlider.setValue(parameters.eqLowDb,juce::dontSendNotification);
     eqMidSlider.setValue(parameters.eqMidDb,juce::dontSendNotification);
     eqHighSlider.setValue(parameters.eqHighDb,juce::dontSendNotification);
