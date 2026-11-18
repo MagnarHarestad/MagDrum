@@ -400,6 +400,48 @@ public:
             std::cerr << "Plugin-folder chooser is hidden in Plugin Scanner.\n";
             return 2;
         }
+        editor.pluginInventoryScanRunning = true;
+        editor.resized();
+        if (!editor.pluginInventoryProgress.isVisible()
+            || !editor.getLocalBounds().contains(editor.pluginInventoryProgress.getBounds())
+            || editor.pluginInventoryProgress.getX() < editor.scanPluginInventoryButton.getRight()
+            || editor.pluginInventoryProgress.getWidth() < 100)
+        {
+            std::cerr << "Instrument-scan progress is missing or outside the scanner toolbar.\n";
+            return 4;
+        }
+        editor.pluginInventoryProgressFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("magdrum-vst3-progress-test-" + juce::Uuid().toString() + ".json");
+        editor.pluginInventoryProgressFile.replaceWithText("{\"completed\":40,\"total\":100}");
+        editor.pollPluginInventoryProgress();
+        if (std::abs(editor.pluginInventoryProgressValue - 0.4) > 0.001
+            || !editor.status.getText().contains("40%"))
+        {
+            std::cerr << "Instrument-scan progress did not report its completion percentage.\n";
+            editor.pluginInventoryProgressFile.deleteFile();
+            editor.pluginInventoryProgressFile = {};
+            editor.pluginInventoryScanRunning = false;
+            return 5;
+        }
+        editor.pluginInventoryProgressFile.replaceWithText("{\"completed\":150,\"total\":100}");
+        editor.pollPluginInventoryProgress();
+        if (std::abs(editor.pluginInventoryProgressValue - 1.0) > 0.001)
+        {
+            std::cerr << "Instrument-scan progress did not clamp at 100 percent.\n";
+            editor.pluginInventoryProgressFile.deleteFile();
+            editor.pluginInventoryProgressFile = {};
+            editor.pluginInventoryScanRunning = false;
+            return 6;
+        }
+        editor.pluginInventoryProgressFile.deleteFile();
+        editor.pluginInventoryProgressFile = {};
+        editor.pluginInventoryScanRunning = false;
+        editor.resized();
+        if (editor.pluginInventoryProgress.isVisible())
+        {
+            std::cerr << "Instrument-scan progress stayed visible after the scan stopped.\n";
+            return 7;
+        }
         editor.buttonClicked(&editor.libraryTab);
         if (editor.choosePluginFolderButton.isVisible())
         {

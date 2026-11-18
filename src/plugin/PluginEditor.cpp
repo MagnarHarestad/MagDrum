@@ -1692,6 +1692,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     pluginProgramSelect.onChange=[this]{if(pluginProgramSelect.getSelectedId()>0)pluginPresetKitName.setText(pluginProgramSelect.getText(),juce::dontSendNotification);importPluginProgramButton.setEnabled(pluginProgramSelect.getSelectedId()>0&&!pluginPresetImportRunning);};addAndMakeVisible(pluginProgramSelect);
     refreshPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Refresh instruments"));refreshPluginInventoryButton.addListener(this);addAndMakeVisible(refreshPluginInventoryButton);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders"));scanPluginInventoryButton.addListener(this);addAndMakeVisible(scanPluginInventoryButton);
+    pluginInventoryProgress.setTextToDisplay(juce::String{});pluginInventoryProgress.setPercentageDisplay(true);pluginInventoryProgress.setColour(juce::ProgressBar::foregroundColourId,Palette::Accent);pluginInventoryProgress.setColour(juce::ProgressBar::backgroundColourId,Palette::Panel);addAndMakeVisible(pluginInventoryProgress);
     choosePluginFolderButton.setButtonText(magdrum::ui::localisedText("Choose VST3 folder"));choosePluginFolderButton.addListener(this);addAndMakeVisible(choosePluginFolderButton);
     pluginPresetKitName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Preset kit name"),Palette::Muted);addAndMakeVisible(pluginPresetKitName);
     choosePluginPresetButton.setButtonText(magdrum::ui::localisedText("Choose VST3 preset"));choosePluginPresetButton.addListener(this);addAndMakeVisible(choosePluginPresetButton);
@@ -1790,6 +1791,7 @@ void MagDrumAudioProcessorEditor::resized()
     for(auto* button:{&refreshPluginInventoryButton,&scanPluginInventoryButton,&choosePluginFolderButton,&openPluginManagerButton,&choosePluginPresetButton,&importPluginPresetButton,&scanPluginProgramsButton,&importPluginProgramButton,&scanPluginNotesButton,&cancelPluginNotesButton})button->setVisible(hasPluginScannerPage&&page==4);
     sampleScanProgress.setVisible(page==0&&scanning);
     sampleScanProgressLabel.setVisible(page==0&&scanning);
+    pluginInventoryProgress.setVisible(hasPluginScannerPage&&page==4&&pluginInventoryScanRunning);
     if(page==0)
     {
         auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(225));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);featureFilter.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);sortFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);confidenceFilter.setBounds(controls.removeFromLeft(125));controls.removeFromLeft(6);searchButton.setBounds(controls.removeFromLeft(78));controls.removeFromLeft(6);previewButton.setBounds(controls.removeFromLeft(78));controls.removeFromLeft(6);stopPreviewButton.setBounds(controls.removeFromLeft(64));
@@ -1932,6 +1934,7 @@ void MagDrumAudioProcessorEditor::resized()
         refreshPluginInventoryButton.setBounds(row.removeFromLeft(142));
         row.removeFromLeft(6);
         scanPluginInventoryButton.setBounds(row.removeFromLeft(155));
+        pluginInventoryProgress.setBounds(row.reduced(8, 11));
         if (compactPluginHeader)
         {
             bounds.removeFromTop(6);
@@ -2578,6 +2581,8 @@ void MagDrumAudioProcessorEditor::startPluginInventoryScan(const juce::File& add
     }
     pluginInventoryScanCancellation = std::make_shared<std::atomic<bool>>(false);
     pluginInventoryScanRunning = true;
+    pluginInventoryProgressValue = -1.0;
+    pluginInventoryProgress.repaint();
     pluginInventoryProgressFile = getMagDrumDataDirectory().getChildFile(
         "vst3-scan-progress-" + juce::Uuid().toString() + ".json");
     choosePluginFolderButton.setEnabled(false);
@@ -2603,6 +2608,7 @@ void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
             if (total > 0)
             {
                 const int percent = juce::jlimit(0, 100, juce::roundToInt(100.0 * completed / total));
+                pluginInventoryProgressValue = static_cast<double>(percent) / 100.0;
                 status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…") + " "
                     + juce::String(percent) + "% (" + juce::String(completed) + "/"
                     + juce::String(total) + ")", juce::dontSendNotification);
@@ -2621,6 +2627,8 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
 {
     pluginInventoryScanRunning = false;
     pluginInventoryScanCancellation.reset();
+    pluginInventoryProgressValue = exitCode == 0 && !cancelled ? 1.0 : 0.0;
+    pluginInventoryProgress.repaint();
     if (pluginInventoryProgressFile.existsAsFile()) pluginInventoryProgressFile.deleteFile();
     pluginInventoryProgressFile = {};
     scanPluginInventoryButton.setEnabled(true);

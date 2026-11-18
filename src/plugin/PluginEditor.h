@@ -249,6 +249,8 @@ private:
     juce::Label mappingSummary;
     juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
+    double pluginInventoryProgressValue = 0.0;
+    juce::ProgressBar pluginInventoryProgress{pluginInventoryProgressValue};
     juce::TextEditor pluginPresetKitName;
     juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, choosePluginFolderButton{"Choose VST3 folder"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
