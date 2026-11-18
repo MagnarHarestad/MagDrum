@@ -122,6 +122,18 @@ try {
     # dependent relink happen when needed, without forcing them on every build.
     $productVersion = "0.1.2.$BuildRevision"
     $resourceFileVersion = "0,1,2,$BuildRevision"
+    $resourceBootstrapTargets = @()
+    if (-not (Test-Path -LiteralPath (Join-Path $buildDirectory 'MagDrum_artefacts/JuceLibraryCode/MagDrum_resources.rc') -PathType Leaf)) {
+        $resourceBootstrapTargets += 'MagDrum_rc_lib'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $buildDirectory 'MagDrumPlugin_artefacts/JuceLibraryCode/MagDrumPlugin_resources.rc') -PathType Leaf)) {
+        $resourceBootstrapTargets += 'MagDrumPlugin_rc_lib'
+    }
+    if ($resourceBootstrapTargets.Count -gt 0) {
+        Write-Host "Generating JUCE Windows resource files with targets: $($resourceBootstrapTargets -join ', ')"
+        & $cmakePath --build $buildDirectory --config Release --target $resourceBootstrapTargets --parallel $Parallel
+        if ($LASTEXITCODE -ne 0) { throw "Windows resource bootstrap failed with exit code $LASTEXITCODE." }
+    }
     foreach ($target in @('MagDrum', 'MagDrumPlugin')) {
         $resourceFile = Join-Path $buildDirectory "$target`_artefacts/JuceLibraryCode/${target}_resources.rc"
         if (-not (Test-Path -LiteralPath $resourceFile -PathType Leaf)) {
