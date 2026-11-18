@@ -219,6 +219,41 @@ DrumClassification classify(const ScannedSample& sample) const override
         out.confidence = juce::jlimit(0.42, 0.68, 0.42 + juce::jmin(0.15, (sample.transientCount - 2) * 0.025)
             + juce::jmin(0.08, sample.spectralFlatness * 0.08) + (crest > 4.0 ? 0.03 : 0.0));
     }
+    else if (hasReliablePitch && sample.fundamentalHz >= 500.0
+        && sample.spectralCentroidHz >= 4000.0 && sample.spectralFlatness >= 0.30
+        && sample.durationSeconds >= 0.5 && sample.durationSeconds <= 2.5)
+    {
+        // A stable high fundamental and broadband upper spectrum is a useful,
+        // but not calibrated, percussion review hint (for example bells).
+        out.category = "Percussion";
+        out.confidence = 0.58;
+    }
+    else if (!hasReliablePitch && sample.spectralCentroidHz >= 2800.0
+        && sample.spectralFlatness >= 0.25)
+    {
+        // Unpitched, noisy high-frequency samples can be reviewed as hats or
+        // cymbals. Keep every result below the automatic-acceptance threshold:
+        // kit recordings vary substantially in trim length and spectral balance.
+        const auto duration = sample.durationSeconds;
+        const auto centroid = sample.spectralCentroidHz;
+        if (sample.spectralFlatness >= 0.55 && duration <= 1.1)
+            out.category = duration <= 0.32 ? "Closed hi-hat" : "Open hi-hat";
+        else if (duration > 10.8 && centroid < 5500.0 && sample.transientCount <= 2)
+            out.category = "Crash";
+        else if (duration >= 5.0 && duration < 7.8 && centroid >= 5300.0)
+            out.category = "Ride";
+        else if (duration >= 7.8 && centroid >= 3500.0)
+            out.category = "Open hi-hat";
+        else if (duration >= 1.15 && duration <= 3.5 && centroid < 4000.0)
+            out.category = "Pedal hi-hat";
+        else if (duration <= 1.1 && centroid >= 4000.0 && centroid < 6500.0)
+            out.category = "Closed hi-hat";
+        else if (duration <= 1.1 && centroid >= 6500.0)
+            out.category = centroid >= 9500.0 ? "Closed hi-hat" : "Open hi-hat";
+
+        if (out.category.isNotEmpty())
+            out.confidence = 0.58;
+    }
     else if ((hasTomLikePitch || sample.pitchConfidence < 0.65)
         && sample.spectralCentroidHz >= 350.0 && sample.spectralCentroidHz < 1250.0
         && sample.durationSeconds >= 1.5 && sample.durationSeconds <= 6.0 && transientRatio > 0.45)
@@ -241,6 +276,15 @@ DrumClassification classify(const ScannedSample& sample) const override
         {
             out.category = "Kick";
             out.confidence = juce::jlimit(0.35, 0.72, 0.62 - sample.spectralCentroidHz / 12000.0 + (transientRatio > 1.0 ? 0.04 : 0.0));
+        }
+        else if (sample.spectralCentroidHz >= 1200.0 && sample.spectralCentroidHz < 1800.0
+            && sample.spectralFlatness < 0.45 && sample.durationSeconds >= 1.5
+            && sample.durationSeconds <= 3.0 && transientRatio > 1.2)
+        {
+            // Some recorded snares have lower centroid and no stable pitch.
+            // Offer them for review rather than dropping them as Unknown.
+            out.category = "Snare";
+            out.confidence = 0.58;
         }
         else if (sample.spectralCentroidHz >= 1800.0 && transientRatio > 0.45)
         {

@@ -709,6 +709,67 @@ int runSmokeTests(int argc,char** argv)
             return 263;
         }
     }
+    struct AudioOnlyFamilyFixture
+    {
+        const char* name;
+        double duration;
+        double centroid;
+        double flatness;
+        double transientRatio;
+        int transientCount;
+        const char* expected;
+    };
+    constexpr std::array<AudioOnlyFamilyFixture, 7> audioOnlyCymbalFixtures{{
+        {"shorter low-brightness noise", 0.70, 5175.0, 0.38, 2.36, 1, "Closed hi-hat"},
+        {"long open noise", 9.17, 5749.0, 0.38, 3.77, 2, "Open hi-hat"},
+        {"mid-length low-brightness noise", 1.97, 3168.0, 0.32, 3.31, 2, "Pedal hi-hat"},
+        {"short ultra-bright noise", 0.25, 11559.0, 0.66, 1.64, 1, "Closed hi-hat"},
+        {"short bright noise", 0.50, 8273.0, 0.62, 1.56, 1, "Open hi-hat"},
+        {"long single-hit cymbal", 12.02, 4754.0, 0.40, 4.44, 1, "Crash"},
+        {"sustained repeating cymbal", 6.82, 6436.0, 0.44, 2.73, 10, "Ride"}}};
+    for (const auto& fixture : audioOnlyCymbalFixtures)
+    {
+        ScannedSample unlabelled;
+        unlabelled.file = juce::File("neutral-audio-only-fixture.wav");
+        unlabelled.durationSeconds = fixture.duration;
+        unlabelled.rms = 0.2;
+        unlabelled.peak = 0.8;
+        unlabelled.spectralCentroidHz = fixture.centroid;
+        unlabelled.spectralFlatness = fixture.flatness;
+        unlabelled.transientStrength = fixture.transientRatio * unlabelled.rms;
+        unlabelled.transientCount = fixture.transientCount;
+        const auto audioOnly = AudioClassifier{}.classify(unlabelled);
+        if (audioOnly.category != fixture.expected || audioOnly.confidence >= 0.75)
+        {
+            std::cerr << "Audio-only low-confidence family fixture failed for " << fixture.name
+                      << ": " << audioOnly.category << " confidence=" << audioOnly.confidence
+                      << " expected=" << fixture.expected << '\n';
+            return 265;
+        }
+    }
+    ScannedSample audioOnlyBell;
+    audioOnlyBell.file = juce::File("neutral-pitched-hit.wav");
+    audioOnlyBell.durationSeconds = 1.13;
+    audioOnlyBell.rms = 0.2;
+    audioOnlyBell.peak = 0.8;
+    audioOnlyBell.spectralCentroidHz = 5701.0;
+    audioOnlyBell.spectralFlatness = 0.48;
+    audioOnlyBell.transientStrength = 3.37 * audioOnlyBell.rms;
+    audioOnlyBell.transientCount = 1;
+    audioOnlyBell.fundamentalHz = 727.0;
+    audioOnlyBell.pitchConfidence = 0.78;
+    const auto bellSuggestion = AudioClassifier{}.classify(audioOnlyBell);
+    if (bellSuggestion.category != "Percussion" || bellSuggestion.confidence >= 0.75) return 266;
+    auto lowCentroidSnare = audioOnlyBell;
+    lowCentroidSnare.file = juce::File("neutral-low-mid-hit.wav");
+    lowCentroidSnare.durationSeconds = 2.29;
+    lowCentroidSnare.spectralCentroidHz = 1538.0;
+    lowCentroidSnare.spectralFlatness = 0.36;
+    lowCentroidSnare.transientStrength = 4.51 * lowCentroidSnare.rms;
+    lowCentroidSnare.fundamentalHz = 178.0;
+    lowCentroidSnare.pitchConfidence = 0.0;
+    const auto snareSuggestion = AudioClassifier{}.classify(lowCentroidSnare);
+    if (snareSuggestion.category != "Snare" || snareSuggestion.confidence >= 0.75) return 267;
     ScannedSample contradictoryHat = kickLike;
     contradictoryHat.file = juce::File("Closed_HiHat_Open_HiHat.wav");
     if (AudioClassifier{}.classify(contradictoryHat).category != "Unknown") return 264;
