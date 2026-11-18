@@ -4557,9 +4557,10 @@ void MagDrumAudioProcessorEditor::manageSampleLayers()
     {
         const auto& layer = layers[index];
         juce::PopupMenu actions;
-        const int editAction = 100 + static_cast<int>(index) * 2;
-        actions.addItem(editAction, magdrum::ui::localisedText("Edit velocity range"));
-        actions.addItem(editAction + 1, magdrum::ui::localisedText("Remove layer"));
+        const int editAction = 100 + static_cast<int>(index) * 3;
+        actions.addItem(editAction, magdrum::ui::localisedText("Preview layer"));
+        actions.addItem(editAction + 1, magdrum::ui::localisedText("Edit velocity range"));
+        actions.addItem(editAction + 2, magdrum::ui::localisedText("Remove layer"));
         auto label = magdrum::ui::localisedText("Velocity") + " "
             + juce::String(layer.minimumVelocity) + "-" + juce::String(layer.maximumVelocity)
             + " - " + juce::File(layer.path).getFileName();
@@ -4576,11 +4577,17 @@ void MagDrumAudioProcessorEditor::manageSampleLayers()
         {
             if (safe == nullptr || action < 100)
                 return;
-            const size_t index = static_cast<size_t>((action - 100) / 2);
+            const size_t index = static_cast<size_t>((action - 100) / 3);
             if (index >= layers.size())
                 return;
             const auto& layer = layers[index];
-            if ((action - 100) % 2 == 0)
+            const int actionInLayer = (action - 100) % 3;
+            if (actionInLayer == 0)
+            {
+                safe->previewSampleAsync(juce::File(layer.path));
+                return;
+            }
+            if (actionInLayer == 1)
             {
                 safe->editSampleLayerVelocityRange(layer);
                 return;

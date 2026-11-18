@@ -141,7 +141,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'Each pad can also be assigned to choke group Off or 1-16; triggering another pad in that group cuts its active voice, and the setting is automatable and saved with the project.',
         'The VST opens and closes Cubase automation gestures around UI edits, including rotary-control drags and sample-trim waveform drags.',
         'The Drum Machine waveform includes per-pad sample start and end handles. Drag either marker to trim playback, double-click to reset the full sample, and save the range with the DAW project.',
-        'The Drum Machine Layers control can edit or remove an individual sample layer. Velocity ranges are validated against the other layers on the pad and persist with the DAW project.',
+        'The Drum Machine Layers menu can preview, edit the velocity range of, or remove an individual sample layer. Ranges are validated against other layers on the pad and persist with the DAW project.',
         'MIDI export defaults to exact articulation mappings. The VST, desktop and mobile controls offer no fallback, default-articulation-only fallback, or any same-instrument articulation. Each substitution and omitted event is reported after export.',
         'MIDI import processes events across all tracks in musical time order, preserving overlapping same-pitch note durations split between tracks.',
         'MIDI imports also accept valid SMPTE absolute-time divisions at 24, 25, 29.97 drop-frame, and 30 fps, converting through tempo changes and exporting in PPQ format.',
