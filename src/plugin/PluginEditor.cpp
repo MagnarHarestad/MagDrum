@@ -89,8 +89,8 @@ magdrum::sequencer::BarMap makeSequencerBarMap(int numerator,int denominator,int
 juce::String localizedPadName(size_t index)
 {
     const auto source = juce::String(padNames[index]);
-    if (source.startsWith("Crash ")) return magdrum::ui::localisedText("Crash") + source.fromFirstOccurrenceOf(" ", false, false);
-    if (source.startsWith("Tom ")) return magdrum::ui::localisedText("Tom") + source.fromFirstOccurrenceOf(" ", false, false);
+    if (source.startsWith("Crash ")) return magdrum::ui::localisedText("Crash") + " " + source.fromFirstOccurrenceOf(" ", false, false);
+    if (source.startsWith("Tom ")) return magdrum::ui::localisedText("Tom") + " " + source.fromFirstOccurrenceOf(" ", false, false);
     if (source == "Side Stick") return magdrum::ui::localisedText("Side stick");
     if (source == "Closed HH") return magdrum::ui::localisedText("Closed hi-hat");
     if (source == "Open HH") return magdrum::ui::localisedText("Open hi-hat");

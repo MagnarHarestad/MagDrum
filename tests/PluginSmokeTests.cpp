@@ -647,8 +647,26 @@ public:
     {
         if (editor.languageButton.getButtonText().isNotEmpty()) return 8;
         if (editor.steps.size() != 16 || editor.steps.front().size() != 32) return 1;
-        if (editor.laneLabels[8].getText() != "Bell" || editor.laneLabels[15].getText() != "Cowbell") return 2;
-        if (editor.mappedLaneNotes[8] != 53 || editor.mappedLaneNotes[15] != 56) return 9;
+        constexpr std::array<const char*, 16> expectedLaneNames{
+            "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Tom 4", "Ride", "Crash 1", "Clap",
+            "Bell", "Crash 2", "Tom 1", "Tom 2", "Tom 3", "Side stick", "Pedal hi-hat", "Cowbell"};
+        constexpr std::array<int, 16> expectedLaneNotes{
+            36, 38, 42, 46, 43, 51, 49, 39, 53, 57, 50, 47, 45, 37, 44, 56};
+        for (size_t lane = 0; lane < expectedLaneNames.size(); ++lane)
+        {
+            if (editor.laneLabels[lane].getText() != expectedLaneNames[lane])
+            {
+                std::cerr << "Sequencer lane " << lane << " label mismatch: expected " << expectedLaneNames[lane]
+                          << ", got " << editor.laneLabels[lane].getText() << ".\n";
+                return 2;
+            }
+            if (editor.mappedLaneNotes[lane] != expectedLaneNotes[lane])
+            {
+                std::cerr << "Sequencer lane " << lane << " MIDI note mismatch: expected " << expectedLaneNotes[lane]
+                          << ", got " << editor.mappedLaneNotes[lane] << ".\n";
+                return 9;
+            }
+        }
         editor.pads[0].flash();
         if (editor.pads[0].getFlashAmount() < 0.9f) return 12;
         if (editor.getNumChildComponents() >= 800)
