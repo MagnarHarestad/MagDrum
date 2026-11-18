@@ -427,6 +427,22 @@ int runSmokeTests(int argc,char** argv)
         || magdrum::isSampleSimilarityPointVisible(0.24f, 0.75f, 2.0f, 0.25f, 0.25f)
         || magdrum::isSampleSimilarityPointVisible(0.50f, 0.76f, 2.0f, 0.25f, 0.25f)
         || magdrum::isSampleSimilarityPointVisible(0.50f, 0.50f, 0.0f, 0.25f, 0.25f)) return 288;
+    magdrum::SampleSimilarityViewport mapViewport;
+    mapViewport.zoomAt(1.0f, 0.37f, 0.62f);
+    const auto anchoredMapPoint = mapViewport.transform(0.37f, 1.0f - 0.62f);
+    if (mapViewport.zoom <= 1.0f || std::abs(anchoredMapPoint.x - 0.37f) > 0.0001f
+        || std::abs(anchoredMapPoint.y - 0.62f) > 0.0001f) return 289;
+    const auto zoomedMapPoint = mapViewport.transform(0.8f, 0.2f);
+    mapViewport.panFrom(mapViewport.panX, mapViewport.panY, 100000.0f, -100000.0f, 500.0f, 300.0f);
+    if (mapViewport.panX < 0.0f || mapViewport.panY < 0.0f
+        || mapViewport.panX > 1.0f - 1.0f / mapViewport.zoom
+        || mapViewport.panY > 1.0f - 1.0f / mapViewport.zoom
+        || mapViewport.contains(0.0f, 1.0f) || !mapViewport.contains(0.0f, 0.0f)) return 290;
+    mapViewport.panFrom(mapViewport.panX, mapViewport.panY, -100000.0f, 100000.0f, 500.0f, 300.0f);
+    if (mapViewport.panX < 0.0f || mapViewport.panY < 0.0f
+        || mapViewport.panX > 1.0f - 1.0f / mapViewport.zoom
+        || mapViewport.panY > 1.0f - 1.0f / mapViewport.zoom
+        || !mapViewport.contains(1.0f, 1.0f) || !std::isfinite(zoomedMapPoint.x) || !std::isfinite(zoomedMapPoint.y)) return 291;
     if(scanned.getFirst().fundamentalHz<418.0||scanned.getFirst().fundamentalHz>462.0||scanned.getFirst().pitchConfidence<0.65)return 43;
     if(scanned.getFirst().peak<0.45||scanned.getFirst().rms<0.30||scanned.getFirst().spectralCentroidHz<300||scanned.getFirst().spectralCentroidHz>600||scanned.getFirst().spectralFlatness>0.1){std::cerr<<"Feature check: peak="<<scanned.getFirst().peak<<" rms="<<scanned.getFirst().rms<<" centroid="<<scanned.getFirst().spectralCentroidHz<<" flatness="<<scanned.getFirst().spectralFlatness<<"\n";return 18;}
     if(!scanner.scan(root,[]{return true;}).isEmpty())return 7;

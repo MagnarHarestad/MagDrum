@@ -29,6 +29,53 @@ inline bool isSampleSimilarityPointVisible(float x, float y, float zoom, float p
         && y >= 1.0f - panY - visibleWidth && y <= 1.0f - panY;
 }
 
+// Keeps the sample-map wheel zoom and middle-button pan math consistent
+// between drawing, point hit-testing and offscreen regression tests.
+struct SampleSimilarityViewport
+{
+    static constexpr float minimumZoom = 1.0f;
+    static constexpr float maximumZoom = 12.0f;
+    float zoom = minimumZoom;
+    float panX = 0.0f;
+    float panY = 0.0f;
+
+    void zoomAt(float wheelDeltaY, float anchorX, float anchorY) noexcept
+    {
+        if (!std::isfinite(wheelDeltaY) || !std::isfinite(anchorX) || !std::isfinite(anchorY))
+            return;
+        const float previousZoom = zoom;
+        zoom = std::clamp(zoom * std::exp(wheelDeltaY * 0.22f), minimumZoom, maximumZoom);
+        panX = std::clamp(panX + anchorX / previousZoom - anchorX / zoom,
+                          0.0f, 1.0f - 1.0f / zoom);
+        panY = std::clamp(panY + anchorY / previousZoom - anchorY / zoom,
+                          0.0f, 1.0f - 1.0f / zoom);
+    }
+
+    void panFrom(float startPanX, float startPanY, float deltaX, float deltaY,
+                 float plotWidth, float plotHeight) noexcept
+    {
+        if (!std::isfinite(startPanX) || !std::isfinite(startPanY)
+            || !std::isfinite(deltaX) || !std::isfinite(deltaY)
+            || !std::isfinite(plotWidth) || !std::isfinite(plotHeight)
+            || plotWidth <= 0.0f || plotHeight <= 0.0f)
+            return;
+        panX = std::clamp(startPanX - deltaX / (plotWidth * zoom),
+                          0.0f, 1.0f - 1.0f / zoom);
+        panY = std::clamp(startPanY - deltaY / (plotHeight * zoom),
+                          0.0f, 1.0f - 1.0f / zoom);
+    }
+
+    bool contains(float x, float y) const noexcept
+    {
+        return isSampleSimilarityPointVisible(x, y, zoom, panX, panY);
+    }
+
+    juce::Point<float> transform(float x, float y) const noexcept
+    {
+        return {(x - panX) * zoom, (1.0f - y - panY) * zoom};
+    }
+};
+
 inline std::vector<int> representativeSampleIndices(size_t sampleCount)
 {
     constexpr size_t maximumPoints = 3000;

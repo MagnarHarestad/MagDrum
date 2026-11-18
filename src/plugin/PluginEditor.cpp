@@ -335,13 +335,9 @@ public:
     {
         const auto plot = plotBounds();
         if (!plot.contains(event.position)) return;
-        const float oldZoom = zoom;
-        zoom = juce::jlimit(1.0f, 12.0f, zoom * std::exp(wheel.deltaY * 0.22f));
-        const auto mousePosition = event.position;
-        const float nx = (mousePosition.x - plot.getX()) / plot.getWidth();
-        const float ny = (mousePosition.y - plot.getY()) / plot.getHeight();
-        panX = juce::jlimit(0.0f, 1.0f - 1.0f / zoom, panX + nx / oldZoom - nx / zoom);
-        panY = juce::jlimit(0.0f, 1.0f - 1.0f / zoom, panY + ny / oldZoom - ny / zoom);
+        const float nx = (event.position.x - plot.getX()) / plot.getWidth();
+        const float ny = (event.position.y - plot.getY()) / plot.getHeight();
+        viewport.zoomAt(wheel.deltaY, nx, ny);
         repaint();
     }
     void mouseDrag(const juce::MouseEvent& event) override
@@ -349,8 +345,8 @@ public:
         if (!isPanning) return;
         const auto plot = plotBounds();
         if (plot.isEmpty()) return;
-        panX = juce::jlimit(0.0f, 1.0f - 1.0f / zoom, panStartX - (event.position.x - panStart.x) / (plot.getWidth() * zoom));
-        panY = juce::jlimit(0.0f, 1.0f - 1.0f / zoom, panStartY - (event.position.y - panStart.y) / (plot.getHeight() * zoom));
+        viewport.panFrom(panStartX, panStartY, event.position.x - panStart.x,
+                         event.position.y - panStart.y, plot.getWidth(), plot.getHeight());
         repaint();
     }
     void paint(juce::Graphics& g) override
@@ -388,7 +384,7 @@ public:
         {
             const int i=projected.sampleIndex;
             if(!juce::isPositiveAndBelow(i,samples.size()))continue;
-            if(!magdrum::isSampleSimilarityPointVisible(projected.x, projected.y, zoom, panX, panY))continue;
+            if(!viewport.contains(projected.x, projected.y))continue;
             const auto& sample=samples.getReference(i);
             const auto position=samplePosition(projected, plot);
             const auto x=position.x, y=position.y;
@@ -404,7 +400,7 @@ public:
     {
         if (event.mods.isMiddleButtonDown())
         {
-            isPanning = true; panStart = event.position; panStartX = panX; panStartY = panY;
+            isPanning = true; panStart = event.position; panStartX = viewport.panX; panStartY = viewport.panY;
             return;
         }
         const int closest=sampleAt(event.position);
@@ -466,10 +462,9 @@ private:
     {
         constexpr float pointHaloInset = 16.0f;
         plot = plot.reduced(pointHaloInset);
-        const float normalizedX = (point.x - panX) * zoom;
-        const float normalizedY = (1.0f - point.y - panY) * zoom;
-        return {plot.getX() + 6.0f + normalizedX * (plot.getWidth() - 12.0f),
-                plot.getY() + 6.0f + normalizedY * (plot.getHeight() - 12.0f)};
+        const auto normalized = viewport.transform(point.x, point.y);
+        return {plot.getX() + 6.0f + normalized.x * (plot.getWidth() - 12.0f),
+                plot.getY() + 6.0f + normalized.y * (plot.getHeight() - 12.0f)};
     }
     int sampleAt(juce::Point<float> point) const
     {
@@ -479,7 +474,7 @@ private:
         float distance=24.0f;
         for(const auto& projected : acousticPoints)
         {
-            if (!magdrum::isSampleSimilarityPointVisible(projected.x, projected.y, zoom, panX, panY)) continue;
+            if (!viewport.contains(projected.x, projected.y)) continue;
             const float current=point.getDistanceFrom(samplePosition(projected, plot));
             if(current<distance){distance=current;closest=projected.sampleIndex;}
         }
@@ -488,7 +483,8 @@ private:
     juce::Array<SampleBrowseRecord> samples;std::vector<magdrum::SampleSimilarityPoint> acousticPoints;
     std::vector<int> pointForSampleIndex;juce::ThreadPool projectionWorkers{1};
     std::uint64_t projectionGeneration=0;int selectedIndex=-1, previewedIndex=-1;
-    float zoom=1.0f, panX=0.0f, panY=0.0f, panStartX=0.0f, panStartY=0.0f;
+    magdrum::SampleSimilarityViewport viewport;
+    float panStartX=0.0f, panStartY=0.0f;
     juce::Point<float> panStart;
     bool isPreviewing=false, isPanning=false;
 };
