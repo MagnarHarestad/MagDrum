@@ -138,6 +138,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'Pad sample assignment and project-state restoration decode in cancellable background workers. Sample paths remain in the saved host state while restored audio is loading.',
         'Drum pads glow briefly when struck, using distinct colors for instrument groups. Each MIDI pad has independent gain, pan, tuning, Drive, three-band EQ, attack, decay, sustain, release and low-pass cutoff controls saved with the DAW project.',
         'Cubase can automate all 24 sound controls for each of the 16 pads; parameters are grouped by pad and saved with the project.',
+        'Each pad can also be assigned to choke group Off or 1-16; triggering another pad in that group cuts its active voice, and the setting is automatable and saved with the project.',
         'The VST opens and closes Cubase automation gestures around UI edits, including rotary-control drags and sample-trim waveform drags.',
         'The Drum Machine waveform includes per-pad sample start and end handles. Drag either marker to trim playback, double-click to reset the full sample, and save the range with the DAW project.',
         'MIDI export defaults to exact articulation mappings. The VST, desktop and mobile controls offer no fallback, default-articulation-only fallback, or any same-instrument articulation. Each substitution and omitted event is reported after export.',

@@ -16,6 +16,8 @@ The VST is intended to expose the MagDrum workflows from inside Cubase. This che
 
 The VST cannot take ownership of Cubase's audio device. Any standalone action that currently opens or configures a device must use the DAW's playback/render callbacks or a separate worker instead. Discovery, program enumeration, preset/program loading and note scanning use separate MagDrum helpers, so third-party plugins are not loaded into Cubase by these workflows. Windows x64 is the active parity target. Other plug-in formats remain paused until the user explicitly asks to resume them. Plugin-specific editors remain in a separate MagDrum manager process.
 
+**Unreleased Windows x64 work after .235:** the per-pad Drum Machine editor now assigns each pad to Off or one of 16 choke groups. Triggering one grouped pad cuts active voices from other pads in that group while leaving ungrouped and differently grouped voices untouched. The setting is host-automatable, localized, and included in project state. The new parameter is appended after the existing per-pad parameters to preserve their IDs. The headless Debug plugin/core suites passed 2/2, and offscreen snapshots were rendered for every view, both FX panels, and minimum-size effects layouts. The published and installed .235 package is still the current Cubase version; this change has not been packaged or installed.
+
 ## Windows x64 completion path
 
 The completion target is the Windows VST3 inside Cubase Pro 15. Linux, macOS, ARM64, iOS preview work and classifier research are outside this critical path until requested. Track code work against the rows marked **Partial** above; rows already marked implemented do not need another release solely to reconfirm them.

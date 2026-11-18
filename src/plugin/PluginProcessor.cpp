@@ -18,9 +18,10 @@ struct PadHostParameterDefinition
     float maximum;
     float defaultValue;
     float skew = 1.0f;
+    float interval = 0.0f;
 };
 
-constexpr std::array<PadHostParameterDefinition, 24> padHostParameterDefinitions{{
+constexpr std::array<PadHostParameterDefinition, 25> padHostParameterDefinitions{{
     {"gain", "Gain", "dB", -60.0f, 6.0f, 0.0f},
     {"pan", "Pan", "", -1.0f, 1.0f, 0.0f},
     {"tune", "Tune", "semitones", -24.0f, 24.0f, 0.0f},
@@ -44,7 +45,8 @@ constexpr std::array<PadHostParameterDefinition, 24> padHostParameterDefinitions
     {"phaser_rate", "Phaser Rate", "Hz", 0.0f, 8.0f, 0.0f},
     {"phaser_depth", "Phaser Depth", "%", 0.0f, 1.0f, 0.0f},
     {"phaser_feedback", "Phaser Feedback", "", -0.8f, 0.8f, 0.0f},
-    {"phaser_mix", "Phaser Mix", "%", 0.0f, 1.0f, 0.0f}
+    {"phaser_mix", "Phaser Mix", "%", 0.0f, 1.0f, 0.0f},
+    {"choke_group", "Choke Group", "", 0.0f, 16.0f, 0.0f, 1.0f, 1.0f}
 }};
 
 class PadHostParameter final : public juce::AudioParameterFloat
@@ -99,6 +101,7 @@ float padHostParameterValue(const MagDrumAudioProcessor::NoteParameters& paramet
         case 21: return parameters.phaserDepth;
         case 22: return parameters.phaserFeedback;
         case 23: return parameters.phaserMix;
+        case 24: return static_cast<float>(parameters.chokeGroup);
         default: return 0.0f;
     }
 }
@@ -161,6 +164,7 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         notePhaserDepth[note].store(0.0f, std::memory_order_relaxed);
         notePhaserFeedback[note].store(0.0f, std::memory_order_relaxed);
         notePhaserMix[note].store(0.0f, std::memory_order_relaxed);
+        noteChokeGroup[note].store(0, std::memory_order_relaxed);
         noteTriggerCounts[note].store(0, std::memory_order_relaxed);
     }
     for (auto& noteCounters : roundRobinCounters)
@@ -181,7 +185,8 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
                 + "_" + definition.idSuffix;
             auto parameter = std::make_unique<PadHostParameter>(
                 juce::ParameterID{parameterId, 1}, definition.name,
-                juce::NormalisableRange<float>{definition.minimum, definition.maximum, 0.0f, definition.skew},
+                juce::NormalisableRange<float>{definition.minimum, definition.maximum,
+                    definition.interval, definition.skew},
                 definition.defaultValue, definition.label,
                 [this, note = pad.midiNote, parameterIndex](float value)
                 { onPadHostParameterChanged(note, parameterIndex, value); });
@@ -526,7 +531,8 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             notePhaserDepth[index].load(std::memory_order_relaxed),
             notePhaserFeedback[index].load(std::memory_order_relaxed),
             notePhaserMix[index].load(std::memory_order_relaxed),
-            noteFilterResonance[index].load(std::memory_order_relaxed)};
+            noteFilterResonance[index].load(std::memory_order_relaxed),
+            noteChokeGroup[index].load(std::memory_order_relaxed)};
 }
 
 void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters, bool notifyHost)
@@ -565,6 +571,7 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
     notePhaserDepth[index].store(juce::jlimit(0.0f, 1.0f, finiteOrZero(parameters.phaserDepth)), std::memory_order_relaxed);
     notePhaserFeedback[index].store(juce::jlimit(-0.8f, 0.8f, finiteOrZero(parameters.phaserFeedback)), std::memory_order_relaxed);
     notePhaserMix[index].store(juce::jlimit(0.0f, 1.0f, finiteOrZero(parameters.phaserMix)), std::memory_order_relaxed);
+    noteChokeGroup[index].store(juce::jlimit(0, 16, parameters.chokeGroup), std::memory_order_relaxed);
 
     const auto pad = std::find_if(magdrum::plugin::bossDr660PadLayout.begin(),
         magdrum::plugin::bossDr660PadLayout.end(), [note](const auto& definition)
@@ -683,6 +690,7 @@ void MagDrumAudioProcessor::onPadHostParameterChanged(int note, size_t parameter
         case 21: notePhaserDepth[index].store(value, std::memory_order_relaxed); break;
         case 22: notePhaserFeedback[index].store(value, std::memory_order_relaxed); break;
         case 23: notePhaserMix[index].store(value, std::memory_order_relaxed); break;
+        case 24: noteChokeGroup[index].store(juce::jlimit(0, 16, juce::roundToInt(value)), std::memory_order_relaxed); break;
         default: break;
     }
 }
@@ -719,6 +727,11 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
     if (sample != nullptr && sample->audio.getNumSamples() > 0)
     {
         const auto parameters = getNoteParameters(note);
+        if (parameters.chokeGroup > 0)
+            for (auto& activeVoice : voices)
+                if (activeVoice.active && activeVoice.midiNote != note
+                    && activeVoice.chokeGroup == parameters.chokeGroup)
+                    activeVoice.active = false;
         const float pan = parameters.pan;
         float leftPanGain = 1.0f, rightPanGain = 1.0f;
         if (sample->audio.getNumChannels() == 1)
@@ -738,6 +751,8 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         const double startPosition = parameters.sampleStart * sample->audio.getNumSamples();
         const double endPosition = parameters.sampleEnd * sample->audio.getNumSamples();
         voice = {sample, startPosition, endPosition, gain, leftPanGain, rightPanGain, playbackRate, true};
+        voice.midiNote = note;
+        voice.chokeGroup = parameters.chokeGroup;
         const double sourceAdvance = (sample->sampleRate / juce::jmax(1.0, outputSampleRate)) * playbackRate;
         voice.totalOutputSamples = (endPosition - startPosition) / juce::jmax(1.0e-9, sourceAdvance);
         voice.attackSamples = parameters.attackMs * 0.001 * outputSampleRate;
@@ -1138,7 +1153,8 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 || std::abs(parameters.compressorReleaseMs - 100.0f) > 0.000001f
                 || std::abs(parameters.compressorMakeupDb) > 0.000001f
                 || std::abs(parameters.phaserRateHz) > 0.000001f || std::abs(parameters.phaserDepth) > 0.000001f
-                || std::abs(parameters.phaserFeedback) > 0.000001f || std::abs(parameters.phaserMix) > 0.000001f)
+                || std::abs(parameters.phaserFeedback) > 0.000001f || std::abs(parameters.phaserMix) > 0.000001f
+                || parameters.chokeGroup != 0)
             {
                 auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
                 savedParameters->setAttribute("note", note);
@@ -1166,6 +1182,7 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("phaserDepth", parameters.phaserDepth);
                 savedParameters->setAttribute("phaserFeedback", parameters.phaserFeedback);
                 savedParameters->setAttribute("phaserMix", parameters.phaserMix);
+                savedParameters->setAttribute("chokeGroup", parameters.chokeGroup);
             }
             int layerCount = 0;
             const SampleData* onlyLayer = nullptr;
@@ -1251,7 +1268,8 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("phaserDepth", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("phaserFeedback", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("phaserMix", 0.0)),
-                    static_cast<float>(child->getDoubleAttribute("filterResonance", 0.707))};
+                    static_cast<float>(child->getDoubleAttribute("filterResonance", 0.707)),
+                    child->getIntAttribute("chokeGroup", 0)};
             continue;
         }
         if (!child->hasTagName("SAMPLE_LAYER"))

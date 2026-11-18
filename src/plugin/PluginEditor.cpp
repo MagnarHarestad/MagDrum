@@ -1456,7 +1456,22 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     sampleScanProgress.setTextToDisplay(juce::String{});sampleScanProgress.setPercentageDisplay(true);sampleScanProgress.setColour(juce::ProgressBar::foregroundColourId,Palette::Accent);sampleScanProgress.setColour(juce::ProgressBar::backgroundColourId,Palette::Panel);addAndMakeVisible(sampleScanProgress);
     sampleScanProgressLabel.setJustificationType(juce::Justification::centredLeft);sampleScanProgressLabel.setColour(juce::Label::textColourId,Palette::Muted);sampleScanProgressLabel.setFont(juce::Font(juce::FontOptions(11.0f)));addAndMakeVisible(sampleScanProgressLabel);
     for(size_t i=0;i<pads.size();++i){auto& pad=pads[i];pad.setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));pad.setColour(juce::TextButton::buttonColourId,Palette::Surface);pad.setColour(juce::TextButton::buttonOnColourId,categoryColour(padNames[i]));pad.setPadGlowColour(categoryColour(padNames[i]));pad.setClickingTogglesState(false);pad.addListener(this);addAndMakeVisible(pad);}
-    selectedPadTitle.setFont(juce::Font(juce::FontOptions(22.0f,juce::Font::bold)));selectedPadTitle.setColour(juce::Label::textColourId,Palette::Accent);addAndMakeVisible(selectedPadTitle);
+    selectedPadTitle.setFont(juce::Font(juce::FontOptions(20.0f,juce::Font::bold)));selectedPadTitle.setColour(juce::Label::textColourId,Palette::Accent);addAndMakeVisible(selectedPadTitle);
+    chokeGroupLabel.setJustificationType(juce::Justification::centredRight);
+    chokeGroupLabel.setColour(juce::Label::textColourId, Palette::Muted);
+    chokeGroupLabel.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    addAndMakeVisible(chokeGroupLabel);
+    chokeGroupSelect.setTooltip(magdrum::ui::localisedText(
+        "Pads in the same choke group stop one another when triggered."));
+    addAndMakeVisible(chokeGroupSelect);
+    chokeGroupSelect.onChange = [this]
+    {
+        if (updatingPadControls || chokeGroupSelect.getSelectedId() < 1) return;
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.chokeGroup = chokeGroupSelect.getSelectedId() - 1;
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
     layerSummary.setColour(juce::Label::textColourId,Palette::Text);layerSummary.setJustificationType(juce::Justification::topLeft);layerSummary.setMinimumHorizontalScale(0.8f);layerSummary.setTooltip(magdrum::ui::localisedText("Samples assigned to the same velocity range play in round-robin order."));addAndMakeVisible(layerSummary);
     sampleDetails.setColour(juce::Label::textColourId,Palette::Muted);sampleDetails.setJustificationType(juce::Justification::topLeft);sampleDetails.setMinimumHorizontalScale(0.8f);addAndMakeVisible(sampleDetails);
     const auto configurePadControl = [this](juce::Slider& slider, juce::Label& label, const juce::String& name,
@@ -1980,7 +1995,7 @@ void MagDrumAudioProcessorEditor::resized()
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
     sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);scanDefaultsButton.setVisible(page==0);instrumentScannerButton.setVisible(page==0);openSourceKitButton.setVisible(page==0);searchButton.setVisible(page==0);previewButton.setVisible(page==0);stopPreviewButton.setVisible(page==0);assignButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
-    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
+    for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);chokeGroupLabel.setVisible(page==1);chokeGroupSelect.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);clearPadButton.setVisible(page==1);loadButton.setVisible(page==1);
     filterResonanceLabel.setVisible(page==1);
     filterResonanceSlider.setVisible(page==1);
     for(auto* label:{&compressorThresholdLabel,&compressorRatioLabel,&compressorAttackLabel,&compressorReleaseLabel,&compressorMakeupLabel})label->setVisible(page==1&&!showPhaserControls);
@@ -2050,7 +2065,13 @@ void MagDrumAudioProcessorEditor::resized()
             64 + juce::jlimit(0, 120, bounds.getHeight() - 413) * 30 / 120);
         const int waveformHeight = juce::jmax(28,
             bounds.getHeight() - 128 - 4 * controlGroupHeight);
-        selectedPadTitle.setBounds(bounds.removeFromTop(26));bounds.removeFromTop(2);
+        auto selectedPadRow = bounds.removeFromTop(26);
+        auto chokeArea = selectedPadRow.removeFromRight(158);
+        chokeGroupSelect.setBounds(chokeArea.removeFromRight(98).reduced(0, 1));
+        chokeArea.removeFromRight(5);
+        chokeGroupLabel.setBounds(chokeArea.removeFromRight(50));
+        selectedPadTitle.setBounds(selectedPadRow);
+        bounds.removeFromTop(2);
         sampleDetails.setBounds(bounds.removeFromTop(36));bounds.removeFromTop(3);
         drumWaveformPanelBounds = bounds.removeFromTop(waveformHeight).expanded(5, 3);
         waveform->setBounds(drumWaveformPanelBounds.reduced(5, 5));
@@ -2258,6 +2279,15 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     searchButton.setButtonText(magdrum::ui::localisedText("Search"));previewButton.setButtonText(magdrum::ui::localisedText("Preview"));stopPreviewButton.setButtonText(magdrum::ui::localisedText("Stop"));assignButton.setButtonText(magdrum::ui::localisedText("Assign to pad"));
     libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));
     clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));
+    chokeGroupLabel.setText(magdrum::ui::localisedText("CHOKE"), juce::dontSendNotification);
+    chokeGroupSelect.setTooltip(magdrum::ui::localisedText(
+        "Pads in the same choke group stop one another when triggered."));
+    const int selectedChokeGroup = chokeGroupSelect.getSelectedId();
+    chokeGroupSelect.clear(juce::dontSendNotification);
+    chokeGroupSelect.addItem(magdrum::ui::localisedText("None"), 1);
+    for (int group = 1; group <= 16; ++group)
+        chokeGroupSelect.addItem(juce::String(group), group + 1);
+    chokeGroupSelect.setSelectedId(selectedChokeGroup, juce::dontSendNotification);
     gainLabel.setText(magdrum::ui::localisedText("PAD GAIN"),juce::dontSendNotification);
     panLabel.setText(magdrum::ui::localisedText("PAD PAN"),juce::dontSendNotification);
     tuneLabel.setText(magdrum::ui::localisedText("PAD TUNE"),juce::dontSendNotification);
@@ -4297,9 +4327,10 @@ void MagDrumAudioProcessorEditor::setNote(int note)
         pads[i].setPadGlowColour(categoryColour(padNames[i]));
         pads[i].setColour(juce::TextButton::buttonColourId,static_cast<int>(i)==index?categoryColour(padNames[i]).withAlpha(0.54f):Palette::Surface);
     }
-    selectedPadTitle.setText(localizedPadName(static_cast<size_t>(safeIndex))+"   ·   "+noteName(selectedNote)+"   ·   MIDI "+juce::String(selectedNote),juce::dontSendNotification);
+    selectedPadTitle.setText(localizedPadName(static_cast<size_t>(safeIndex))+"   ·   "+noteName(selectedNote),juce::dontSendNotification);
     updatingPadControls=true;
     const auto parameters=processor.getNoteParameters(selectedNote);
+    chokeGroupSelect.setSelectedId(parameters.chokeGroup + 1, juce::dontSendNotification);
     waveform->setTrimRange(parameters.sampleStart,parameters.sampleEnd);
     gainSlider.setValue(parameters.gainDb,juce::dontSendNotification);
     panSlider.setValue(parameters.pan,juce::dontSendNotification);

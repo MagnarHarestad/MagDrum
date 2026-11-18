@@ -5,6 +5,7 @@
 #include "core/ScopedFileAccess.h"
 #include "ui/MagDrumLocalization.h"
 #include <cmath>
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <iostream>
@@ -229,6 +230,19 @@ public:
     {
         for (auto& voice : processor.voices)
             voice.active = false;
+    }
+
+    static int activeVoicesForChokeGroup(const MagDrumAudioProcessor& processor, int group)
+    {
+        return static_cast<int>(std::count_if(processor.voices.begin(), processor.voices.end(),
+            [group](const auto& voice) { return voice.active && voice.chokeGroup == group; }));
+    }
+
+    static bool activeVoiceMatches(const MagDrumAudioProcessor& processor, int group, int note)
+    {
+        return std::any_of(processor.voices.begin(), processor.voices.end(),
+            [group, note](const auto& voice)
+            { return voice.active && voice.chokeGroup == group && voice.midiNote == note; });
     }
 };
 
@@ -527,6 +541,7 @@ public:
         kick.pan = -0.45f;
         kick.tuneSemitones = 3.5f;
         kick.driveDb = 5.0f;
+        kick.chokeGroup = 3;
         processor.setNoteParameters(36, kick);
         auto snare = processor.getNoteParameters(38);
         snare.gainDb = 2.5f;
@@ -538,7 +553,8 @@ public:
         if (std::abs(editor.gainSlider.getValue() + 8.0) > 0.05
             || std::abs(editor.panSlider.getValue() + 0.45) > 0.02
             || std::abs(editor.tuneSlider.getValue() - 3.5) > 0.1
-            || std::abs(editor.driveSlider.getValue() - 5.0) > 0.1)
+            || std::abs(editor.driveSlider.getValue() - 5.0) > 0.1
+            || editor.chokeGroupSelect.getSelectedId() != 4)
         {
             std::cerr << "Kick controls did not load that pad's saved sound settings.\n";
             return 1;
@@ -550,6 +566,13 @@ public:
         {
             std::cerr << "Editing Kick gain did not stay isolated to the selected pad.\n";
             return 2;
+        }
+        editor.chokeGroupSelect.setSelectedId(6, juce::sendNotificationSync);
+        if (processor.getNoteParameters(36).chokeGroup != 5
+            || processor.getNoteParameters(38).chokeGroup != 0)
+        {
+            std::cerr << "Editing Kick choke group did not remain isolated to that pad.\n";
+            return 4;
         }
 
         editor.setNote(38);
@@ -942,6 +965,15 @@ public:
         const int originalPage = editor.page;
         editor.setSize(1000, 620);
         editor.setPage(1);
+        if (!editor.drumEditorPanelBounds.contains(editor.selectedPadTitle.getBounds())
+            || !editor.drumEditorPanelBounds.contains(editor.chokeGroupLabel.getBounds())
+            || !editor.drumEditorPanelBounds.contains(editor.chokeGroupSelect.getBounds())
+            || editor.chokeGroupLabel.getBounds().getCentreY()
+                != editor.chokeGroupSelect.getBounds().getCentreY())
+        {
+            std::cerr << "The choke selector must remain aligned in the pad header at minimum editor size.\n";
+            return 9;
+        }
         const std::array<const juce::Slider*, 12> padSliders{
             &editor.gainSlider, &editor.panSlider, &editor.tuneSlider, &editor.driveSlider,
             &editor.attackSlider, &editor.decaySlider, &editor.sustainSlider, &editor.releaseSlider,
@@ -989,7 +1021,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 34> checks{{
+            const std::array<LabelCheck, 36> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1012,6 +1044,9 @@ public:
                 {"pad filter resonance", editor.filterResonanceLabel.getText(), magdrum::ui::localisedText("FILTER Q")},
                 {"pad filter resonance tooltip", editor.filterResonanceSlider.getTooltip(),
                     magdrum::ui::localisedText("Filter Q controls resonance. Higher Q emphasizes frequencies near the cutoff.")},
+                {"pad choke control", editor.chokeGroupLabel.getText(), magdrum::ui::localisedText("CHOKE")},
+                {"pad choke tooltip", editor.chokeGroupSelect.getTooltip(),
+                    magdrum::ui::localisedText("Pads in the same choke group stop one another when triggered.")},
                 {"pad drive control", editor.driveLabel.getText(), magdrum::ui::localisedText("PAD DRIVE")},
                 {"pad low EQ control", editor.eqLowLabel.getText(), magdrum::ui::localisedText("EQ LOW")},
                 {"pad mid EQ control", editor.eqMidLabel.getText(), magdrum::ui::localisedText("EQ MID")},
@@ -1506,9 +1541,9 @@ int main(int argc, char** argv)
     if (processor.getNumPrograms() != 1 || processor.getCurrentProgram() != 0
         || processor.getProgramName(0) != "Default Kit") return 254;
     auto& automatedPadProcessor = makeTestProcessor();
-    if (automatedPadProcessor.getParameters().size() != 16 * 24)
+    if (automatedPadProcessor.getParameters().size() != 16 * 25)
     {
-        std::cerr << "Expected 384 host-automatable pad parameters, found "
+        std::cerr << "Expected 400 host-automatable pad parameters, found "
                   << automatedPadProcessor.getParameters().size() << ".\n";
         return 257;
     }
@@ -1518,6 +1553,11 @@ int main(int argc, char** argv)
         std::cerr << "The C1 Kick Gain parameter was not registered with the host.\n";
         return 258;
     }
+    auto* kickChokeParameter = findHostFloatParameter(automatedPadProcessor, "magdrum_pad_36_choke_group");
+    if (kickChokeParameter == nullptr) return 292;
+    kickChokeParameter->setValueNotifyingHost(kickChokeParameter->range.convertTo0to1(3.0f));
+    if (automatedPadProcessor.getNoteParameters(36).chokeGroup != 3
+        || automatedPadProcessor.getNoteParameters(38).chokeGroup != 0) return 293;
     kickGainParameter->setValueNotifyingHost(kickGainParameter->range.convertTo0to1(-12.0f));
     if (std::abs(automatedPadProcessor.getNoteParameters(36).gainDb + 12.0f) > 0.001f)
     {
@@ -1535,6 +1575,31 @@ int main(int argc, char** argv)
         return 260;
     }
     if (!processor.loadSampleForNote(36, sample) || processor.getSamplePathForNote(36) != sample.getFullPathName()) return 8;
+    auto& chokeProcessor = makeTestProcessor();
+    if (!chokeProcessor.loadSampleForNote(36, sample)
+        || !chokeProcessor.loadSampleForNote(38, sample)
+        || !chokeProcessor.loadSampleForNote(40, sample)) return 294;
+    chokeProcessor.prepareToPlay(48000.0, 128);
+    auto kickChoke = chokeProcessor.getNoteParameters(36);
+    kickChoke.chokeGroup = 2;
+    chokeProcessor.setNoteParameters(36, kickChoke, false);
+    auto snareChoke = chokeProcessor.getNoteParameters(38);
+    snareChoke.chokeGroup = 2;
+    chokeProcessor.setNoteParameters(38, snareChoke, false);
+    juce::AudioBuffer<float> chokeAudio(2, 128);
+    juce::MidiBuffer chokeMidi;
+    chokeMidi.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(100)), 0);
+    chokeProcessor.processBlock(chokeAudio, chokeMidi);
+    if (MagDrumAudioProcessorTestAccess::activeVoicesForChokeGroup(chokeProcessor, 2) != 1) return 295;
+    chokeMidi.addEvent(juce::MidiMessage::noteOn(10, 38, static_cast<juce::uint8>(100)), 0);
+    chokeProcessor.processBlock(chokeAudio, chokeMidi);
+    if (MagDrumAudioProcessorTestAccess::activeVoicesForChokeGroup(chokeProcessor, 2) != 1
+        || !MagDrumAudioProcessorTestAccess::activeVoiceMatches(chokeProcessor, 2, 38)) return 296;
+    auto ungrouped = chokeProcessor.getNoteParameters(40);
+    chokeProcessor.setNoteParameters(40, ungrouped, false);
+    chokeMidi.addEvent(juce::MidiMessage::noteOn(10, 40, static_cast<juce::uint8>(100)), 0);
+    chokeProcessor.processBlock(chokeAudio, chokeMidi);
+    if (MagDrumAudioProcessorTestAccess::activeVoicesForChokeGroup(chokeProcessor, 2) != 1) return 297;
     auto& automationReference = makeTestProcessor();
     if (!automationReference.loadSampleForNote(36, sample)
         || !automatedPadProcessor.loadSampleForNote(36, sample)) return 262;
@@ -1890,6 +1955,7 @@ int main(int argc, char** argv)
     configuredEffects.phaserFeedback = 0.3f;
     configuredEffects.phaserMix = 0.8f;
     configuredEffects.filterResonance = 4.75f;
+    configuredEffects.chokeGroup = 3;
     controlStateSource.setNoteParameters(36, configuredEffects);
     auto extremeEffects = controlStateSource.getNoteParameters(37);
     extremeEffects.compressorThresholdDb = -100.0f;
@@ -1902,6 +1968,7 @@ int main(int argc, char** argv)
     extremeEffects.phaserFeedback = -2.0f;
     extremeEffects.phaserMix = 2.0f;
     extremeEffects.filterResonance = 99.0f;
+    extremeEffects.chokeGroup = 99;
     controlStateSource.setNoteParameters(37, extremeEffects);
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
@@ -1927,7 +1994,8 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.phaserDepth - 1.0f) > 0.001f
         || std::abs(clampedParameters.phaserFeedback + 0.8f) > 0.001f
         || std::abs(clampedParameters.phaserMix - 1.0f) > 0.001f
-        || std::abs(clampedParameters.filterResonance - 10.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.filterResonance - 10.0f) > 0.001f
+        || clampedParameters.chokeGroup != 16) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -1935,7 +2003,10 @@ int main(int argc, char** argv)
     if (!waitForSamplePath(controlStateRestored, 36, sample.getFullPathName())) return 24;
     const auto restoredParameters = controlStateRestored.getNoteParameters(36);
     const auto* restoredGainParameter = findHostFloatParameter(controlStateRestored, "magdrum_pad_36_gain");
-    if (restoredGainParameter == nullptr || std::abs(restoredGainParameter->get() + 6.0f) > 0.001f) return 261;
+    const auto* restoredChokeParameter = findHostFloatParameter(controlStateRestored,
+        "magdrum_pad_36_choke_group");
+    if (restoredGainParameter == nullptr || std::abs(restoredGainParameter->get() + 6.0f) > 0.001f
+        || restoredChokeParameter == nullptr || std::abs(restoredChokeParameter->get() - 3.0f) > 0.001f) return 261;
     if (std::abs(restoredParameters.gainDb + 6.0f) > 0.001f
         || std::abs(restoredParameters.pan + 1.0f) > 0.001f
         || std::abs(restoredParameters.tuneSemitones - 12.0f) > 0.001f
@@ -1960,6 +2031,7 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.phaserFeedback - 0.3f) > 0.001f
         || std::abs(restoredParameters.phaserMix - 0.8f) > 0.001f
         || std::abs(restoredParameters.filterResonance - 4.75f) > 0.001f
+        || restoredParameters.chokeGroup != 3
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),

@@ -61,6 +61,7 @@ public:
         float phaserFeedback = 0.0f;
         float phaserMix = 0.0f;
         float filterResonance = 0.707f;
+        int chokeGroup = 0;
     };
 
     MagDrumAudioProcessor();
@@ -119,7 +120,7 @@ public:
 
 private:
     friend class MagDrumAudioProcessorTestAccess;
-    static constexpr size_t padHostParameterCount = 24;
+    static constexpr size_t padHostParameterCount = 25;
 
     struct SampleData
     {
@@ -168,6 +169,8 @@ private:
         double phaserPhase = 0.0;
         float phaserFeedbackLeft = 0.0f, phaserFeedbackRight = 0.0f;
         std::array<float, 4> phaserStateLeft{}, phaserStateRight{};
+        int midiNote = -1;
+        int chokeGroup = 0;
     };
 
     static constexpr int maxVoices = 32;
@@ -203,6 +206,7 @@ private:
     std::array<std::atomic<float>, 128> noteSampleStart{}, noteSampleEnd{};
     std::array<std::atomic<float>, 128> noteCompressorThresholdDb{}, noteCompressorRatio{}, noteCompressorAttackMs{}, noteCompressorReleaseMs{}, noteCompressorMakeupDb{};
     std::array<std::atomic<float>, 128> notePhaserRateHz{}, notePhaserDepth{}, notePhaserFeedback{}, notePhaserMix{};
+    std::array<std::atomic<int>, 128> noteChokeGroup{};
     std::array<std::array<juce::AudioParameterFloat*, padHostParameterCount>, 16> padHostParameters{};
     std::array<std::array<bool, padHostParameterCount>, 16> activePadParameterGestures{};
     std::array<std::atomic<std::uint32_t>, 128> noteTriggerCounts{};

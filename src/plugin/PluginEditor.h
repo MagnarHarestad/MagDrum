@@ -220,6 +220,8 @@ private:
     std::unique_ptr<MagDrumWaveform> waveform;
     std::array<magdrum::ui::DrumPadButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
+    juce::Label chokeGroupLabel;
+    juce::ComboBox chokeGroupSelect;
     juce::Label padMixHeading, padShapeHeading, padEqHeading, padFxHeading;
     juce::Rectangle<int> drumPadTrayBounds, drumEditorPanelBounds, drumWaveformPanelBounds;
     juce::Rectangle<int> padMixPanelBounds, padShapePanelBounds, padEqPanelBounds, padFxPanelBounds;
