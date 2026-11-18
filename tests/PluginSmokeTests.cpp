@@ -227,7 +227,7 @@ public:
             std::cerr << "Plugin-folder chooser is visible outside Plugin Scanner.\n";
             return 1;
         }
-        editor.buttonClicked(&editor.pluginScannerTab);
+        editor.setPage(4);
         if (!editor.choosePluginFolderButton.isVisible())
         {
             std::cerr << "Plugin-folder chooser is hidden in Plugin Scanner.\n";
@@ -403,8 +403,15 @@ public:
     static int checksVirtualizedSequencerBar(MagDrumAudioProcessorEditor& editor,
                                               MagDrumAudioProcessor& processor)
     {
-        if (editor.steps.size() != 8 || editor.steps.front().size() != 32) return 1;
-        if (editor.getNumChildComponents() >= 512) return 2;
+        if (editor.languageButton.getButtonText().isNotEmpty()) return 8;
+        if (editor.steps.size() != 16 || editor.steps.front().size() != 32) return 1;
+        if (editor.laneLabels[8].getText() != "Bell" || editor.laneLabels[15].getText() != "Cowbell") return 2;
+        if (editor.mappedLaneNotes[8] != 53 || editor.mappedLaneNotes[15] != 56) return 9;
+        if (editor.getNumChildComponents() >= 800)
+        {
+            std::cerr << "Unexpectedly high sequencer component count: " << editor.getNumChildComponents() << "\n";
+            return 7;
+        }
 
         editor.lengthSelect.setSelectedId(2);
         editor.barSelect.setSelectedId(2);
@@ -420,7 +427,19 @@ public:
         for (auto* child = state->getFirstChildElement(); child != nullptr; child = child->getNextElement())
             if (child->hasTagName("STEP") && child->getIntAttribute("lane", -1) == 0
                 && child->getIntAttribute("step", -1) == 16)
+            {
+                editor.sequenceStepActive[8][0] = true;
+                editor.sequenceStepActive[15][1] = true;
+                editor.syncSequenceEventsFromGrid();
+                const auto bell = std::find_if(editor.sequenceEvents.begin(), editor.sequenceEvents.end(),
+                    [](const DrumEvent& event){ return event.midiNote == 53; });
+                const auto cowbell = std::find_if(editor.sequenceEvents.begin(), editor.sequenceEvents.end(),
+                    [](const DrumEvent& event){ return event.midiNote == 56; });
+                if (bell == editor.sequenceEvents.end() || cowbell == editor.sequenceEvents.end()) return 10;
+                if (editor.mappingProfile.toMidi(*bell, false).note != std::optional<std::uint8_t>(static_cast<std::uint8_t>(53))
+                    || editor.mappingProfile.toMidi(*cowbell, false).note != std::optional<std::uint8_t>(static_cast<std::uint8_t>(56))) return 11;
                 return 0;
+            }
         return 6;
     }
 };

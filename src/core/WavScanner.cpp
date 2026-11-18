@@ -169,7 +169,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
                                             SampleConsumer sampleConsumer,
                                             const juce::String& resumeAfterFile,
                                             FileProgressConsumer fileProgressConsumer,
-                                            std::shared_ptr<const DrumClassificationModel> classificationModel) const
+                                            std::shared_ptr<const DrumClassificationModel> classificationModel,
+                                            ScanProgressConsumer scanProgressConsumer) const
 {
     juce::Array<ScannedSample> result;
     if (stats != nullptr) *stats = {};
@@ -204,6 +205,13 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         while (firstFile < files.size()
                && files.getReference(firstFile).getFullPathName().compareIgnoreCase(resumeAfterFile) <= 0)
             ++firstFile;
+    if (scanProgressConsumer)
+        scanProgressConsumer(root, 0, files.size() - firstFile);
+    const auto reportProgress = [&](const juce::File& file, int fileIndex)
+    {
+        if (scanProgressConsumer)
+            scanProgressConsumer(file, fileIndex - firstFile + 1, files.size() - firstFile);
+    };
     for (int fileIndex = firstFile; fileIndex < files.size(); ++fileIndex)
     {
         if (shouldCancel && shouldCancel())
@@ -221,6 +229,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         {
             if (stats != nullptr) ++stats->filesSkippedUnchanged;
             if (!checkpoint() && stats != nullptr) ++stats->errors;
+            reportProgress(file, fileIndex);
             continue;
         }
         std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
@@ -228,6 +237,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         {
             if (stats != nullptr) ++stats->errors;
             checkpoint();
+            reportProgress(file, fileIndex);
             continue;
         }
         ScannedSample sample;
@@ -313,12 +323,14 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         {
             if (stats != nullptr) ++stats->errors;
             checkpoint();
+            reportProgress(file, fileIndex);
             continue;
         }
         if (measured == 0)
         {
             if (stats != nullptr) ++stats->errors;
             checkpoint();
+            reportProgress(file, fileIndex);
             continue;
         }
         std::array<juce::int64, 4> centroidOffsets{};
@@ -414,6 +426,7 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
             if (stats != nullptr) ++stats->filesAnalyzed;
             if (!checkpoint() && stats != nullptr) ++stats->errors;
         }
+        reportProgress(file, fileIndex);
     }
     return result;
 }

@@ -382,9 +382,12 @@ int runSmokeTests(int argc,char** argv)
 
     WavScanner scanner;
     WavScanner::Stats initialScanStats;
-    auto scanned=scanner.scan(root,{}, {},&initialScanStats);
+    int scanProgressCallbacks=0, scanProgressCompleted=-1, scanProgressTotal=-1;
+    auto scanned=scanner.scan(root,{}, {},&initialScanStats,{}, {},{}, {},
+        [&](const juce::File&,int completed,int total){++scanProgressCallbacks;scanProgressCompleted=completed;scanProgressTotal=total;});
     if(scanned.size()!=1||scanned.getFirst().file!=waveFile)return 5;
     if(initialScanStats.filesConsidered!=1||initialScanStats.filesAnalyzed!=1||initialScanStats.errors!=0)return 44;
+    if(scanProgressCallbacks<2||scanProgressCompleted!=1||scanProgressTotal!=1)return 286;
     if(scanned.getFirst().channels!=1||scanned.getFirst().sampleRate!=44100.0)return 6;
     if(scanned.getFirst().format!="WAV"||scanned.getFirst().bitDepth!=16||scanned.getFirst().fingerprint.isEmpty())return 12;
     if(scanned.getFirst().acousticFingerprint.length()!=128)return 56;
@@ -736,6 +739,8 @@ int runSmokeTests(int argc,char** argv)
     if(!mapped.note||*mapped.note!=42||mapped.usedFallback)return 19;
     auto decoded=gm.fromMidi(42,96,1.5,0.125);
     if(!decoded||decoded->instrument!=DrumInstrument::HiHat||decoded->articulation!=DrumArticulation::Closed||decoded->positionBeats!=1.5)return 20;
+    const DrumEvent bell{DrumInstrument::Ride,DrumArticulation::Bell,100,0.0,0.1,53};
+    if(gm.toMidi(bell,false).note!=std::optional<std::uint8_t>(53))return 287;
     if(gm.mappingsForMidiNote(42).size()!=1||gm.mappingsForMidiNote(38).size()!=2)return 133;
     DrumEvent unsupported{DrumInstrument::HiHat,DrumArticulation::Edge,80,0.0,0.1};
     if(gm.toMidi(unsupported,false).note)return 21;

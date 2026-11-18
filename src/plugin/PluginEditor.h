@@ -43,6 +43,7 @@ public:
     void paintListBoxItem(int, juce::Graphics&, int, int, bool) override;
     void selectedRowsChanged(int) override;
     void listBoxItemDoubleClicked(int, const juce::MouseEvent&) override;
+    void listBoxItemClicked(int, const juce::MouseEvent&) override;
 
 private:
     friend class MagDrumAudioProcessorEditorTestAccess;
@@ -86,7 +87,7 @@ private:
     void finishDefaultMidiPatternSearch(std::vector<juce::File>, bool cancelled);
     void browseDefaultMidiPatterns();
     void chooseMappingCsv(bool exportCsv);
-    void chooseSampleFolder();
+    void chooseSampleFolder(bool chooseDifferentFolder = false);
     void scanDefaultLibraryFolders();
     void launchInstrumentScanner();
     void openSourceKitForSelectedSample();
@@ -166,6 +167,9 @@ private:
     std::int64_t defaultLibraryErrorCount = 0;
     std::int64_t defaultLibraryVstSoundCount = 0;
     std::int64_t defaultLibraryKontaktNcwCount = 0;
+    juce::File lastSampleScanFolder;
+    bool defaultLibraryScanCanResume = false;
+    double sampleScanProgressValue = 0.0;
     std::shared_ptr<std::atomic<bool>> scanCancellation;
     juce::ThreadPool scanWorkers{1};
     juce::ThreadPool metadataSyncWorkers{1};
@@ -180,12 +184,14 @@ private:
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
     juce::TextButton mapsTab{"MIDI MAPS"};
     juce::TextButton pluginScannerTab{"PLUGIN SCANNER"};
-    juce::TextButton languageButton{"☰"};
+    magdrum::ui::MenuIconButton languageButton;
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
     juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, searchButton{"Search"}, previewButton{"Preview"}, stopPreviewButton{"Stop"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
+    juce::ProgressBar sampleScanProgress{sampleScanProgressValue};
+    juce::Label sampleScanProgressLabel;
     std::unique_ptr<MagDrumWaveform> waveform;
     std::array<juce::TextButton, 16> pads;
     juce::Label selectedPadTitle, layerSummary, sampleDetails, status;
@@ -208,16 +214,16 @@ private:
     std::vector<DrumEvent> sequenceEvents;
     bool sequenceEventsInitialised = false;
     MidiPattern midiEventEditingPattern;
-    std::array<juce::Label, 8> laneLabels;
+    std::array<juce::Label, 16> laneLabels;
     static constexpr size_t stepButtonCount = 32;
-    std::array<std::array<MagDrumStepButton, stepButtonCount>, 8> steps;
-    std::array<std::array<bool, 512>, 8> sequenceStepActive{};
-    std::array<std::array<int, 512>, 8> stepVelocities{};
+    std::array<std::array<MagDrumStepButton, stepButtonCount>, 16> steps;
+    std::array<std::array<bool, 512>, 16> sequenceStepActive{};
+    std::array<std::array<int, 512>, 16> stepVelocities{};
     juce::ComboBox barSelect, meterSelect, lengthSelect, gridResolutionSelect;
     int previousGridResolution = 4;
     MidiMappingProfile mappingProfile = MidiMappingProfile::generalMidi();
     std::array<int, 16> mappedPadNotes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
-    std::array<int, 8> mappedLaneNotes{36,38,42,46,43,51,49,39};
+    std::array<int, 16> mappedLaneNotes{36,38,42,46,43,51,49,39,53,57,50,47,45,37,44,56};
     juce::ComboBox profileSelect, mappingInstrument, mappingArticulation;
     juce::TextEditor profileName, mappingNote;
     juce::TextButton loadProfileButton{"Load profile"}, saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};

@@ -306,4 +306,29 @@ public:
         g.fillEllipse(centreX - 2.2f, centreY - 2.2f, 4.4f, 4.4f);
     }
 };
+
+// Text-free, vector-drawn navigation icon: independent of the host's font and code page.
+class MenuIconButton final : public juce::TextButton
+{
+public:
+    MenuIconButton() : juce::TextButton(juce::String{}) {}
+
+    void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
+    {
+        if (auto* lf = dynamic_cast<LookAndFeel*>(&getLookAndFeel()))
+            lf->drawButtonBackground(g, *this, findColour(getToggleState() ? juce::TextButton::buttonOnColourId
+                                                                            : juce::TextButton::buttonColourId),
+                                     isMouseOverButton, isButtonDown);
+        const auto bounds = getLocalBounds().toFloat().reduced(10.0f, 9.0f);
+        const float width = juce::jmin(19.0f, bounds.getWidth());
+        const float height = juce::jmin(14.0f, bounds.getHeight());
+        const float x = bounds.getCentreX() - width * 0.5f;
+        const float y = bounds.getCentreY() - height * 0.5f;
+        const auto colour = isMouseOverButton || isButtonDown ? Palette::Accent : Palette::Text;
+        g.setColour(colour.withAlpha(isEnabled() ? 1.0f : 0.45f));
+        for (int line = 0; line < 3; ++line)
+            g.fillRoundedRectangle(x, y + static_cast<float>(line) * (height - 2.0f) * 0.5f,
+                                   width, 2.0f, 1.0f);
+    }
+};
 }

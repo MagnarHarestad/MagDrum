@@ -45,6 +45,7 @@ public:
     // When provided, each analyzed file is delivered immediately and is not retained in the returned array.
     using SampleConsumer = std::function<bool(const ScannedSample&)>;
     using FileProgressConsumer = std::function<bool(const juce::File&)>;
+    using ScanProgressConsumer = std::function<void(const juce::File&, int, int)>;
     struct Stats
     {
         std::int64_t filesConsidered = 0;
@@ -60,5 +61,6 @@ public:
                                     SampleConsumer sampleConsumer = {},
                                     const juce::String& resumeAfterFile = {},
                                     FileProgressConsumer fileProgressConsumer = {},
-                                    std::shared_ptr<const DrumClassificationModel> classificationModel = {}) const;
+                                    std::shared_ptr<const DrumClassificationModel> classificationModel = {},
+                                    ScanProgressConsumer scanProgressConsumer = {}) const;
 };

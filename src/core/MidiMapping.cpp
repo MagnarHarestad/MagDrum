@@ -55,6 +55,8 @@ MidiMappingResult MidiMappingProfile::toMidi(const DrumEvent& event,bool allowFa
 
 MidiMappingResult MidiMappingProfile::toMidi(const DrumEvent& event, MidiFallbackPolicy fallbackPolicy) const
 {
+    if (event.midiNote >= 0 && event.midiNote <= 127)
+        return {static_cast<std::uint8_t>(event.midiNote), false, event.articulation};
     const auto exact=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.instrument==event.instrument&&m.articulation==event.articulation;});
     if(exact!=mappings.end())return{exact->note,false,exact->articulation};
     if(fallbackPolicy == MidiFallbackPolicy::disabled)return{};

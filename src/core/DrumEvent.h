@@ -11,4 +11,6 @@ struct DrumEvent
     std::uint8_t velocity = 100;
     double positionBeats = 0.0;
     double durationBeats = 0.1;
+    // Preserves distinct drum pads that share the same semantic instrument/articulation.
+    int midiNote = -1;
 };
