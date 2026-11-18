@@ -18,6 +18,7 @@ using CachedVst3ModuleIndex = std::unordered_map<std::string, CachedVst3ModuleIn
 
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
+bool vst3ModuleMayBeInstrument(const juce::File& bundle);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
 bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);

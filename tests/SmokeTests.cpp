@@ -299,6 +299,31 @@ int runSmokeTests(int argc,char** argv)
     const juce::FileSearchPath defaultsWithCustom(defaultPluginPath+";"+customPluginRoot.getFullPathName());
     const auto duplicatePluginSearch=magdrum::plugins::createVst3DiscoverySearchPath(defaultsWithCustom,customPluginRoot);
     if(duplicatePluginSearch.getNumPaths()!=3)return 209;
+    const auto effectBundle = customPluginRoot.getChildFile("WavesEffect.vst3");
+    const auto instrumentBundle = customPluginRoot.getChildFile("DrumInstrument.vst3");
+    const auto mixedBundle = customPluginRoot.getChildFile("MultiClassInstrument.vst3");
+    const auto legacyBundle = customPluginRoot.getChildFile("LegacyInstrument.vst3");
+    if (!effectBundle.createDirectory().wasOk() || !instrumentBundle.createDirectory().wasOk()
+        || !mixedBundle.createDirectory().wasOk() || !legacyBundle.createDirectory().wasOk()) return 215;
+    const auto effectManifest = effectBundle.getChildFile("Contents/Resources/moduleinfo.json");
+    const auto instrumentManifest = instrumentBundle.getChildFile("Contents/Resources/moduleinfo.json");
+    const auto mixedManifest = mixedBundle.getChildFile("Contents/moduleinfo.json");
+    if (!effectManifest.getParentDirectory().createDirectory().wasOk()
+        || !instrumentManifest.getParentDirectory().createDirectory().wasOk()
+        || !mixedManifest.getParentDirectory().createDirectory().wasOk()) return 216;
+    if (!effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx","Dynamics"]}]})")
+        || !instrumentManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Instrument"]}]})")
+        || !mixedManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx"]},{"Category":"Audio Module Class","Sub Categories":["Instrument"]}]})")) return 217;
+    if (magdrum::plugins::vst3ModuleMayBeInstrument(effectBundle)
+        || !magdrum::plugins::vst3ModuleMayBeInstrument(instrumentBundle)
+        || !magdrum::plugins::vst3ModuleMayBeInstrument(mixedBundle)
+        || !magdrum::plugins::vst3ModuleMayBeInstrument(legacyBundle))
+    {
+        std::cerr << "VST3 discovery did not filter known effects while retaining instruments and legacy modules.\n";
+        return 218;
+    }
+    if (!mixedManifest.replaceWithText("not valid module metadata")
+        || !magdrum::plugins::vst3ModuleMayBeInstrument(mixedBundle)) return 219;
     juce::Array<juce::PluginDescription> cachedPluginDescriptions;
     juce::PluginDescription cachedEffect;cachedEffect.fileOrIdentifier="effect-module";cachedEffect.pluginFormatName="VST3";cachedEffect.isInstrument=false;cachedPluginDescriptions.add(cachedEffect);
     juce::PluginDescription cachedInstrument;cachedInstrument.fileOrIdentifier="instrument-module";cachedInstrument.pluginFormatName="VST3";cachedInstrument.isInstrument=true;cachedPluginDescriptions.add(cachedInstrument);

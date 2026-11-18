@@ -13,6 +13,37 @@ juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
     return result;
 }
 
+bool magdrum::plugins::vst3ModuleMayBeInstrument(const juce::File& bundle)
+{
+    const auto manifest = bundle.getChildFile("Contents").getChildFile("Resources")
+        .getChildFile("moduleinfo.json");
+    const auto fallbackManifest = bundle.getChildFile("Contents").getChildFile("moduleinfo.json");
+    const auto metadataFile = manifest.existsAsFile() ? manifest : fallbackManifest;
+    if (!metadataFile.existsAsFile()) return true;
+
+    const auto parsed = juce::JSON::parse(metadataFile.loadFileAsString());
+    const auto* root = parsed.getDynamicObject();
+    if (root == nullptr) return true;
+    const auto* classes = root->getProperty("Classes").getArray();
+    if (classes == nullptr) return true;
+
+    bool foundAudioClass = false;
+    for (const auto& classInfo : *classes)
+    {
+        const auto* details = classInfo.getDynamicObject();
+        if (details == nullptr
+            || details->getProperty("Category").toString() != "Audio Module Class")
+            continue;
+
+        foundAudioClass = true;
+        const auto* categories = details->getProperty("Sub Categories").getArray();
+        if (categories == nullptr) continue;
+        for (const auto& category : *categories)
+            if (category.toString().equalsIgnoreCase("Instrument")) return true;
+    }
+    return !foundAudioClass;
+}
+
 magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions)
 {

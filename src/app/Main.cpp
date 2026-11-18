@@ -753,31 +753,6 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto previouslyDiscoveredTypes = knownPlugins.getTypes();
     const auto cachedModuleIndex = magdrum::plugins::indexCachedVst3Modules(
         previouslyDiscoveredTypes);
-    const auto declaresInstrument = [](const juce::String& identifier)
-    {
-        const juce::File bundle(identifier);
-        const auto manifest = bundle.getChildFile("Contents").getChildFile("Resources").getChildFile("moduleinfo.json");
-        const auto fallbackManifest = bundle.getChildFile("Contents").getChildFile("moduleinfo.json");
-        const auto metadataFile = manifest.existsAsFile() ? manifest : fallbackManifest;
-        if (!metadataFile.existsAsFile()) return true; // Older VST3 bundles need normal JUCE discovery.
-        const auto parsed = juce::JSON::parse(metadataFile.loadFileAsString());
-        const auto* root = parsed.getDynamicObject();
-        if (root == nullptr) return true; // JSON5 or vendor-specific metadata: keep compatibility.
-        const auto* classes = root->getProperty("Classes").getArray();
-        if (classes == nullptr) return true;
-        bool foundAudioClass = false;
-        for (const auto& classInfo : *classes)
-        {
-            const auto* details = classInfo.getDynamicObject();
-            if (details == nullptr || details->getProperty("Category").toString() != "Audio Module Class") continue;
-            foundAudioClass = true;
-            const auto* categories = details->getProperty("Sub Categories").getArray();
-            if (categories == nullptr) continue;
-            for (const auto& category : *categories)
-                if (category.toString().equalsIgnoreCase("Instrument")) return true;
-        }
-        return !foundAudioClass;
-    };
     juce::StringArray instrumentCandidates;
     const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
     for (const auto& candidate : candidates)
@@ -792,7 +767,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             || module.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (hasSidecarManifest)
         {
-            if (declaresInstrument(candidate)) instrumentCandidates.add(candidate);
+            if (magdrum::plugins::vst3ModuleMayBeInstrument(juce::File(candidate)))
+                instrumentCandidates.add(candidate);
             continue;
         }
 
@@ -801,7 +777,7 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         // A stale cache entry must not hide a module whose classes changed.
         // Sidecar metadata can still cheaply reject effects; legacy bundles are
         // kept eligible for JUCE discovery.
-        if (declaresInstrument(candidate))
+        if (magdrum::plugins::vst3ModuleMayBeInstrument(module))
             instrumentCandidates.add(candidate);
     }
     const int overallTotal = juce::jmax(progressTotal,
