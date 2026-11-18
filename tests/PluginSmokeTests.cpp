@@ -439,6 +439,27 @@ public:
             return 3;
         }
         phaserStream->flush();
+        const auto renderMinimumEffect = [&](juce::Button* tab, const juce::String& name)
+        {
+            editor.setSize(1000, 620);
+            editor.setPage(1);
+            editor.buttonClicked(tab);
+            const auto image = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
+            const auto file = outputDirectory.getChildFile(name + ".png");
+            if (!image.isValid() || (file.existsAsFile() && !file.deleteFile()))
+                return false;
+            std::unique_ptr<juce::FileOutputStream> stream(file.createOutputStream());
+            if (stream == nullptr || !stream->openedOk() || !png.writeImageToStream(image, *stream))
+                return false;
+            stream->flush();
+            return true;
+        };
+        if (!renderMinimumEffect(&editor.compressorTab, "drum-machine-minimum-compressor")
+            || !renderMinimumEffect(&editor.phaserTab, "drum-machine-minimum-phaser"))
+        {
+            std::cerr << "Offscreen minimum-size effects-panel rendering failed.\n";
+            return 4;
+        }
         return 0;
     }
 
