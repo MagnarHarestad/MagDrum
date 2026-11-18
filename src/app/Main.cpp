@@ -759,26 +759,34 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
     for (const auto& candidate : candidates)
     {
-        const auto cachedModule = cachedModuleIndex.find(candidate.toStdString());
-        if (cachedModule != cachedModuleIndex.end()
-            && magdrum::plugins::isCachedVst3ModuleUpToDate(cachedModule->second, juce::File(candidate)))
-            continue;
         const auto module = juce::File(candidate);
+        const auto cachedModule = cachedModuleIndex.find(candidate.toStdString());
+        const bool cachedBinaryIsUpToDate = cachedModule != cachedModuleIndex.end()
+            && magdrum::plugins::isCachedVst3ModuleUpToDate(cachedModule->second, module);
         const bool hasSidecarManifest = module.getChildFile("Contents").getChildFile("Resources")
             .getChildFile("moduleinfo.json").existsAsFile()
             || module.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (hasSidecarManifest)
         {
-            auto mayBeInstrument = magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, module);
-            if (!mayBeInstrument.has_value())
+            const auto action = magdrum::plugins::classifyVst3ModuleForDiscovery(
+                moduleFilterCache, module, cachedBinaryIsUpToDate);
+            if (action == magdrum::plugins::Vst3ModuleDiscoveryAction::ExcludeEffect)
             {
-                mayBeInstrument = magdrum::plugins::vst3ModuleMayBeInstrument(module);
-                magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, module, *mayBeInstrument);
+                // A manifest can change independently of the bundle's main-file timestamp.
+                // Remove any stale instrument descriptions when it now identifies an effect.
+                for (const auto& description : knownPlugins.getTypes())
+                    if (description.pluginFormatName == "VST3"
+                        && description.fileOrIdentifier == candidate)
+                        knownPlugins.removeType(description);
+                continue;
             }
-            if (*mayBeInstrument)
+            if (action == magdrum::plugins::Vst3ModuleDiscoveryAction::ScanInstrument)
                 instrumentCandidates.add(candidate);
             continue;
         }
+
+        if (cachedBinaryIsUpToDate)
+            continue;
 
         // Single-file VST3 modules do not expose a sidecar moduleinfo.json,
         // so keep them eligible for isolated discovery when their cache is stale.

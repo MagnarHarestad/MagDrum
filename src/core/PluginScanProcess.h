@@ -25,6 +25,7 @@ struct Vst3ModuleInstrumentCacheEntry
     bool mayBeInstrument = true;
 };
 using Vst3ModuleInstrumentCache = std::unordered_map<std::string, Vst3ModuleInstrumentCacheEntry>;
+enum class Vst3ModuleDiscoveryAction { Skip, ScanInstrument, ExcludeEffect };
 
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
@@ -34,6 +35,9 @@ std::optional<bool> cachedVst3ModuleMayBeInstrument(const Vst3ModuleInstrumentCa
                                                     const juce::File& bundle);
 void rememberVst3ModuleInstrumentStatus(Vst3ModuleInstrumentCache& cache, const juce::File& bundle,
                                         bool mayBeInstrument);
+Vst3ModuleDiscoveryAction classifyVst3ModuleForDiscovery(Vst3ModuleInstrumentCache& cache,
+                                                          const juce::File& bundle,
+                                                          bool cachedBinaryIsUpToDate);
 bool saveVst3ModuleInstrumentCache(const juce::File& cacheFile,
                                   const Vst3ModuleInstrumentCache& cache);
 CachedVst3ModuleIndex indexCachedVst3Modules(

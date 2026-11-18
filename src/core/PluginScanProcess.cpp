@@ -108,6 +108,22 @@ void magdrum::plugins::rememberVst3ModuleInstrumentStatus(
     cache[bundle.getFullPathName().toStdString()] = std::move(entry);
 }
 
+magdrum::plugins::Vst3ModuleDiscoveryAction magdrum::plugins::classifyVst3ModuleForDiscovery(
+    Vst3ModuleInstrumentCache& cache, const juce::File& bundle, bool cachedBinaryIsUpToDate)
+{
+    const auto cachedClassification = cachedVst3ModuleMayBeInstrument(cache, bundle);
+    const bool manifestWasCached = cachedClassification.has_value();
+    const bool mayBeInstrument = manifestWasCached
+        ? *cachedClassification : vst3ModuleMayBeInstrument(bundle);
+    if (!manifestWasCached)
+        rememberVst3ModuleInstrumentStatus(cache, bundle, mayBeInstrument);
+    if (!mayBeInstrument)
+        return Vst3ModuleDiscoveryAction::ExcludeEffect;
+    if (manifestWasCached && cachedBinaryIsUpToDate)
+        return Vst3ModuleDiscoveryAction::Skip;
+    return Vst3ModuleDiscoveryAction::ScanInstrument;
+}
+
 bool magdrum::plugins::saveVst3ModuleInstrumentCache(
     const juce::File& cacheFile, const Vst3ModuleInstrumentCache& cache)
 {

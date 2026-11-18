@@ -341,6 +341,19 @@ int runSmokeTests(int argc,char** argv)
             + juce::RelativeTime::seconds(5))
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(timestampInvalidationCache, effectBundle).has_value())
         return 223;
+    auto classificationCache = magdrum::plugins::Vst3ModuleInstrumentCache{};
+    magdrum::plugins::rememberVst3ModuleInstrumentStatus(classificationCache, effectBundle, false);
+    if (magdrum::plugins::classifyVst3ModuleForDiscovery(classificationCache, effectBundle, true)
+            != magdrum::plugins::Vst3ModuleDiscoveryAction::ExcludeEffect
+        || !effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Instrument"]}]})")
+        || magdrum::plugins::classifyVst3ModuleForDiscovery(classificationCache, effectBundle, true)
+            != magdrum::plugins::Vst3ModuleDiscoveryAction::ScanInstrument
+        || magdrum::plugins::classifyVst3ModuleForDiscovery(classificationCache, effectBundle, true)
+            != magdrum::plugins::Vst3ModuleDiscoveryAction::Skip
+        || !effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx"]}]})")
+        || magdrum::plugins::classifyVst3ModuleForDiscovery(classificationCache, effectBundle, true)
+            != magdrum::plugins::Vst3ModuleDiscoveryAction::ExcludeEffect)
+        return 224;
     if (!mixedManifest.replaceWithText("not valid module metadata")
         || !magdrum::plugins::vst3ModuleMayBeInstrument(mixedBundle)) return 219;
     juce::Array<juce::PluginDescription> cachedPluginDescriptions;
