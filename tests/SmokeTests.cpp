@@ -309,11 +309,21 @@ int runSmokeTests(int argc,char** argv)
     {
         juce::PluginDescription bulk;bulk.fileOrIdentifier="bulk-module-"+juce::String(index);bulk.pluginFormatName="VST3";bulk.isInstrument=(index%2)==0;cachedPluginDescriptions.add(bulk);
     }
-    const auto cachedInstrumentIndex=magdrum::plugins::indexCachedVst3InstrumentDecisions(cachedPluginDescriptions);
-    if(cachedInstrumentIndex.size()!=4099||cachedInstrumentIndex.at("effect-module")
-        ||!cachedInstrumentIndex.at("instrument-module")||!cachedInstrumentIndex.at("multi-class-module")
-        ||cachedInstrumentIndex.count("other-format")!=0||!cachedInstrumentIndex.at("bulk-module-4094")
-        ||cachedInstrumentIndex.at("bulk-module-4095"))return 210;
+    const auto cachedModuleIndex=magdrum::plugins::indexCachedVst3Modules(cachedPluginDescriptions);
+    if(cachedModuleIndex.size()!=4099||cachedModuleIndex.count("other-format")!=0
+        ||!cachedModuleIndex.at("multi-class-module").hasFileModTime
+        ||!cachedModuleIndex.at("multi-class-module").cachedModTimesAgree)return 210;
+    const auto cachedVst3File = root.getChildFile("cached-module.vst3");
+    if(!cachedVst3File.replaceWithText("test module"))return 211;
+    juce::Array<juce::PluginDescription> timestampedDescriptions;
+    juce::PluginDescription timestampedInstrument;timestampedInstrument.fileOrIdentifier=cachedVst3File.getFullPathName();timestampedInstrument.pluginFormatName="VST3";timestampedInstrument.isInstrument=true;timestampedInstrument.lastFileModTime=cachedVst3File.getLastModificationTime();timestampedDescriptions.add(timestampedInstrument);
+    const auto timestampedIndex=magdrum::plugins::indexCachedVst3Modules(timestampedDescriptions);
+    if(!magdrum::plugins::isCachedVst3ModuleUpToDate(timestampedIndex.at(cachedVst3File.getFullPathName().toStdString()),cachedVst3File))return 212;
+    timestampedInstrument.lastFileModTime=juce::Time();timestampedDescriptions.add(timestampedInstrument);
+    const auto conflictingTimestampIndex=magdrum::plugins::indexCachedVst3Modules(timestampedDescriptions);
+    if(magdrum::plugins::isCachedVst3ModuleUpToDate(conflictingTimestampIndex.at(cachedVst3File.getFullPathName().toStdString()),cachedVst3File))return 213;
+    auto staleTimestamp=timestampedIndex.at(cachedVst3File.getFullPathName().toStdString());staleTimestamp.fileModTime=juce::Time();
+    if(magdrum::plugins::isCachedVst3ModuleUpToDate(staleTimestamp,cachedVst3File))return 214;
     const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
     midiFixture.deleteRecursively();
     const auto midiRoot=midiFixture.getChildFile("midi-discovery");

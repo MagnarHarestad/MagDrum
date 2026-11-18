@@ -13,20 +13,35 @@ juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
     return result;
 }
 
-magdrum::plugins::CachedVst3InstrumentDecisions magdrum::plugins::indexCachedVst3InstrumentDecisions(
+magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions)
 {
-    CachedVst3InstrumentDecisions decisions;
+    CachedVst3ModuleIndex decisions;
     decisions.reserve(static_cast<size_t>(cachedDescriptions.size()));
     for (const auto& description : cachedDescriptions)
     {
         if (description.pluginFormatName != "VST3")
             continue;
 
-        auto& hasInstrument = decisions[description.fileOrIdentifier.toStdString()];
-        hasInstrument = hasInstrument || description.isInstrument;
+        auto& module = decisions[description.fileOrIdentifier.toStdString()];
+        if (!module.hasFileModTime)
+        {
+            module.fileModTime = description.lastFileModTime;
+            module.hasFileModTime = true;
+        }
+        else if (module.fileModTime != description.lastFileModTime)
+        {
+            module.cachedModTimesAgree = false;
+        }
     }
     return decisions;
+}
+
+bool magdrum::plugins::isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached,
+                                                   const juce::File& module)
+{
+    return cached.hasFileModTime && cached.cachedModTimesAgree && module.exists()
+        && module.getLastModificationTime() == cached.fileModTime;
 }
 
 namespace

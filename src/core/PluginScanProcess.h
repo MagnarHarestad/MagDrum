@@ -8,12 +8,19 @@
 
 namespace magdrum::plugins
 {
-using CachedVst3InstrumentDecisions = std::unordered_map<std::string, bool>;
+struct CachedVst3ModuleInfo
+{
+    bool hasFileModTime = false;
+    bool cachedModTimesAgree = true;
+    juce::Time fileModTime;
+};
+using CachedVst3ModuleIndex = std::unordered_map<std::string, CachedVst3ModuleInfo>;
 
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
-CachedVst3InstrumentDecisions indexCachedVst3InstrumentDecisions(
+CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
+bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);
 }
 
 struct PluginScanProcessCapture

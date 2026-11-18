@@ -751,7 +751,7 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto searchPath = magdrum::plugins::createVst3DiscoverySearchPath(
         vst3->getDefaultLocationsToSearch(), additionalFolder);
     const auto previouslyDiscoveredTypes = knownPlugins.getTypes();
-    const auto cachedInstrumentDecisions = magdrum::plugins::indexCachedVst3InstrumentDecisions(
+    const auto cachedModuleIndex = magdrum::plugins::indexCachedVst3Modules(
         previouslyDiscoveredTypes);
     const auto declaresInstrument = [](const juce::String& identifier)
     {
@@ -782,7 +782,9 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
     for (const auto& candidate : candidates)
     {
-        if (knownPlugins.isListingUpToDate(candidate, *vst3))
+        const auto cachedModule = cachedModuleIndex.find(candidate.toStdString());
+        if (cachedModule != cachedModuleIndex.end()
+            && magdrum::plugins::isCachedVst3ModuleUpToDate(cachedModule->second, juce::File(candidate)))
             continue;
         const auto module = juce::File(candidate);
         const bool hasSidecarManifest = module.getChildFile("Contents").getChildFile("Resources")
@@ -794,12 +796,12 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             continue;
         }
 
-        // Single-file VST3 modules do not expose a sidecar moduleinfo.json.
-        // Reuse the cached description after the first isolated scan so later
-        // instrument refreshes can skip effect modules without loading them.
-        const auto cachedDecision = cachedInstrumentDecisions.find(candidate.toStdString());
-        if (cachedDecision != cachedInstrumentDecisions.end()
-                ? cachedDecision->second : declaresInstrument(candidate))
+        // Single-file VST3 modules do not expose a sidecar moduleinfo.json,
+        // so keep them eligible for isolated discovery when their cache is stale.
+        // A stale cache entry must not hide a module whose classes changed.
+        // Sidecar metadata can still cheaply reject effects; legacy bundles are
+        // kept eligible for JUCE discovery.
+        if (declaresInstrument(candidate))
             instrumentCandidates.add(candidate);
     }
     const int overallTotal = juce::jmax(progressTotal,
