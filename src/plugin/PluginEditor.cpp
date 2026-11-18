@@ -378,10 +378,13 @@ public:
         g.drawText(footer,
                    static_cast<int>(plot.getX()),static_cast<int>(plot.getBottom()+4),
                    static_cast<int>(plot.getWidth()),14,juce::Justification::centred);
+        g.saveState();
+        g.reduceClipRegion(plot.toNearestInt().reduced(1));
         for(const auto& projected : acousticPoints)
         {
             const int i=projected.sampleIndex;
             if(!juce::isPositiveAndBelow(i,samples.size()))continue;
+            if(!magdrum::isSampleSimilarityPointVisible(projected.x, projected.y, zoom, panX, panY))continue;
             const auto& sample=samples.getReference(i);
             const auto position=samplePosition(projected, plot);
             const auto x=position.x, y=position.y;
@@ -391,6 +394,7 @@ public:
             if(selected){g.setColour(Palette::Text);g.drawEllipse(x-radius-2,y-radius-2,(radius+2)*2,(radius+2)*2,1.4f);}
         }
         if(samples.isEmpty()){g.setColour(Palette::Muted);g.drawFittedText(magdrum::ui::localisedText("Scan installed libraries or add a sample folder to populate the library."),plot.toNearestInt().reduced(22),juce::Justification::centred,3);}
+        g.restoreState();
     }
     void mouseDown(const juce::MouseEvent& event) override
     {
@@ -469,6 +473,7 @@ private:
         float distance=24.0f;
         for(const auto& projected : acousticPoints)
         {
+            if (!magdrum::isSampleSimilarityPointVisible(projected.x, projected.y, zoom, panX, panY)) continue;
             const float current=point.getDistanceFrom(samplePosition(projected, plot));
             if(current<distance){distance=current;closest=projected.sampleIndex;}
         }

@@ -18,6 +18,17 @@ struct SampleSimilarityPoint
     bool hasAcousticFingerprint = false;
 };
 
+inline bool isSampleSimilarityPointVisible(float x, float y, float zoom, float panX, float panY)
+{
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(zoom)
+        || !std::isfinite(panX) || !std::isfinite(panY) || zoom < 1.0f)
+        return false;
+
+    const float visibleWidth = 1.0f / zoom;
+    return x >= panX && x <= panX + visibleWidth
+        && y >= 1.0f - panY - visibleWidth && y <= 1.0f - panY;
+}
+
 inline std::vector<int> representativeSampleIndices(size_t sampleCount)
 {
     constexpr size_t maximumPoints = 3000;
