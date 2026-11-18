@@ -260,6 +260,27 @@ public:
             std::cerr << "The MIDI fallback policy was not restored with the Cubase plug-in state.\n";
             return 2;
         }
+
+        juce::XmlElement legacyEditorState("PLUGIN_EDITOR_STATE");
+        legacyEditorState.setAttribute("allowArticulationFallback", true);
+        editor.processor.setPluginEditorState(legacyEditorState);
+        editor.restorePluginEditorState();
+        if (editor.midiFallbackPolicy.getSelectedId() != 3)
+        {
+            std::cerr << "A legacy Cubase project did not restore its enabled articulation fallback.\n";
+            return 3;
+        }
+
+        juce::XmlElement currentEditorState("PLUGIN_EDITOR_STATE");
+        currentEditorState.setAttribute("fallbackPolicy", 1);
+        currentEditorState.setAttribute("allowArticulationFallback", false);
+        editor.processor.setPluginEditorState(currentEditorState);
+        editor.restorePluginEditorState();
+        if (editor.midiFallbackPolicy.getSelectedId() != 2)
+        {
+            std::cerr << "The explicit MIDI fallback mode did not take precedence over the legacy flag.\n";
+            return 4;
+        }
         return 0;
     }
 
