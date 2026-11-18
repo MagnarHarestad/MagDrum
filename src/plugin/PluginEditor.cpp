@@ -1064,23 +1064,44 @@ class PluginInventoryScanJob final : public juce::ThreadPoolJob
 {
 public:
     PluginInventoryScanJob(MagDrumAudioProcessorEditor& owner, std::shared_ptr<std::atomic<bool>> cancel,
-                           juce::File folder)
+                           juce::File progress, juce::File folder)
         : ThreadPoolJob("MagDrum isolated VST3 discovery"), editor(&owner), cancellation(std::move(cancel)),
-          additionalFolder(std::move(folder)) {}
+          progressFile(std::move(progress)), additionalFolder(std::move(folder)) {}
     JobStatus runJob() override
     {
         const auto helper = bundledScannerApplication();
         if (! helper.existsAsFile()) { finish(-1, false); return jobHasFinished; }
-        juce::ChildProcess child;
-        juce::StringArray command{helper.getFullPathName(), "--magdrum-vst3-discovery-worker"};
-        if (additionalFolder.isDirectory()) command.add(additionalFolder.getFullPathName());
-        if (! child.start(command, 0))
-        { finish(-1, false); return jobHasFinished; }
-        while (child.isRunning() && ! shouldExit() && ! cancellation->load())
-            child.waitForProcessToFinish(100);
-        const bool cancelled = shouldExit() || cancellation->load();
-        if (cancelled && child.isRunning()) { child.kill(); child.waitForProcessToFinish(3000); }
-        finish(cancelled ? -1 : static_cast<int>(child.getExitCode()), cancelled);
+        constexpr int maximumPluginCrashRecoveries = 64;
+        int recoveredCrashes = 0;
+        while (! shouldExit() && ! cancellation->load())
+        {
+            juce::ChildProcess child;
+            juce::StringArray command{helper.getFullPathName(), "--magdrum-vst3-discovery-worker",
+                                      progressFile.getFullPathName()};
+            if (additionalFolder.isDirectory()) command.add(additionalFolder.getFullPathName());
+            if (! child.start(command, 0))
+            { finish(-1, false); return jobHasFinished; }
+            while (child.isRunning() && ! shouldExit() && ! cancellation->load())
+                child.waitForProcessToFinish(100);
+            const bool cancelled = shouldExit() || cancellation->load();
+            if (cancelled && child.isRunning()) { child.kill(); child.waitForProcessToFinish(3000); }
+            if (cancelled)
+            { finish(-1, true); return jobHasFinished; }
+
+            const int exitCode = static_cast<int>(child.getExitCode());
+            if (exitCode == 0)
+            { finish(0, false); return jobHasFinished; }
+
+            // The helper persists each completed module and JUCE records a
+            // crashing module in its dead-man's pedal file. Restarting lets the
+            // scanner skip that module and continue the remaining inventory.
+            if (exitCode < 0 && ++recoveredCrashes <= maximumPluginCrashRecoveries)
+                continue;
+
+            finish(exitCode, false);
+            return jobHasFinished;
+        }
+        finish(-1, true);
         return jobHasFinished;
     }
 private:
@@ -1092,6 +1113,7 @@ private:
     }
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> editor;
     std::shared_ptr<std::atomic<bool>> cancellation;
+    juce::File progressFile;
     juce::File additionalFolder;
 };
 
@@ -2410,16 +2432,51 @@ void MagDrumAudioProcessorEditor::startPluginInventoryScan(const juce::File& add
     }
     pluginInventoryScanCancellation = std::make_shared<std::atomic<bool>>(false);
     pluginInventoryScanRunning = true;
+    pluginInventoryProgressFile = getMagDrumDataDirectory().getChildFile(
+        "vst3-scan-progress-" + juce::Uuid().toString() + ".json");
     choosePluginFolderButton.setEnabled(false);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Cancel instrument scan"));
     status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…"), juce::dontSendNotification);
-    pluginInventoryWorkers.addJob(new PluginInventoryScanJob(*this, pluginInventoryScanCancellation, additionalFolder), true);
+    pollPluginInventoryProgress();
+    pluginInventoryWorkers.addJob(new PluginInventoryScanJob(*this, pluginInventoryScanCancellation,
+        pluginInventoryProgressFile, additionalFolder), true);
+}
+
+void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
+{
+    if (!pluginInventoryScanRunning)
+        return;
+
+    if (pluginInventoryProgressFile.existsAsFile())
+    {
+        const auto parsed = juce::JSON::parse(pluginInventoryProgressFile.loadFileAsString());
+        if (const auto* progress = parsed.getDynamicObject())
+        {
+            const int completed = juce::jmax(0, static_cast<int>(progress->getProperty("completed")));
+            const int total = juce::jmax(0, static_cast<int>(progress->getProperty("total")));
+            if (total > 0)
+            {
+                const int percent = juce::jlimit(0, 100, juce::roundToInt(100.0 * completed / total));
+                status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…") + " "
+                    + juce::String(percent) + "% (" + juce::String(completed) + "/"
+                    + juce::String(total) + ")", juce::dontSendNotification);
+            }
+        }
+    }
+
+    const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    juce::Timer::callAfterDelay(200, [safe]
+    {
+        if (safe != nullptr) safe->pollPluginInventoryProgress();
+    });
 }
 
 void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool cancelled)
 {
     pluginInventoryScanRunning = false;
     pluginInventoryScanCancellation.reset();
+    if (pluginInventoryProgressFile.existsAsFile()) pluginInventoryProgressFile.deleteFile();
+    pluginInventoryProgressFile = {};
     scanPluginInventoryButton.setEnabled(true);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders"));
     choosePluginFolderButton.setEnabled(true);

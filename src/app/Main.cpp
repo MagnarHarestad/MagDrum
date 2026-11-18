@@ -26,6 +26,7 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <optional>
 #include <unordered_map>
 
 namespace
@@ -697,7 +698,7 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 void MainComponent::openPluginBrowser(){if(pluginWindow==nullptr)pluginWindow=std::make_unique<PluginWindow>(*this);pluginWindow->toFront(true);status.setText(juce::String(database.getPluginInstruments().size())+" plugin instruments indexed.",juce::dontSendNotification);}
-int runIsolatedVst3Discovery(const juce::File& additionalFolder = {})
+int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& additionalFolder = {})
 {
     if (additionalFolder != juce::File() && ! additionalFolder.isDirectory())
         return 7;
@@ -705,6 +706,28 @@ int runIsolatedVst3Discovery(const juce::File& additionalFolder = {})
     const auto dataDirectory = getMagDrumDataDirectory();
     if ((! dataDirectory.isDirectory()) && ! dataDirectory.createDirectory().wasOk())
         return 2;
+
+    int progressBase = 0;
+    int progressTotal = 0;
+    if (progressFile.existsAsFile())
+    {
+        const auto previous = juce::JSON::parse(progressFile.loadFileAsString());
+        if (const auto* object = previous.getDynamicObject())
+        {
+            progressBase = juce::jmax(0, static_cast<int>(object->getProperty("completed")));
+            progressTotal = juce::jmax(0, static_cast<int>(object->getProperty("total")));
+        }
+    }
+    const auto publishProgress = [&progressFile](int completed, int total, const juce::String& current)
+    {
+        if (progressFile == juce::File{}) return;
+        auto* progress = new juce::DynamicObject();
+        progress->setProperty("completed", completed);
+        progress->setProperty("total", total);
+        progress->setProperty("current", current);
+        progressFile.replaceWithText(juce::JSON::toString(juce::var(progress)));
+    };
+    publishProgress(progressBase, progressTotal, "discovering");
 
     const auto inventoryFile = dataDirectory.getChildFile("vst3-plugins.xml");
     juce::KnownPluginList knownPlugins;
@@ -727,6 +750,21 @@ int runIsolatedVst3Discovery(const juce::File& additionalFolder = {})
 
     const auto searchPath = magdrum::plugins::createVst3DiscoverySearchPath(
         vst3->getDefaultLocationsToSearch(), additionalFolder);
+    const auto previouslyDiscoveredTypes = knownPlugins.getTypes();
+    const auto cachedInstrumentDecision = [&previouslyDiscoveredTypes](const juce::String& identifier)
+        -> std::optional<bool>
+    {
+        bool found = false;
+        bool hasInstrument = false;
+        for (const auto& description : previouslyDiscoveredTypes)
+            if (description.fileOrIdentifier == identifier && description.pluginFormatName == "VST3")
+            {
+                found = true;
+                hasInstrument = hasInstrument || description.isInstrument;
+            }
+        if (!found) return {};
+        return hasInstrument;
+    };
     const auto declaresInstrument = [](const juce::String& identifier)
     {
         const juce::File bundle(identifier);
@@ -755,13 +793,46 @@ int runIsolatedVst3Discovery(const juce::File& additionalFolder = {})
     juce::StringArray instrumentCandidates;
     const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
     for (const auto& candidate : candidates)
-        if (declaresInstrument(candidate)) instrumentCandidates.add(candidate);
+    {
+        if (knownPlugins.isListingUpToDate(candidate, *vst3))
+            continue;
+        const auto module = juce::File(candidate);
+        const bool hasSidecarManifest = module.getChildFile("Contents").getChildFile("Resources")
+            .getChildFile("moduleinfo.json").existsAsFile()
+            || module.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
+        if (hasSidecarManifest)
+        {
+            if (declaresInstrument(candidate)) instrumentCandidates.add(candidate);
+            continue;
+        }
+
+        // Single-file VST3 modules do not expose a sidecar moduleinfo.json.
+        // Reuse the cached description after the first isolated scan so later
+        // instrument refreshes can skip effect modules without loading them.
+        const auto cachedDecision = cachedInstrumentDecision(candidate);
+        if (cachedDecision.has_value() ? *cachedDecision : declaresInstrument(candidate))
+            instrumentCandidates.add(candidate);
+    }
+    const int overallTotal = juce::jmax(progressTotal,
+        progressBase + instrumentCandidates.size());
+    publishProgress(progressBase, overallTotal, "scanning");
     juce::PluginDirectoryScanner scanner(knownPlugins, *vst3,
         juce::FileSearchPath{}, true,
         dataDirectory.getChildFile("RecentlyCrashedPluginsList"));
     scanner.setFilesOrIdentifiersToScan(instrumentCandidates);
-    juce::String name;
-    while (scanner.scanNextFile(true, name)) {}
+    for (int completed = 0; completed < instrumentCandidates.size(); ++completed)
+    {
+        juce::String name;
+        scanner.scanNextFile(true, name);
+        // Commit discoveries incrementally. If a third-party binary crashes
+        // this helper, a later scan keeps completed results and the JUCE
+        // dead-man's pedal skips the module that was being scanned.
+        auto xml = knownPlugins.createXml();
+        if (xml == nullptr || !xml->writeTo(inventoryFile))
+            return 5;
+        publishProgress(progressBase + completed + 1, overallTotal, name);
+    }
+    publishProgress(overallTotal, overallTotal, "complete");
 
     if (auto xml = knownPlugins.createXml())
         return xml->writeTo(inventoryFile) ? 0 : 5;
@@ -899,13 +970,14 @@ public:
         juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         juce::StringArray arguments;
         arguments.addTokens(commandLine, true);
-        if ((arguments.size() == 1 || arguments.size() == 2)
+        if ((arguments.size() == 2 || arguments.size() == 3)
             && arguments[0] == "--magdrum-vst3-discovery-worker")
         {
-            const auto additionalFolder = arguments.size() == 2 ? juce::File(arguments[1]) : juce::File();
-            if (! juce::Thread::launch([this, additionalFolder]
+            const auto progressFile = juce::File(arguments[1].unquoted());
+            const auto additionalFolder = arguments.size() == 3 ? juce::File(arguments[2].unquoted()) : juce::File();
+            if (! juce::Thread::launch([this, progressFile, additionalFolder]
                 {
-                    const auto exitCode = runIsolatedVst3Discovery(additionalFolder);
+                    const auto exitCode = runIsolatedVst3Discovery(progressFile, additionalFolder);
                     juce::MessageManager::callAsync([this, exitCode]
                     {
                         setApplicationReturnValue(exitCode);

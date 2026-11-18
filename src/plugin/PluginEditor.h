@@ -100,6 +100,7 @@ private:
     void refreshPluginKits();
     void choosePluginFolder();
     void startPluginInventoryScan(const juce::File& additionalFolder = {});
+    void pollPluginInventoryProgress();
     void finishPluginInventoryScan(int exitCode, bool cancelled);
     void choosePluginPreset();
     void startPluginPresetImport();
@@ -179,6 +180,7 @@ private:
     bool pluginScanRunning = false;
     bool pluginInventoryScanRunning = false;
     std::shared_ptr<std::atomic<bool>> pluginInventoryScanCancellation;
+    juce::File pluginInventoryProgressFile;
     juce::ThreadPool pluginInventoryWorkers{1};
     juce::Array<juce::PluginDescription> discoveredPluginInstruments;
     juce::TextButton libraryTab{"SAMPLE LIBRARY"}, machineTab{"DRUM MACHINE"}, sequencerTab{"SEQUENCER"};
