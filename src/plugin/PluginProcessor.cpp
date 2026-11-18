@@ -50,6 +50,10 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         noteSustainLevel[note].store(1.0f, std::memory_order_relaxed);
         noteReleaseMs[note].store(0.0f, std::memory_order_relaxed);
         noteFilterCutoffHz[note].store(20000.0f, std::memory_order_relaxed);
+        noteDriveDb[note].store(0.0f, std::memory_order_relaxed);
+        noteEqLowDb[note].store(0.0f, std::memory_order_relaxed);
+        noteEqMidDb[note].store(0.0f, std::memory_order_relaxed);
+        noteEqHighDb[note].store(0.0f, std::memory_order_relaxed);
     }
     for (auto& noteCounters : roundRobinCounters)
         for (auto& counter : noteCounters)
@@ -366,7 +370,11 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             noteDecayMs[index].load(std::memory_order_relaxed),
             noteSustainLevel[index].load(std::memory_order_relaxed),
             noteReleaseMs[index].load(std::memory_order_relaxed),
-            noteFilterCutoffHz[index].load(std::memory_order_relaxed)};
+            noteFilterCutoffHz[index].load(std::memory_order_relaxed),
+            noteDriveDb[index].load(std::memory_order_relaxed),
+            noteEqLowDb[index].load(std::memory_order_relaxed),
+            noteEqMidDb[index].load(std::memory_order_relaxed),
+            noteEqHighDb[index].load(std::memory_order_relaxed)};
 }
 
 void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters)
@@ -385,6 +393,10 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
     noteReleaseMs[index].store(juce::jlimit(0.0f, 5000.0f, finiteOrZero(parameters.releaseMs)), std::memory_order_relaxed);
     const float cutoff = std::isfinite(parameters.filterCutoffHz) ? parameters.filterCutoffHz : 20000.0f;
     noteFilterCutoffHz[index].store(juce::jlimit(20.0f, 20000.0f, cutoff), std::memory_order_relaxed);
+    noteDriveDb[index].store(juce::jlimit(0.0f, 24.0f, finiteOrZero(parameters.driveDb)), std::memory_order_relaxed);
+    noteEqLowDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqLowDb)), std::memory_order_relaxed);
+    noteEqMidDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqMidDb)), std::memory_order_relaxed);
+    noteEqHighDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqHighDb)), std::memory_order_relaxed);
 }
 
 void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
@@ -441,6 +453,17 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         const float cutoff = juce::jmin(parameters.filterCutoffHz, static_cast<float>(outputSampleRate * 0.49));
         voice.lowPassCoefficient = cutoff >= outputSampleRate * 0.49
             ? 0.0f : std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / static_cast<float>(outputSampleRate));
+        voice.driveGain = juce::Decibels::decibelsToGain(parameters.driveDb);
+        voice.eqLowGain = juce::Decibels::decibelsToGain(parameters.eqLowDb);
+        voice.eqMidGain = juce::Decibels::decibelsToGain(parameters.eqMidDb);
+        voice.eqHighGain = juce::Decibels::decibelsToGain(parameters.eqHighDb);
+        const auto lowPassMix = [this](float frequency)
+        {
+            return 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi * frequency
+                                  / static_cast<float>(juce::jmax(1.0, outputSampleRate)));
+        };
+        voice.eqLowCoefficient = lowPassMix(200.0f);
+        voice.eqHighCoefficient = lowPassMix(4000.0f);
     }
 }
 
@@ -680,9 +703,25 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             }
             const float leftInput = readInterpolated(0);
             const float rightInput = readInterpolated(audio.getNumChannels() > 1 ? 1 : 0);
+            const auto saturate = [drive = voice.driveGain](float input)
+            {
+                return drive <= 1.0001f ? input : std::tanh(input * drive) / drive;
+            };
+            const float drivenLeft = saturate(leftInput);
+            const float drivenRight = saturate(rightInput);
+            voice.eqLowStateLeft += voice.eqLowCoefficient * (drivenLeft - voice.eqLowStateLeft);
+            voice.eqLowStateRight += voice.eqLowCoefficient * (drivenRight - voice.eqLowStateRight);
+            voice.eqHighStateLeft += voice.eqHighCoefficient * (drivenLeft - voice.eqHighStateLeft);
+            voice.eqHighStateRight += voice.eqHighCoefficient * (drivenRight - voice.eqHighStateRight);
+            const float equalizedLeft = voice.eqLowStateLeft * voice.eqLowGain
+                + (drivenLeft - voice.eqLowStateLeft - (drivenLeft - voice.eqHighStateLeft)) * voice.eqMidGain
+                + (drivenLeft - voice.eqHighStateLeft) * voice.eqHighGain;
+            const float equalizedRight = voice.eqLowStateRight * voice.eqLowGain
+                + (drivenRight - voice.eqLowStateRight - (drivenRight - voice.eqHighStateRight)) * voice.eqMidGain
+                + (drivenRight - voice.eqHighStateRight) * voice.eqHighGain;
             const float filterMix = 1.0f - voice.lowPassCoefficient;
-            voice.lowPassStateLeft += filterMix * (leftInput - voice.lowPassStateLeft);
-            voice.lowPassStateRight += filterMix * (rightInput - voice.lowPassStateRight);
+            voice.lowPassStateLeft += filterMix * (equalizedLeft - voice.lowPassStateLeft);
+            voice.lowPassStateRight += filterMix * (equalizedRight - voice.lowPassStateRight);
             left += voice.lowPassStateLeft * voice.gain * envelope * voice.leftPanGain;
             right += voice.lowPassStateRight * voice.gain * envelope * voice.rightPanGain;
             voice.position += (voice.sample->sampleRate / outputSampleRate) * voice.playbackRate;
@@ -712,7 +751,10 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
             if (std::abs(parameters.gainDb) > 0.000001f || std::abs(parameters.pan) > 0.000001f
                 || std::abs(parameters.tuneSemitones) > 0.000001f || std::abs(parameters.attackMs) > 0.000001f
                 || std::abs(parameters.decayMs) > 0.000001f || std::abs(parameters.sustainLevel - 1.0f) > 0.000001f
-                || std::abs(parameters.releaseMs) > 0.000001f || std::abs(parameters.filterCutoffHz - 20000.0f) > 0.001f)
+                || std::abs(parameters.releaseMs) > 0.000001f || std::abs(parameters.filterCutoffHz - 20000.0f) > 0.001f
+                || std::abs(parameters.driveDb) > 0.000001f
+                || std::abs(parameters.eqLowDb) > 0.000001f || std::abs(parameters.eqMidDb) > 0.000001f
+                || std::abs(parameters.eqHighDb) > 0.000001f)
             {
                 auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
                 savedParameters->setAttribute("note", note);
@@ -724,6 +766,10 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("sustainLevel", parameters.sustainLevel);
                 savedParameters->setAttribute("releaseMs", parameters.releaseMs);
                 savedParameters->setAttribute("filterCutoffHz", parameters.filterCutoffHz);
+                savedParameters->setAttribute("driveDb", parameters.driveDb);
+                savedParameters->setAttribute("eqLowDb", parameters.eqLowDb);
+                savedParameters->setAttribute("eqMidDb", parameters.eqMidDb);
+                savedParameters->setAttribute("eqHighDb", parameters.eqHighDb);
             }
             int layerCount = 0;
             const SampleData* onlyLayer = nullptr;
@@ -793,7 +839,11 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("decayMs", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("sustainLevel", 1.0)),
                     static_cast<float>(child->getDoubleAttribute("releaseMs", 0.0)),
-                    static_cast<float>(child->getDoubleAttribute("filterCutoffHz", 20000.0))};
+                    static_cast<float>(child->getDoubleAttribute("filterCutoffHz", 20000.0)),
+                    static_cast<float>(child->getDoubleAttribute("driveDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("eqLowDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("eqMidDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("eqHighDb", 0.0))};
             continue;
         }
         if (!child->hasTagName("SAMPLE_LAYER"))

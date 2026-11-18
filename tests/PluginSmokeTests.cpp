@@ -911,8 +911,8 @@ int main(int argc, char** argv)
 
     auto& controlStateSource = makeTestProcessor();
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
-    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f});
-    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f});
+    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f, 12.5f, -6.0f, 3.0f, 4.0f});
+    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f, 99.0f, -99.0f, 99.0f, -99.0f});
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
         || std::abs(clampedParameters.pan + 1.0f) > 0.001f
@@ -921,7 +921,11 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.decayMs - 5000.0f) > 0.001f
         || std::abs(clampedParameters.sustainLevel) > 0.001f
         || std::abs(clampedParameters.releaseMs - 5000.0f) > 0.001f
-        || std::abs(clampedParameters.filterCutoffHz - 20000.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.filterCutoffHz - 20000.0f) > 0.001f
+        || std::abs(clampedParameters.driveDb - 24.0f) > 0.001f
+        || std::abs(clampedParameters.eqLowDb + 18.0f) > 0.001f
+        || std::abs(clampedParameters.eqMidDb - 18.0f) > 0.001f
+        || std::abs(clampedParameters.eqHighDb + 18.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -936,6 +940,10 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.sustainLevel - 0.4f) > 0.001f
         || std::abs(restoredParameters.releaseMs - 350.0f) > 0.001f
         || std::abs(restoredParameters.filterCutoffHz - 8000.0f) > 0.001f
+        || std::abs(restoredParameters.driveDb - 12.5f) > 0.001f
+        || std::abs(restoredParameters.eqLowDb + 6.0f) > 0.001f
+        || std::abs(restoredParameters.eqMidDb - 3.0f) > 0.001f
+        || std::abs(restoredParameters.eqHighDb - 4.0f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
@@ -944,13 +952,19 @@ int main(int argc, char** argv)
                                                std::numeric_limits<float>::infinity(),
                                                std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
-                                               -std::numeric_limits<float>::infinity()});
+                                               -std::numeric_limits<float>::infinity(),
+                                               std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::quiet_NaN()});
     const auto finiteParameters = controlStateSource.getNoteParameters(38);
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
         || std::abs(finiteParameters.tuneSemitones) > 0.001f) return 31;
     if (finiteParameters.attackMs != 0.0f || finiteParameters.decayMs != 0.0f
         || finiteParameters.sustainLevel != 1.0f || finiteParameters.releaseMs != 0.0f
-        || finiteParameters.filterCutoffHz != 20000.0f) return 40;
+        || finiteParameters.filterCutoffHz != 20000.0f || finiteParameters.driveDb != 0.0f
+        || finiteParameters.eqLowDb != 0.0f || finiteParameters.eqMidDb != 0.0f
+        || finiteParameters.eqHighDb != 0.0f) return 40;
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
@@ -1012,6 +1026,26 @@ int main(int argc, char** argv)
     const double naturalFilterPeak = renderPeak(filterReference, 36, 127);
     const double filteredPeak = renderPeak(filteredPad, 36, 127);
     if (naturalFilterPeak < 0.05 || filteredPeak / naturalFilterPeak > 0.6) return 44;
+
+    auto& driveReference = makeTestProcessor();
+    auto& drivenPad = makeTestProcessor();
+    if (!driveReference.loadSampleForNote(36, sample) || !drivenPad.loadSampleForNote(36, sample)) return 51;
+    driveReference.prepareToPlay(48000.0, 128);
+    drivenPad.prepareToPlay(48000.0, 128);
+    drivenPad.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 20000.0f, 12.0f});
+    const double cleanDrivePeak = renderPeak(driveReference, 36, 127);
+    const double saturatedDrivePeak = renderPeak(drivenPad, 36, 127);
+    if (cleanDrivePeak < 0.05 || saturatedDrivePeak >= cleanDrivePeak * 0.95) return 52;
+
+    auto& eqReference = makeTestProcessor();
+    auto& eqLowReduced = makeTestProcessor();
+    if (!eqReference.loadSampleForNote(36, sample) || !eqLowReduced.loadSampleForNote(36, sample)) return 53;
+    eqReference.prepareToPlay(48000.0, 128);
+    eqLowReduced.prepareToPlay(48000.0, 128);
+    eqLowReduced.setNoteParameters(36, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 20000.0f, 0.0f, -18.0f});
+    const double unfilteredEqPeak = renderPeak(eqReference, 36, 127);
+    const double lowReducedPeak = renderPeak(eqLowReduced, 36, 127);
+    if (unfilteredEqPeak < 0.05 || lowReducedPeak >= unfilteredEqPeak * 0.8) return 54;
 
     auto& leftPan = makeTestProcessor();
     auto& rightPan = makeTestProcessor();
