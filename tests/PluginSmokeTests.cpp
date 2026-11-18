@@ -547,6 +547,22 @@ public:
         if (editor.midiEventWindow == nullptr || editor.midiEventWindow->getContentComponent() == nullptr)
             return 5;
         auto* midiEventContent = editor.midiEventWindow->getContentComponent();
+        int midiEventTextFields = 0;
+        for (int childIndex = 0; childIndex < midiEventContent->getNumChildComponents(); ++childIndex)
+            if (const auto* field = dynamic_cast<const juce::TextEditor*>(midiEventContent->getChildComponent(childIndex)))
+            {
+                ++midiEventTextFields;
+                if (!field->getJustificationType().testFlags(juce::Justification::verticallyCentred))
+                {
+                    std::cerr << "A MIDI-event editor text field is not vertically centred.\n";
+                    return 9;
+                }
+            }
+        if (midiEventTextFields != 3)
+        {
+            std::cerr << "Expected three MIDI-event editor text fields, found " << midiEventTextFields << ".\n";
+            return 10;
+        }
         const std::array<Language, 8> languages{
             Language::english, Language::german, Language::french, Language::spanish,
             Language::swedish, Language::norwegian, Language::danish, Language::finnish};
@@ -646,6 +662,18 @@ public:
                                               MagDrumAudioProcessor& processor)
     {
         if (editor.languageButton.getButtonText().isNotEmpty()) return 8;
+        constexpr auto verticallyCentred = juce::Justification::verticallyCentred;
+        const std::array<const juce::TextEditor*, 13> textFields{
+            &editor.sampleSearch, &editor.velocityRange, &editor.tempoEditor, &editor.metadataBeat,
+            &editor.metadataValue, &editor.profileName, &editor.mappingNote, &editor.pluginPresetKitName,
+            &editor.pluginVelocities, &editor.pluginNoteDuration, &editor.pluginRelease,
+            &editor.pluginCaptureLength, &editor.pluginRepeatCount};
+        for (const auto* field : textFields)
+            if (!field->getJustificationType().testFlags(verticallyCentred))
+            {
+                std::cerr << "A VST text field is not vertically centred.\n";
+                return 13;
+            }
         if (editor.steps.size() != 16 || editor.steps.front().size() != 32) return 1;
         constexpr std::array<const char*, 16> expectedLaneNames{
             "Kick", "Snare", "Closed hi-hat", "Open hi-hat", "Tom 4", "Ride", "Crash 1", "Clap",

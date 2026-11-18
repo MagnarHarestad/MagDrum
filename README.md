@@ -4,7 +4,7 @@ MagDrum is a drum sample library, VST3 drum machine and semantic MIDI workspace.
 
 ## Current Windows build
 
-The latest test release is [v0.1.2-test.218](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.218), VST3 version 0.1.2.218. Release CTest passed 2/2, package verification passed, and the installed plugin passed isolated scanning and rendering for all 128 MIDI notes, including C1. Pads now glow for mouse, sequencer and incoming host MIDI triggers. The installed per-user plugin is at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; the previous .217 bundle is backed up outside the VST3 scan folders. No system-wide copy is installed. Cubase Pro 15 rescan and hands-on acceptance remain pending.
+The latest test release is [v0.1.2-test.222](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.222), VST3 version 0.1.2.222. Release CTest passed 2/2, package verification passed, and the installed plugin passed isolated scanning and rendering for all 128 MIDI notes, including C1. Sequencer smoke coverage checks all 16 lane labels and General MIDI notes. VST text fields are vertically centered, including the library search and plugin-scan controls. Pads glow for mouse, sequencer and incoming host MIDI triggers. The installed per-user plugin is at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; the previous .221 bundle is backed up outside the VST3 scan folders. No system-wide copy is installed. Cubase Pro 15 rescan and hands-on acceptance remain pending.
 
 The VST has five views: Sample Library, Drum Machine, Sequencer, MIDI Maps and Plugin Scanner. The drum machine follows a DR-660-inspired 4×4 order and provides velocity layers, round-robin playback, per-pad gain, pan, tune, Drive, three-band EQ, ADSR, low-pass and editable sample-trim controls. These settings are saved with the Cubase project. The VST scans local sample libraries, previews and assigns sounds, edits semantic drum patterns and mappings, and can discover VST3 instruments and capture their MIDI notes in an isolated helper. Third-party plugin behavior still needs real host review; opening a vendor instrument's own editor uses a separate MagDrum window.
 
@@ -23,7 +23,7 @@ Requires CMake 3.22+, C++20, Git and a supported Visual Studio C++ toolchain. JU
 Use `Build-Windows-Plugin.ps1` for fast cached Debug iteration. Build and run the Windows Release checks once for a Cubase-ready milestone with `Build-Windows.ps1 -BuildRevision <test-number>`. The latter creates the package under `latest-publish`. For installed-package verification, run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-InstalledWindowsVST3.ps1 -ExpectedVersion 0.1.2.218
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test-InstalledWindowsVST3.ps1 -ExpectedVersion 0.1.2.222
 ```
 
 See [`docs/vst-parity.md`](docs/vst-parity.md#windows-development-and-installation-loop) for the full workflow. Do not use `Build-Unix.sh` while Linux and macOS remain paused.
