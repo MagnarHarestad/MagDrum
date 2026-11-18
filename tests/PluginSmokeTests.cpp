@@ -451,6 +451,62 @@ public:
         return 0;
     }
 
+    static int checksSampleScanProgress(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.setPage(0);
+        editor.scanning = true;
+        editor.resized();
+        if (!editor.sampleScanProgress.isVisible() || !editor.sampleScanProgressLabel.isVisible()
+            || !editor.getLocalBounds().contains(editor.sampleScanProgress.getBounds())
+            || !editor.getLocalBounds().contains(editor.sampleScanProgressLabel.getBounds()))
+        {
+            std::cerr << "Sample-scan progress is not visible in the Sample Library layout.\n";
+            editor.scanning = false;
+            editor.resized();
+            return 1;
+        }
+
+        editor.updateSampleScanProgress(juce::File("Kick.wav"), 2, 5);
+        if (std::abs(editor.sampleScanProgressValue - 0.4) > 0.001
+            || editor.sampleScanProgressLabel.getText() != "40% - 2 / 5 - Kick.wav"
+            || editor.status.getText() != "Scanning sample: Kick.wav")
+        {
+            std::cerr << "Sample-scan progress did not show percentage, count and current filename.\n";
+            editor.scanning = false;
+            editor.resized();
+            return 2;
+        }
+
+        editor.updateSampleScanProgress(juce::File("Kick.wav"), 15, 10);
+        if (std::abs(editor.sampleScanProgressValue - 1.0) > 0.001
+            || editor.sampleScanProgressLabel.getText() != "100% - 15 / 10 - Kick.wav")
+        {
+            std::cerr << "Sample-scan progress did not clamp its bar at 100 percent.\n";
+            editor.scanning = false;
+            editor.resized();
+            return 3;
+        }
+
+        editor.updateSampleScanProgress(juce::File("Unknown.wav"), 0, 0);
+        if (editor.sampleScanProgressValue != -1.0
+            || editor.sampleScanProgressLabel.getText() != "Unknown.wav")
+        {
+            std::cerr << "Indeterminate sample-scan progress did not show the current filename.\n";
+            editor.scanning = false;
+            editor.resized();
+            return 4;
+        }
+
+        editor.scanning = false;
+        editor.resized();
+        if (editor.sampleScanProgress.isVisible() || editor.sampleScanProgressLabel.isVisible())
+        {
+            std::cerr << "Sample-scan progress remained visible after scanning stopped.\n";
+            return 5;
+        }
+        return 0;
+    }
+
     static int checksDefaultMidiSearchCancellation(MagDrumAudioProcessorEditor& editor)
     {
         auto cancellation = std::make_shared<std::atomic<bool>>(false);
@@ -873,6 +929,8 @@ int main(int argc, char** argv)
         if (independentPadCheck != 0) return 65 + independentPadCheck;
         const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
         if (folderButtonCheck != 0) return 44;
+        const int sampleScanProgressCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleScanProgress(editor);
+        if (sampleScanProgressCheck != 0) return 48 + sampleScanProgressCheck;
         const int drumLayoutCheck = MagDrumAudioProcessorEditorTestAccess::checksDrumMachineControlLayout(editor);
         if (drumLayoutCheck != 0) return 60 + drumLayoutCheck;
         const int editorCheck=MagDrumAudioProcessorEditorTestAccess::checksVirtualizedSequencerBar(editor, editorProcessor);

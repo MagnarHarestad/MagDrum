@@ -106,6 +106,7 @@ private:
     void openSourceKitForSelectedSample();
     void startNextDefaultLibraryFolder();
     void startSampleScan(const juce::File&);
+    void updateSampleScanProgress(const juce::File&, int completed, int total);
     void finishSampleScan(const WavScanner::Stats&, std::int64_t, const juce::String&);
     void loadSamplePage(bool reset, std::uint64_t requestGeneration = 0);
     void refreshSourceKitFilters();

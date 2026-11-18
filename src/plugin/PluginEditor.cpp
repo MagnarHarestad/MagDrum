@@ -3358,8 +3358,18 @@ void MagDrumAudioProcessorEditor::startSampleScan(const juce::File& folder)
     sampleScanProgressLabel.setText(magdrum::ui::localisedText("Scanning folder: ")+folder.getFileName(),juce::dontSendNotification);resized();status.setText(magdrum::ui::localisedText("Scanning folder: ")+folder.getFileName()+"...",juce::dontSendNotification);
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     auto completion=[safe](const WavScanner::Stats& stats,std::int64_t indexed,const juce::String& error){juce::MessageManager::callAsync([safe,stats,indexed,error]{if(safe!=nullptr)safe->finishSampleScan(stats,indexed,error);});};
-    auto progress=[safe](const juce::File& file,int completed,int total){if(total>0&&completed!=0&&completed!=total&&completed%5!=0)return;juce::MessageManager::callAsync([safe,name=file.getFileName(),completed,total]{if(safe!=nullptr&&safe->scanning){safe->sampleScanProgressValue=total>0?static_cast<double>(completed)/total:-1.0;const int percent=total>0?juce::jlimit(0,100,juce::roundToInt(100.0*completed/total)):-1;safe->sampleScanProgressLabel.setText(total>0?juce::String(percent)+"% - "+juce::String(completed)+" / "+juce::String(total)+" - "+name:name,juce::dontSendNotification);safe->status.setText(magdrum::ui::localisedText("Scanning sample: ")+name,juce::dontSendNotification);}});};
+    auto progress=[safe](const juce::File& file,int completed,int total){if(total>0&&completed!=0&&completed!=total&&completed%5!=0)return;juce::MessageManager::callAsync([safe,file,completed,total]{if(safe!=nullptr)safe->updateSampleScanProgress(file,completed,total);});};
     scanWorkers.addJob(new PluginSampleScanJob(folder,databaseFile,scanCancellation,std::move(completion),std::move(progress)),true);
+}
+
+void MagDrumAudioProcessorEditor::updateSampleScanProgress(const juce::File& file,int completed,int total)
+{
+    if(!scanning)return;
+    sampleScanProgressValue=total>0?static_cast<double>(juce::jlimit(0,total,completed))/total:-1.0;
+    const int percent=total>0?juce::jlimit(0,100,juce::roundToInt(100.0*completed/total)):-1;
+    const auto name=file.getFileName();
+    sampleScanProgressLabel.setText(total>0?juce::String(percent)+"% - "+juce::String(completed)+" / "+juce::String(total)+" - "+name:name,juce::dontSendNotification);
+    status.setText(magdrum::ui::localisedText("Scanning sample: ")+name,juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::finishSampleScan(const WavScanner::Stats& stats,std::int64_t indexed,const juce::String& error)
