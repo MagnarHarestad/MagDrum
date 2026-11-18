@@ -45,7 +45,7 @@ constexpr std::array<const char*, 16> laneNames{"KICK","SNARE","CLOSED HAT","OPE
 constexpr std::array<int, 16> defaultSequencerMidiNotes{36,38,42,46,43,51,49,39,53,57,50,47,45,37,44,56};
 using I=DrumInstrument;using A=DrumArticulation;
 constexpr std::array<I,16> laneInstruments{I::Kick,I::Snare,I::HiHat,I::HiHat,I::Tom,I::Ride,I::Crash,I::Clap,I::Ride,I::Crash,I::Tom,I::Tom,I::Tom,I::Rimshot,I::HiHat,I::Percussion};
-constexpr std::array<A,16> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default,A::Bell,A::Default,A::High,A::Mid,A::Low,A::SideStick,A::Pedal,A::Default};
+constexpr std::array<A,16> laneArticulations{A::Default,A::Default,A::Closed,A::Open,A::Low,A::Bow,A::Default,A::Default,A::Bell,A::Default,A::High,A::Mid,A::Low,A::SideStick,A::Pedal,A::Bell};
 juce::Colour categoryColour(const juce::String& value) { return Palette::forDrumCategory(value); }
 int sequencerLaneForEvent(const DrumEvent& event, const std::array<int, 16>& mappedNotes)
 {

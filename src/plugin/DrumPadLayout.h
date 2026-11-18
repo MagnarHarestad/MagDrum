@@ -34,7 +34,7 @@ inline constexpr std::array<DrumPadDefinition, 16> bossDr660PadLayout{{
     {"Kick", 36, DrumInstrument::Kick, DrumArticulation::Default},
     {"Snare", 38, DrumInstrument::Snare, DrumArticulation::Default},
     {"Pedal HH", 44, DrumInstrument::HiHat, DrumArticulation::Pedal},
-    {"Cowbell", 56, DrumInstrument::Percussion, DrumArticulation::Default}
+    {"Cowbell", 56, DrumInstrument::Percussion, DrumArticulation::Bell}
 }};
 
 inline constexpr auto defaultPadNotes = []
@@ -75,4 +75,5 @@ static_assert(std::string_view(padNames[12]) == "Kick");
 static_assert(std::string_view(padNames[13]) == "Snare");
 static_assert(std::string_view(padNames[14]) == "Pedal HH");
 static_assert(std::string_view(padNames[15]) == "Cowbell");
+static_assert(padArticulations[15] == DrumArticulation::Bell);
 }

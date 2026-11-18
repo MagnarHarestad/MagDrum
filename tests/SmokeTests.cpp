@@ -809,6 +809,29 @@ int runSmokeTests(int argc,char** argv)
     if(!mapped.note||*mapped.note!=42||mapped.usedFallback)return 19;
     auto decoded=gm.fromMidi(42,96,1.5,0.125);
     if(!decoded||decoded->instrument!=DrumInstrument::HiHat||decoded->articulation!=DrumArticulation::Closed||decoded->positionBeats!=1.5)return 20;
+    const auto cowbell = gm.fromMidi(56, 112, 2.0, 0.25);
+    if (!cowbell || cowbell->instrument != DrumInstrument::Percussion
+        || cowbell->articulation != DrumArticulation::Bell
+        || gm.toMidi(*cowbell, MidiFallbackPolicy::disabled).note != std::optional<std::uint8_t>(56))
+    {
+        std::cerr << "The General MIDI profile did not preserve Cowbell note 56 as a mapped percussion articulation.\n";
+        return 292;
+    }
+    MidiPattern cowbellPattern;
+    cowbellPattern.events.push_back(*cowbell);
+    const auto cowbellMidi = root.getChildFile("gm-cowbell-roundtrip.mid");
+    MidiPattern decodedCowbellPattern;
+    const auto cowbellReport = MidiPatternIO{}.write(cowbellMidi, cowbellPattern, gm, false)
+        ? MidiPatternIO{}.read(cowbellMidi, gm, decodedCowbellPattern)
+        : MidiImportReport{};
+    if (!cowbellReport.ok || !cowbellReport.unmappedNotes.empty()
+        || decodedCowbellPattern.events.size() != 1
+        || decodedCowbellPattern.events.front().instrument != DrumInstrument::Percussion
+        || decodedCowbellPattern.events.front().articulation != DrumArticulation::Bell)
+    {
+        std::cerr << "The General MIDI Cowbell event did not survive MIDI export and re-import.\n";
+        return 293;
+    }
     const DrumEvent bell{DrumInstrument::Ride,DrumArticulation::Bell,100,0.0,0.1,53};
     if(gm.toMidi(bell,false).note!=std::optional<std::uint8_t>(53))return 287;
     if(gm.mappingsForMidiNote(42).size()!=1||gm.mappingsForMidiNote(38).size()!=2)return 133;

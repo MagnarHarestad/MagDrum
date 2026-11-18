@@ -44,7 +44,8 @@ MidiMappingProfile MidiMappingProfile::generalMidi()
         {I::Kick,A::Default,36},{I::Kick,A::Low,35},
         {I::Snare,A::Center,38},{I::Snare,A::Default,38},{I::Snare,A::SideStick,37},{I::Snare,A::Rimshot,40},{I::Rimshot,A::Default,40},
         {I::HiHat,A::Closed,42},{I::HiHat,A::Open,46},{I::HiHat,A::Pedal,44},{I::Tom,A::Low,43},{I::Tom,A::Mid,47},{I::Tom,A::High,50},
-        {I::Ride,A::Bow,51},{I::Ride,A::Bell,53},{I::Crash,A::Default,49},{I::Clap,A::Default,39},{I::Percussion,A::Default,54}
+        {I::Ride,A::Bow,51},{I::Ride,A::Bell,53},{I::Crash,A::Default,49},{I::Clap,A::Default,39},
+        {I::Percussion,A::Default,54},{I::Percussion,A::Bell,56}
     });
 }
 

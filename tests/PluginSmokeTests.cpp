@@ -773,6 +773,13 @@ public:
                 return 9;
             }
         }
+        if (magdrum::plugin::bossDr660PadLayout[15].instrument != DrumInstrument::Percussion
+            || magdrum::plugin::bossDr660PadLayout[15].articulation != DrumArticulation::Bell
+            || magdrum::plugin::padArticulations[15] != DrumArticulation::Bell)
+        {
+            std::cerr << "The Cowbell sequencer lane does not use the General MIDI Cowbell articulation.\n";
+            return 10;
+        }
         editor.pads[0].flash();
         if (editor.pads[0].getFlashAmount() < 0.9f) return 12;
         if (editor.getNumChildComponents() >= 800)
