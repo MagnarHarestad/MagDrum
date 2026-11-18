@@ -49,6 +49,8 @@ This ordering puts the playable instrument path first while preserving the reque
 
 **Windows .228 host-compatibility checks:** the installed .228 module passed Steinberg VST 3.8.1's standard validator suite (47/47) and extended suite (537/537). The exact package also passed Release CTest, package safeguards, hash matching and isolated rendering for MIDI notes 0–127 including C1. Follow-up Debug processor tests now simulate host tempo changes between blocks, a sequencer loop crossing the 4-beat boundary, seeking to the start, and stopping transport; Debug CTest passed 2/2. These checks do not replace opening the plugin and saving/reopening a real Cubase Pro 15 project; the manual host review remains pending.
 
+**Windows .229 UI-correction build:** the MIDI Maps note field now uses the short ASCII placeholder `MIDI 0-127`, with the accepted range explained in its tooltip, avoiding a clipped mojibake dash in Cubase. An offscreen renderer now refreshes and replaces PNG snapshots for all five VST views. Debug and Release CTest passed 2/2, localization coverage passed for 582 source labels, package verification passed, and the exact ZIP bundle passed isolated scanner/rendering for all 128 MIDI notes including C1; its module hash matched the extracted package. Cubase Pro 15 visual and project acceptance remains pending.
+
 ## Windows development and installation loop
 
 Work Windows x64 only until the Cubase Pro 15 experience is accepted. Do not spend iteration time on Linux or macOS packages unless requested.

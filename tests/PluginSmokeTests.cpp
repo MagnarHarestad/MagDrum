@@ -236,6 +236,45 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static bool mappingNotePlaceholderMatchesLanguage(const MagDrumAudioProcessorEditor& editor)
+    {
+        return editor.mappingNote.getTextToShowWhenEmpty() == magdrum::ui::localisedText("MIDI 0-127");
+    }
+
+    static int renderPagesOffscreen(MagDrumAudioProcessorEditor& editor, const juce::File& outputDirectory)
+    {
+        static constexpr std::array<std::pair<int, const char*>, 5> pages{{
+            {0, "sample-library"}, {1, "drum-machine"}, {2, "sequencer"},
+            {3, "midi-maps"}, {4, "plugin-scanner"}}};
+        editor.setSize(1280, 800);
+        juce::PNGImageFormat png;
+        for (const auto& [page, name] : pages)
+        {
+            editor.setPage(page);
+            editor.resized();
+            const auto image = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
+            if (!image.isValid())
+            {
+                std::cerr << "Offscreen VST page rendering returned an empty image: " << name << ".\n";
+                return 1;
+            }
+            const auto file = outputDirectory.getChildFile(juce::String(name) + ".png");
+            if (file.existsAsFile() && !file.deleteFile())
+            {
+                std::cerr << "Could not replace offscreen VST page image: " << file.getFullPathName() << ".\n";
+                return 2;
+            }
+            std::unique_ptr<juce::FileOutputStream> stream(file.createOutputStream());
+            if (stream == nullptr || !stream->openedOk() || !png.writeImageToStream(image, *stream))
+            {
+                std::cerr << "Could not save offscreen VST page image: " << file.getFullPathName() << ".\n";
+                return 2;
+            }
+            stream->flush();
+        }
+        return 0;
+    }
+
     static int checksDr660ImportedNotesReachTheirOwnSequencerLanes(MagDrumAudioProcessorEditor& editor)
     {
         constexpr std::array<int, 16> notes{49,57,53,51,50,47,45,43,37,39,42,46,36,38,44,56};
@@ -876,6 +915,19 @@ int main(int argc, char** argv)
         return !state.isEmpty() && juce::File(argv[3]).replaceWithData(state.getData(), state.getSize()) ? 0 : 203;
     }
 
+#if JUCE_WINDOWS
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-render-ui") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        const auto outputDirectory = juce::File(argv[2]);
+        if (!outputDirectory.isDirectory() && !outputDirectory.createDirectory().wasOk()) return 204;
+        auto processor = std::make_unique<MagDrumAudioProcessor>();
+        const auto editorDatabase = outputDirectory.getChildFile("snapshot-index.sqlite3");
+        auto editor = std::make_unique<MagDrumAudioProcessorEditor>(*processor, editorDatabase);
+        return MagDrumAudioProcessorEditorTestAccess::renderPagesOffscreen(*editor, outputDirectory);
+    }
+#endif
+
     std::vector<std::unique_ptr<MagDrumAudioProcessor>> testProcessors;
     activeTestProcessors = &testProcessors;
 
@@ -989,6 +1041,11 @@ int main(int argc, char** argv)
         MagDrumAudioProcessor editorProcessor;
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
+        if (!MagDrumAudioProcessorEditorTestAccess::mappingNotePlaceholderMatchesLanguage(editor))
+        {
+            std::cerr << "The MIDI note placeholder does not match the selected language key.\n";
+            return 77;
+        }
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
         const int independentPadCheck = MagDrumAudioProcessorEditorTestAccess::checksIndependentPadSoundControls(editor, editorProcessor);
         if (independentPadCheck != 0) return 65 + independentPadCheck;
