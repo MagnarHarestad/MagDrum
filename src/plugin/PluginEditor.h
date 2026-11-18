@@ -81,6 +81,7 @@ private:
     void refreshMappingSummary();
     void savePluginEditorState();
     void restorePluginEditorState();
+    juce::String currentWaveformTooltip() const;
     void importMidiPattern();
     void loadMidiPatternFile(const juce::File&);
     void searchDefaultMidiPatterns();

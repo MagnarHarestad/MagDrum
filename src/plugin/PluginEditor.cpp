@@ -493,9 +493,11 @@ private:
     bool isPreviewing=false, isPanning=false;
 };
 
-class MagDrumWaveform final : public juce::Component, private juce::ChangeListener
+class MagDrumWaveform final : public juce::Component, public juce::TooltipClient, private juce::ChangeListener
 {
 public:
+    std::function<void(float, float)> onTrimRangeChanged;
+    juce::String getTooltip() override { return tooltipText; }
     MagDrumWaveform() : thumbnail(512, formats, cache)
     {
         formats.registerBasicFormats();thumbnail.addChangeListener(this);magdrum::ui::languageChangeBroadcaster().addChangeListener(this);
@@ -503,19 +505,49 @@ public:
     ~MagDrumWaveform() override { thumbnail.removeChangeListener(this);magdrum::ui::languageChangeBroadcaster().removeChangeListener(this); }
     void setFile(const juce::File& file)
     {
-        currentFile=file;thumbnail.setSource(file.existsAsFile()?new juce::FileInputSource(file):nullptr);repaint();
+        currentFile=file;thumbnail.setSource(file.existsAsFile()?new juce::FileInputSource(file):nullptr);updateTooltip();repaint();
+    }
+    void setTrimRange(float start, float end)
+    {
+        trimStart = juce::jlimit(0.0f, 0.99f, start);
+        trimEnd = juce::jlimit(trimStart + 0.01f, 1.0f, end);
+        repaint();
     }
     void paint(juce::Graphics& g) override
     {
         auto area=getLocalBounds().toFloat().reduced(2.0f);g.setColour(Palette::Panel);g.fillRoundedRectangle(area,7.0f);g.setColour(Palette::Border.withAlpha(0.7f));g.drawRoundedRectangle(area,7.0f,1.0f);
         g.setColour(Palette::Muted);g.setFont(11.0f);g.drawText(magdrum::ui::localisedText("SAMPLE WAVEFORM"),getLocalBounds().reduced(12,7).removeFromTop(18),juce::Justification::centredLeft);
-        auto wave=getLocalBounds().reduced(12,28).toFloat();g.setColour(Palette::Accent.withAlpha(0.18f));g.drawHorizontalLine(static_cast<int>(wave.getCentreY()),wave.getX(),wave.getRight());
+        auto wave=getLocalBounds().reduced(12,28).toFloat();
+        const float startX=wave.getX()+trimStart*wave.getWidth(),endX=wave.getX()+trimEnd*wave.getWidth();
+        g.setColour(Palette::Background.withAlpha(0.64f));g.fillRect(juce::Rectangle<float>(wave.getX(),wave.getY(),startX-wave.getX(),wave.getHeight()));g.fillRect(juce::Rectangle<float>(endX,wave.getY(),wave.getRight()-endX,wave.getHeight()));
+        g.setColour(Palette::Accent.withAlpha(0.18f));g.drawHorizontalLine(static_cast<int>(wave.getCentreY()),wave.getX(),wave.getRight());
         if(thumbnail.getNumChannels()>0){g.setColour(Palette::Accent);thumbnail.drawChannels(g,wave.toNearestInt(),0.0,thumbnail.getTotalLength(),1.0f);}
         else{g.setColour(Palette::Muted);g.drawFittedText(magdrum::ui::localisedText(currentFile.existsAsFile()?"Reading waveform…":"No sample loaded"),wave.toNearestInt(),juce::Justification::centred,2);}
+        g.setColour(Palette::Accent.withAlpha(0.30f));g.fillRect(juce::Rectangle<float>(wave.getX(),wave.getY(),startX-wave.getX(),wave.getHeight()));g.fillRect(juce::Rectangle<float>(endX,wave.getY(),wave.getRight()-endX,wave.getHeight()));
+        g.setColour(Palette::Accent);g.drawVerticalLine(juce::roundToInt(startX),wave.getY(),wave.getBottom());g.drawVerticalLine(juce::roundToInt(endX),wave.getY(),wave.getBottom());
+        g.fillRoundedRectangle(juce::Rectangle<float>(startX-4.0f,wave.getY(),8.0f,12.0f),3.0f);g.fillRoundedRectangle(juce::Rectangle<float>(endX-4.0f,wave.getY(),8.0f,12.0f),3.0f);
+        g.setColour(Palette::Muted);g.setFont(10.0f);g.drawText(juce::String(juce::roundToInt(trimStart*100.0f))+"% — "+juce::String(juce::roundToInt(trimEnd*100.0f))+"%",getLocalBounds().reduced(12,7).removeFromTop(18).withTrimmedLeft(130),juce::Justification::centredRight);
     }
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        const auto wave=getLocalBounds().reduced(12,28).toFloat();if(!wave.contains(event.position))return;
+        const float x=wave.getX()+trimStart*wave.getWidth(),endX=wave.getX()+trimEnd*wave.getWidth();draggedTrimHandle=std::abs(event.position.x-x)<=std::abs(event.position.x-endX)?0:1;
+    }
+    void mouseDoubleClick(const juce::MouseEvent&) override {setTrimRange(0.0f,1.0f);if(onTrimRangeChanged)onTrimRangeChanged(trimStart,trimEnd);}
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        if(draggedTrimHandle<0)return;const auto wave=getLocalBounds().reduced(12,28).toFloat();const float normalized=juce::jlimit(0.0f,1.0f,(event.position.x-wave.getX())/juce::jmax(1.0f,wave.getWidth()));
+        if(draggedTrimHandle==0)trimStart=juce::jmin(normalized,trimEnd-0.01f);else trimEnd=juce::jmax(normalized,trimStart+0.01f);repaint();if(onTrimRangeChanged)onTrimRangeChanged(trimStart,trimEnd);
+    }
+    void mouseUp(const juce::MouseEvent&) override {draggedTrimHandle=-1;}
 private:
-    void changeListenerCallback(juce::ChangeBroadcaster*) override { repaint(); }
-    juce::AudioFormatManager formats;juce::AudioThumbnailCache cache{8};juce::AudioThumbnail thumbnail;juce::File currentFile;
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override
+    {
+        if(source==&magdrum::ui::languageChangeBroadcaster())updateTooltip();
+        repaint();
+    }
+    void updateTooltip() { tooltipText=magdrum::ui::localisedText("Drag waveform markers to set the sample playback range. Double-click to reset."); }
+    juce::AudioFormatManager formats;juce::AudioThumbnailCache cache{8};juce::AudioThumbnail thumbnail;juce::File currentFile;juce::String tooltipText;float trimStart=0.0f,trimEnd=1.0f;int draggedTrimHandle=-1;
 };
 
 class MagDrumSampleComparison final : public juce::Component
@@ -1533,6 +1565,14 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         processor.setNoteParameters(selectedNote, parameters);
         processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
     };
+    waveform->onTrimRangeChanged = [this](float start, float end)
+    {
+        auto parameters = processor.getNoteParameters(selectedNote);
+        parameters.sampleStart = start;
+        parameters.sampleEnd = end;
+        processor.setNoteParameters(selectedNote, parameters);
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
     addAndMakeVisible(*waveform);
     velocityRange.setText(magdrum::ui::localisedText("1-127"));velocityRange.setInputRestrictions(7,"0123456789-");velocityRange.setTooltip(magdrum::ui::localisedText("Inclusive velocity range for this sample layer (1–127)."));addAndMakeVisible(velocityRange);
     clearPadButton.setButtonText(magdrum::ui::localisedText("Clear pad"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));for(auto* button:{&clearPadButton,&loadButton}){button->addListener(this);addAndMakeVisible(*button);}
@@ -1732,6 +1772,11 @@ void MagDrumAudioProcessorEditor::resized()
     }
     else if(page==1)
     {
+        const auto fitValueBox = [](juce::Slider& slider, int columnWidth)
+        {
+            const int valueBoxWidth = juce::jlimit(1, 82, columnWidth - 4);
+            slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, valueBoxWidth, 20);
+        };
         auto grid=bounds.removeFromLeft(bounds.getWidth()*3/5);
         const int gap=10;
         const int padW=(grid.getWidth()-3*gap)/4,padH=(grid.getHeight()-3*gap)/4;
@@ -1752,6 +1797,7 @@ void MagDrumAudioProcessorEditor::resized()
         {
             auto column=controls.removeFromLeft(index+1==padMixControls.size()?controls.getWidth():controlWidth);
             padMixControls[index].first->setBounds(column.removeFromTop(15));
+            fitValueBox(*padMixControls[index].second, column.getWidth());
             padMixControls[index].second->setBounds(column);
         }
         bounds.removeFromTop(2);
@@ -1765,6 +1811,7 @@ void MagDrumAudioProcessorEditor::resized()
         {
             auto column=controls.removeFromLeft(index+1==padShapeControls.size()?controls.getWidth():shapeControlWidth);
             padShapeControls[index].first->setBounds(column.removeFromTop(15));
+            fitValueBox(*padShapeControls[index].second, column.getWidth());
             padShapeControls[index].second->setBounds(column);
         }
         bounds.removeFromTop(2);
@@ -1777,6 +1824,7 @@ void MagDrumAudioProcessorEditor::resized()
         {
             auto column=controls.removeFromLeft(index+1==padEqControls.size()?controls.getWidth():eqControlWidth);
             padEqControls[index].first->setBounds(column.removeFromTop(15));
+            fitValueBox(*padEqControls[index].second, column.getWidth());
             padEqControls[index].second->setBounds(column);
         }
         bounds.removeFromTop(3);
@@ -3822,6 +3870,7 @@ void MagDrumAudioProcessorEditor::setNote(int note)
     selectedPadTitle.setText(localizedPadName(static_cast<size_t>(safeIndex))+"   ·   "+noteName(selectedNote)+"   ·   MIDI "+juce::String(selectedNote),juce::dontSendNotification);
     updatingPadControls=true;
     const auto parameters=processor.getNoteParameters(selectedNote);
+    waveform->setTrimRange(parameters.sampleStart,parameters.sampleEnd);
     gainSlider.setValue(parameters.gainDb,juce::dontSendNotification);
     panSlider.setValue(parameters.pan,juce::dontSendNotification);
     tuneSlider.setValue(parameters.tuneSemitones,juce::dontSendNotification);
@@ -4013,6 +4062,11 @@ void MagDrumAudioProcessorEditor::updateLayerSummary()
     layerSummary.setText(text,juce::dontSendNotification);
     sampleDetails.setText(magdrum::ui::localisedText("PAD SAMPLE")+(layers.empty()?"\n"+magdrum::ui::localisedText("No sample loaded"):"\n"+juce::File(layers.front().path).getFileName()+"\n"+layers.front().path),juce::dontSendNotification);
     waveform->setFile(layers.empty()?juce::File():juce::File(layers.front().path));
+}
+
+juce::String MagDrumAudioProcessorEditor::currentWaveformTooltip() const
+{
+    return waveform->getTooltip();
 }
 
 void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)

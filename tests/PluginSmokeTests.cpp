@@ -124,6 +124,22 @@ bool writeFixture(const juce::File& file, float amplitude = 0.25f, int sampleCou
     return writer != nullptr && writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples());
 }
 
+bool writeTrimImpulseFixture(const juce::File& file)
+{
+    juce::AudioBuffer<float> audio(1, 960);
+    audio.clear();
+    audio.setSample(0, 100, 0.7f);
+    audio.setSample(0, 600, 0.8f);
+    audio.setSample(0, 750, 0.9f);
+    juce::WavAudioFormat format;
+    std::unique_ptr<juce::OutputStream> stream(file.createOutputStream());
+    if (!stream)
+        return false;
+    auto writer = format.createWriterFor(stream, juce::AudioFormatWriterOptions()
+        .withSampleRate(48000.0).withNumChannels(1).withBitsPerSample(24));
+    return writer != nullptr && writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples());
+}
+
 double renderPeak(MagDrumAudioProcessor& processor, int note, int velocity)
 {
     juce::AudioBuffer<float> audio(2, 128);
@@ -310,6 +326,26 @@ public:
                                            const juce::File& firstSample, const juce::File& secondSample)
     {
         using magdrum::ui::Language;
+        const juce::Point<int> originalSize{editor.getWidth(), editor.getHeight()};
+        const int originalPage = editor.page;
+        editor.setSize(1000, 620);
+        editor.setPage(1);
+        const std::array<const juce::Slider*, 12> padSliders{
+            &editor.gainSlider, &editor.panSlider, &editor.tuneSlider, &editor.driveSlider,
+            &editor.attackSlider, &editor.decaySlider, &editor.sustainSlider, &editor.releaseSlider,
+            &editor.filterCutoffSlider, &editor.eqLowSlider, &editor.eqMidSlider, &editor.eqHighSlider};
+        for (const auto* slider : padSliders)
+        {
+            if (slider->getWidth() <= 0 || slider->getTextBoxWidth() > slider->getWidth())
+            {
+                std::cerr << "A pad control value field exceeds its column at the minimum VST editor size.\n";
+                editor.setPage(originalPage);
+                editor.setSize(originalSize.x, originalSize.y);
+                return 7;
+            }
+        }
+        editor.setPage(originalPage);
+        editor.setSize(originalSize.x, originalSize.y);
         editor.openSampleComparisonWindow(firstSample, secondSample);
         if (editor.comparisonWindow == nullptr || editor.comparisonWindow->getContentComponent() == nullptr)
             return 2;
@@ -325,7 +361,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 21> checks{{
+            const std::array<LabelCheck, 27> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -345,8 +381,14 @@ public:
                 {"pad sustain control", editor.sustainLabel.getText(), magdrum::ui::localisedText("PAD SUSTAIN")},
                 {"pad release control", editor.releaseLabel.getText(), magdrum::ui::localisedText("PAD RELEASE")},
                 {"pad filter control", editor.filterCutoffLabel.getText(), magdrum::ui::localisedText("FILTER CUTOFF")},
+                {"pad drive control", editor.driveLabel.getText(), magdrum::ui::localisedText("PAD DRIVE")},
+                {"pad low EQ control", editor.eqLowLabel.getText(), magdrum::ui::localisedText("EQ LOW")},
+                {"pad mid EQ control", editor.eqMidLabel.getText(), magdrum::ui::localisedText("EQ MID")},
+                {"pad high EQ control", editor.eqHighLabel.getText(), magdrum::ui::localisedText("EQ HIGH")},
                 {"pad mix heading", editor.padMixHeading.getText(), magdrum::ui::localisedText("PAD MIX")},
-                {"pad envelope heading", editor.padShapeHeading.getText(), magdrum::ui::localisedText("ENVELOPE / FILTER")}
+                {"pad envelope heading", editor.padShapeHeading.getText(), magdrum::ui::localisedText("ENVELOPE / FILTER")},
+                {"pad EQ heading", editor.padEqHeading.getText(), magdrum::ui::localisedText("PAD EQUALIZER")},
+                {"sample trim tooltip", editor.currentWaveformTooltip(), magdrum::ui::localisedText("Drag waveform markers to set the sample playback range. Double-click to reset.")}
             }};
             for (const auto& check : checks)
             {
@@ -576,6 +618,8 @@ int main(int argc, char** argv)
 
     const auto sample = root.getChildFile("kick.wav");
     if (!writeFixture(sample)) return 2;
+    const auto trimSample = root.getChildFile("trim-impulses.wav");
+    if (!writeTrimImpulseFixture(trimSample)) return 2;
     const auto comparisonSample = root.getChildFile("comparison.wav");
     if (!writeFixture(comparisonSample, 0.18f)) return 3;
 
@@ -911,8 +955,8 @@ int main(int argc, char** argv)
 
     auto& controlStateSource = makeTestProcessor();
     if (!controlStateSource.loadSampleForNote(36, sample)) return 22;
-    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f, 12.5f, -6.0f, 3.0f, 4.0f});
-    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f, 99.0f, -99.0f, 99.0f, -99.0f});
+    controlStateSource.setNoteParameters(36, {-6.0f, -1.0f, 12.0f, 25.0f, 80.0f, 0.4f, 350.0f, 8000.0f, 12.5f, -6.0f, 3.0f, 4.0f, 0.2f, 0.9f});
+    controlStateSource.setNoteParameters(37, {99.0f, -99.0f, 99.0f, 2000.0f, 6000.0f, -0.5f, 6000.0f, 25000.0f, 99.0f, -99.0f, 99.0f, -99.0f, 1.2f, 0.5f});
     const auto clampedParameters = controlStateSource.getNoteParameters(37);
     if (std::abs(clampedParameters.gainDb - 6.0f) > 0.001f
         || std::abs(clampedParameters.pan + 1.0f) > 0.001f
@@ -925,7 +969,9 @@ int main(int argc, char** argv)
         || std::abs(clampedParameters.driveDb - 24.0f) > 0.001f
         || std::abs(clampedParameters.eqLowDb + 18.0f) > 0.001f
         || std::abs(clampedParameters.eqMidDb - 18.0f) > 0.001f
-        || std::abs(clampedParameters.eqHighDb + 18.0f) > 0.001f) return 23;
+        || std::abs(clampedParameters.eqHighDb + 18.0f) > 0.001f
+        || std::abs(clampedParameters.sampleStart - 0.99f) > 0.001f
+        || std::abs(clampedParameters.sampleEnd - 1.0f) > 0.001f) return 23;
     juce::MemoryBlock controlState;
     controlStateSource.getStateInformation(controlState);
     auto& controlStateRestored = makeTestProcessor();
@@ -944,6 +990,8 @@ int main(int argc, char** argv)
         || std::abs(restoredParameters.eqLowDb + 6.0f) > 0.001f
         || std::abs(restoredParameters.eqMidDb - 3.0f) > 0.001f
         || std::abs(restoredParameters.eqHighDb - 4.0f) > 0.001f
+        || std::abs(restoredParameters.sampleStart - 0.2f) > 0.001f
+        || std::abs(restoredParameters.sampleEnd - 0.9f) > 0.001f
         || std::abs(controlStateRestored.getNoteParameters(37).gainDb - 6.0f) > 0.001f) return 24;
     controlStateSource.setNoteParameters(38, {std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::infinity(),
@@ -956,6 +1004,8 @@ int main(int argc, char** argv)
                                                std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::quiet_NaN(),
+                                               std::numeric_limits<float>::quiet_NaN(),
                                                std::numeric_limits<float>::quiet_NaN()});
     const auto finiteParameters = controlStateSource.getNoteParameters(38);
     if (std::abs(finiteParameters.gainDb) > 0.001f || std::abs(finiteParameters.pan) > 0.001f
@@ -964,7 +1014,8 @@ int main(int argc, char** argv)
         || finiteParameters.sustainLevel != 1.0f || finiteParameters.releaseMs != 0.0f
         || finiteParameters.filterCutoffHz != 20000.0f || finiteParameters.driveDb != 0.0f
         || finiteParameters.eqLowDb != 0.0f || finiteParameters.eqMidDb != 0.0f
-        || finiteParameters.eqHighDb != 0.0f) return 40;
+        || finiteParameters.eqHighDb != 0.0f || finiteParameters.sampleStart != 0.0f
+        || finiteParameters.sampleEnd != 1.0f) return 40;
 
     auto& gainReference = makeTestProcessor();
     auto& gainReduced = makeTestProcessor();
@@ -1046,6 +1097,43 @@ int main(int argc, char** argv)
     const double unfilteredEqPeak = renderPeak(eqReference, 36, 127);
     const double lowReducedPeak = renderPeak(eqLowReduced, 36, 127);
     if (unfilteredEqPeak < 0.05 || lowReducedPeak >= unfilteredEqPeak * 0.8) return 54;
+
+    auto& trimmedPlayback = makeTestProcessor();
+    if (!trimmedPlayback.loadSampleForNote(36, trimSample)) return 55;
+    trimmedPlayback.prepareToPlay(48000.0, 128);
+    auto trimParameters = trimmedPlayback.getNoteParameters(36);
+    trimParameters.sampleStart = 0.25f;
+    trimParameters.sampleEnd = 0.75f;
+    trimmedPlayback.setNoteParameters(36, trimParameters);
+    juce::AudioBuffer<float> trimAudio(2, 960);
+    int firstTrimmedSignal = -1, lastTrimmedSignal = -1;
+    for (int blockStart = 0; blockStart < trimAudio.getNumSamples(); blockStart += 128)
+    {
+        const int blockSize = juce::jmin(128, trimAudio.getNumSamples() - blockStart);
+        juce::AudioBuffer<float> block(2, blockSize);
+        juce::MidiBuffer midi;
+        if (blockStart == 0)
+            midi.addEvent(juce::MidiMessage::noteOn(10, 36, static_cast<juce::uint8>(127)), 0);
+        trimmedPlayback.processBlock(block, midi);
+        for (int frame = 0; frame < blockSize; ++frame)
+        {
+            const float value = juce::jmax(std::abs(block.getSample(0, frame)), std::abs(block.getSample(1, frame)));
+            if (value > 0.0001f)
+            {
+                const int absoluteFrame = blockStart + frame;
+                if (firstTrimmedSignal < 0) firstTrimmedSignal = absoluteFrame;
+                lastTrimmedSignal = absoluteFrame;
+                trimAudio.setSample(0, absoluteFrame, value);
+            }
+        }
+    }
+    if (firstTrimmedSignal != 360 || lastTrimmedSignal >= 400
+        || trimAudio.getSample(0, 360) < 0.4f)
+    {
+        std::cerr << "Sample trim output range: first=" << firstTrimmedSignal
+                  << " last=" << lastTrimmedSignal << " peak=" << trimAudio.getSample(0, 360) << "\n";
+        return 56;
+    }
 
     auto& leftPan = makeTestProcessor();
     auto& rightPan = makeTestProcessor();

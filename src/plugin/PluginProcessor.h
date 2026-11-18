@@ -49,6 +49,8 @@ public:
         float eqLowDb = 0.0f;
         float eqMidDb = 0.0f;
         float eqHighDb = 0.0f;
+        float sampleStart = 0.0f;
+        float sampleEnd = 1.0f;
     };
 
     MagDrumAudioProcessor();
@@ -122,6 +124,7 @@ private:
     {
         const SampleData* sample = nullptr;
         double position = 0.0;
+        double endPosition = 0.0;
         float gain = 0.0f;
         float leftPanGain = 1.0f;
         float rightPanGain = 1.0f;
@@ -172,6 +175,7 @@ private:
     std::array<std::atomic<float>, 128> noteFilterCutoffHz{};
     std::array<std::atomic<float>, 128> noteDriveDb{};
     std::array<std::atomic<float>, 128> noteEqLowDb{}, noteEqMidDb{}, noteEqHighDb{};
+    std::array<std::atomic<float>, 128> noteSampleStart{}, noteSampleEnd{};
     std::unique_ptr<SampleData> previewData;
     juce::CriticalSection sampleLock;
     juce::CriticalSection stateLock;

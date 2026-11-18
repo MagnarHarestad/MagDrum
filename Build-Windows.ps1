@@ -231,6 +231,25 @@ try {
     $latestZipPath = Join-Path $latestDirectory "MagDrum-Windows-$Architecture.zip"
     Copy-Item -LiteralPath $zipPath -Destination $latestZipPath -Force
 
+    # Keep the convenient installable package directory in sync with the ZIP;
+    # otherwise it can silently retain an older installer and VST3 module.
+    $latestStagePath = Join-Path $latestDirectory "MagDrum-Windows-$Architecture"
+    $latestStageTemp = "$latestStagePath.installing-$([guid]::NewGuid().ToString('N'))"
+    try {
+        New-Item -ItemType Directory -Path $latestStageTemp | Out-Null
+        Expand-Archive -LiteralPath $latestZipPath -DestinationPath $latestStageTemp -Force
+        if (Test-Path -LiteralPath $latestStagePath) {
+            Remove-Item -LiteralPath $latestStagePath -Recurse -Force
+        }
+        Move-Item -LiteralPath $latestStageTemp -Destination $latestStagePath
+    }
+    catch {
+        if (Test-Path -LiteralPath $latestStageTemp) {
+            Remove-Item -LiteralPath $latestStageTemp -Recurse -Force
+        }
+        throw
+    }
+
     $hash = (Get-FileHash -LiteralPath $latestZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Windows $Architecture package: $latestZipPath"
     Write-Host "SHA-256: $hash"

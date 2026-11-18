@@ -54,6 +54,8 @@ MagDrumAudioProcessor::MagDrumAudioProcessor()
         noteEqLowDb[note].store(0.0f, std::memory_order_relaxed);
         noteEqMidDb[note].store(0.0f, std::memory_order_relaxed);
         noteEqHighDb[note].store(0.0f, std::memory_order_relaxed);
+        noteSampleStart[note].store(0.0f, std::memory_order_relaxed);
+        noteSampleEnd[note].store(1.0f, std::memory_order_relaxed);
     }
     for (auto& noteCounters : roundRobinCounters)
         for (auto& counter : noteCounters)
@@ -272,7 +274,8 @@ bool MagDrumAudioProcessor::previewSample(const juce::File& file, const std::fun
     previewData = std::move(sample);
     recalculateTailLengthSeconds();
     auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
-    voice = {previewData.get(), 0.0, 0.85f, 1.0f, 1.0f, 1.0, true};
+    voice = {previewData.get(), 0.0, static_cast<double>(previewData->audio.getNumSamples()),
+             0.85f, 1.0f, 1.0f, 1.0, true};
     return true;
 }
 
@@ -374,7 +377,9 @@ MagDrumAudioProcessor::NoteParameters MagDrumAudioProcessor::getNoteParameters(i
             noteDriveDb[index].load(std::memory_order_relaxed),
             noteEqLowDb[index].load(std::memory_order_relaxed),
             noteEqMidDb[index].load(std::memory_order_relaxed),
-            noteEqHighDb[index].load(std::memory_order_relaxed)};
+            noteEqHighDb[index].load(std::memory_order_relaxed),
+            noteSampleStart[index].load(std::memory_order_relaxed),
+            noteSampleEnd[index].load(std::memory_order_relaxed)};
 }
 
 void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameters)
@@ -397,6 +402,11 @@ void MagDrumAudioProcessor::setNoteParameters(int note, NoteParameters parameter
     noteEqLowDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqLowDb)), std::memory_order_relaxed);
     noteEqMidDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqMidDb)), std::memory_order_relaxed);
     noteEqHighDb[index].store(juce::jlimit(-18.0f, 18.0f, finiteOrZero(parameters.eqHighDb)), std::memory_order_relaxed);
+    const float sampleStart = juce::jlimit(0.0f, 0.99f, finiteOrZero(parameters.sampleStart));
+    const float sampleEnd = juce::jlimit(sampleStart + 0.01f, 1.0f,
+        std::isfinite(parameters.sampleEnd) ? parameters.sampleEnd : 1.0f);
+    noteSampleStart[index].store(sampleStart, std::memory_order_relaxed);
+    noteSampleEnd[index].store(sampleEnd, std::memory_order_relaxed);
 }
 
 void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
@@ -443,9 +453,11 @@ void MagDrumAudioProcessor::startNoteVoice(int note, int velocity)
         const float gain = (clampedVelocity / 127.0f) * juce::Decibels::decibelsToGain(parameters.gainDb);
         const double playbackRate = std::exp2(static_cast<double>(parameters.tuneSemitones) / 12.0);
         auto& voice = voices[static_cast<size_t>(nextVoice++ % maxVoices)];
-        voice = {sample, 0.0, gain, leftPanGain, rightPanGain, playbackRate, true};
+        const double startPosition = parameters.sampleStart * sample->audio.getNumSamples();
+        const double endPosition = parameters.sampleEnd * sample->audio.getNumSamples();
+        voice = {sample, startPosition, endPosition, gain, leftPanGain, rightPanGain, playbackRate, true};
         const double sourceAdvance = (sample->sampleRate / juce::jmax(1.0, outputSampleRate)) * playbackRate;
-        voice.totalOutputSamples = sample->audio.getNumSamples() / juce::jmax(1.0e-9, sourceAdvance);
+        voice.totalOutputSamples = (endPosition - startPosition) / juce::jmax(1.0e-9, sourceAdvance);
         voice.attackSamples = parameters.attackMs * 0.001 * outputSampleRate;
         voice.decaySamples = parameters.decayMs * 0.001 * outputSampleRate;
         voice.sustainLevel = parameters.sustainLevel;
@@ -673,8 +685,14 @@ void MagDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             if (!voice.active || voice.sample == nullptr) continue;
             const auto& audio = voice.sample->audio;
             const int index = static_cast<int>(voice.position);
-            if (index >= audio.getNumSamples()) { voice.active = false; continue; }
-            const int next = juce::jmin(index + 1, audio.getNumSamples() - 1);
+            if (voice.position >= voice.endPosition || index >= audio.getNumSamples())
+            {
+                voice.active = false;
+                continue;
+            }
+            const int lastTrimmedSample = juce::jlimit(0, audio.getNumSamples() - 1,
+                static_cast<int>(std::ceil(voice.endPosition)) - 1);
+            const int next = juce::jmin(index + 1, lastTrimmedSample);
             const float fraction = static_cast<float>(voice.position - index);
             const auto readInterpolated = [&](int channel)
             {
@@ -754,7 +772,8 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 || std::abs(parameters.releaseMs) > 0.000001f || std::abs(parameters.filterCutoffHz - 20000.0f) > 0.001f
                 || std::abs(parameters.driveDb) > 0.000001f
                 || std::abs(parameters.eqLowDb) > 0.000001f || std::abs(parameters.eqMidDb) > 0.000001f
-                || std::abs(parameters.eqHighDb) > 0.000001f)
+                || std::abs(parameters.eqHighDb) > 0.000001f
+                || std::abs(parameters.sampleStart) > 0.000001f || std::abs(parameters.sampleEnd - 1.0f) > 0.000001f)
             {
                 auto* savedParameters = state.createNewChildElement("PAD_SETTINGS");
                 savedParameters->setAttribute("note", note);
@@ -770,6 +789,8 @@ void MagDrumAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
                 savedParameters->setAttribute("eqLowDb", parameters.eqLowDb);
                 savedParameters->setAttribute("eqMidDb", parameters.eqMidDb);
                 savedParameters->setAttribute("eqHighDb", parameters.eqHighDb);
+                savedParameters->setAttribute("sampleStart", parameters.sampleStart);
+                savedParameters->setAttribute("sampleEnd", parameters.sampleEnd);
             }
             int layerCount = 0;
             const SampleData* onlyLayer = nullptr;
@@ -843,7 +864,9 @@ void MagDrumAudioProcessor::setStateInformation(const void* data, int size)
                     static_cast<float>(child->getDoubleAttribute("driveDb", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("eqLowDb", 0.0)),
                     static_cast<float>(child->getDoubleAttribute("eqMidDb", 0.0)),
-                    static_cast<float>(child->getDoubleAttribute("eqHighDb", 0.0))};
+                    static_cast<float>(child->getDoubleAttribute("eqHighDb", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("sampleStart", 0.0)),
+                    static_cast<float>(child->getDoubleAttribute("sampleEnd", 1.0))};
             continue;
         }
         if (!child->hasTagName("SAMPLE_LAYER"))

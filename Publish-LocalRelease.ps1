@@ -136,6 +136,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'Sample preview audio decodes in a cancellable background worker; newer preview requests supersede older ones. Pad and MIDI-map note labels use the Cubase octave convention (MIDI 36 = C1).',
         'Pad sample assignment and project-state restoration decode in cancellable background workers. Sample paths remain in the saved host state while restored audio is loading.',
         'Drum pads glow briefly when struck, using distinct colors for instrument groups. Each MIDI pad has independent gain, pan, tuning, Drive, three-band EQ, attack, decay, sustain, release and low-pass cutoff controls saved with the DAW project.',
+        'The Drum Machine waveform includes per-pad sample start and end handles. Drag either marker to trim playback, double-click to reset the full sample, and save the range with the DAW project.',
         'MIDI export defaults to exact articulation mappings. The VST, desktop and mobile controls offer no fallback, default-articulation-only fallback, or any same-instrument articulation. Each substitution and omitted event is reported after export.',
         'MIDI import processes events across all tracks in musical time order, preserving overlapping same-pitch note durations split between tracks.',
         'MIDI imports also accept valid SMPTE absolute-time divisions at 24, 25, 29.97 drop-frame, and 30 fps, converting through tempo changes and exporting in PPQ format.',
