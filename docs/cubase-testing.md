@@ -4,9 +4,9 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 
 ## Install and load
 
-1. The current public package is [v0.1.2-test.222](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.222). On the development PC, .222 is installed at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; skip installation and continue to step 3.
+1. The current public package is [v0.1.2-test.223](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.223). On the development PC, .223 is installed at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; skip installation and continue to step 3.
 2. To install on another PC, download and extract `MagDrum-Windows-x64.zip`, close Cubase, and double-click `Install-MagDrum-User.cmd`. It installs under `%LOCALAPPDATA%` without UAC and includes the matching `MagDrum.exe` helper. It backs up an existing per-user bundle outside VST3 scan paths. A system-wide legacy copy may require one-time UAC cleanup. If the installer reports `Cubase15.exe` still running, check Task Manager's **Details** tab and wait until Cubase has exited.
-3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.222`, the VST3 version should read `0.1.2.222`. Confirm Cubase shows **Default Kit** as the program name. If Cubase exposes a rename control, rename it, save and reopen the project, then confirm the name persists.
+3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.223`, the VST3 version should read `0.1.2.223`. Confirm Cubase shows **Default Kit** as the program name. If Cubase exposes a rename control, rename it, save and reopen the project, then confirm the name persists.
 4. Create an instrument track with MagDrum and open its editor.
 
 ## Use the plug-in views
