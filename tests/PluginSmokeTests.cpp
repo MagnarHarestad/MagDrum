@@ -236,14 +236,23 @@ MagDrumAudioProcessor& makeTestProcessor()
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
-    static int checksSampleMapCoversBeyondFirstListPage(MagDrumAudioProcessorEditor& editor)
+    static int checksSampleMapCoversBeyondFirstListPage(MagDrumAudioProcessorEditor& editor,
+                                                         const juce::File& validSample)
     {
         constexpr int fixtureCount = 400;
+        constexpr int offPageMapIndex = 300;
+        const auto expectedFile = validSample.getParentDirectory().getChildFile("Map Fixture 300.wav");
+        if (!validSample.copyFileTo(expectedFile))
+        {
+            std::cerr << "Could not create the valid off-page sample assignment fixture.\n";
+            return 1;
+        }
         for (int index = 0; index < fixtureCount; ++index)
         {
             ScannedSample sample;
-            sample.file = juce::File("C:/MagDrumTestFixtures/Map/Map Fixture "
-                                     + juce::String(index).paddedLeft('0', 3) + ".wav");
+            sample.file = index == offPageMapIndex ? expectedFile
+                : juce::File("C:/MagDrumTestFixtures/Map/Map Fixture "
+                             + juce::String(index).paddedLeft('0', 3) + ".wav");
             sample.durationSeconds = 0.18 + 0.001 * index;
             sample.channels = 1;
             sample.sampleRate = 44100.0;
@@ -283,14 +292,37 @@ public:
             return 2;
         }
 
-        constexpr int offPageMapIndex = 300;
-        const auto expectedFile = editor.sampleMapSamples.getReference(offPageMapIndex).file;
+        const auto mapSelectedFile = editor.sampleMapSamples.getReference(offPageMapIndex).file;
         editor.selectSampleMapSample(offPageMapIndex);
-        if (editor.selectedSample() != expectedFile || editor.sampleMapSelectedFile != expectedFile
+        if (editor.selectedSample() != mapSelectedFile || editor.sampleMapSelectedFile != mapSelectedFile
             || editor.indexedList.getSelectedRow() != -1)
         {
             std::cerr << "Selecting a map point beyond the first list page did not select that sample.\n";
             return 3;
+        }
+
+        editor.selectedNote = 36;
+        editor.buttonClicked(&editor.assignButton);
+        const auto assignmentDeadline = juce::Time::getMillisecondCounter() + 10000;
+        while (editor.sampleLoadWorkers.getNumJobs() != 0
+               && juce::Time::getMillisecondCounter() < assignmentDeadline)
+        {
+            juce::Thread::sleep(10);
+        }
+        if (editor.sampleLoadWorkers.getNumJobs() != 0)
+        {
+            std::cerr << "Assigning the off-page map sample did not finish.\n";
+            return 4;
+        }
+        const auto assignedLayers = editor.processor.getSampleLayersForNote(36);
+        if (assignedLayers.size() != 1 || juce::File(assignedLayers.front().path) != expectedFile)
+        {
+            std::cerr << "The sample selected beyond the first list page was not assigned to the selected pad (layers: "
+                      << assignedLayers.size();
+            if (!assignedLayers.empty())
+                std::cerr << ", path: " << assignedLayers.front().path.toStdString();
+            std::cerr << ", expected: " << expectedFile.getFullPathName().toStdString() << ").\n";
+            return 5;
         }
         return 0;
     }
@@ -1126,7 +1158,7 @@ int main(int argc, char** argv)
         if (padActivityCheck != 0) return 59 + padActivityCheck;
         const int dr660LaneCheck = MagDrumAudioProcessorEditorTestAccess::checksDr660ImportedNotesReachTheirOwnSequencerLanes(editor);
         if (dr660LaneCheck != 0) return 300 + dr660LaneCheck;
-        const int sampleMapPagingCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleMapCoversBeyondFirstListPage(editor);
+        const int sampleMapPagingCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleMapCoversBeyondFirstListPage(editor, sample);
         if (sampleMapPagingCheck != 0) return 320 + sampleMapPagingCheck;
     }
 #endif
