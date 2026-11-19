@@ -413,6 +413,8 @@ public:
     {
         if (event.mods.isMiddleButtonDown())
         {
+            isPanning = false;
+            if (!plotBounds().contains(event.position)) return;
             isPanning = true; panStart = event.position; panStartX = viewport.panX; panStartY = viewport.panY;
             return;
         }
