@@ -148,6 +148,7 @@ private:
     void refreshPluginKits();
     void choosePluginFolder();
     juce::PopupMenu createPluginInventoryMenu() const;
+    juce::PopupMenu createPluginSourceMenu() const;
     void startPluginInventoryScan(const juce::File& additionalFolder = {});
     void pollPluginInventoryProgress();
     void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedAfterCrash);

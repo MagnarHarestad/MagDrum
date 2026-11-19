@@ -1005,6 +1005,45 @@ public:
             std::cerr << "The combined scan action should expose scan, custom-folder and refresh choices.\n";
             return 11;
         }
+        const auto sourceMenu = editor.createPluginSourceMenu();
+        if (sourceMenu.getNumItems() != 2
+            || editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"..."
+            || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Choose VST3 preset"))
+            || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Scan programs"))
+            || !editor.choosePluginPresetButton.isVisible() || editor.scanPluginProgramsButton.isVisible())
+        {
+            std::cerr << "Preset selection and program discovery should be grouped under the visible kit-source control.\n";
+            return 12;
+        }
+        const std::array sourceMenuLanguages{
+            magdrum::ui::Language::english, magdrum::ui::Language::german,
+            magdrum::ui::Language::french, magdrum::ui::Language::spanish,
+            magdrum::ui::Language::swedish, magdrum::ui::Language::norwegian,
+            magdrum::ui::Language::danish, magdrum::ui::Language::finnish};
+        for (const auto language : sourceMenuLanguages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            editor.applyLanguage();
+            if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"...")
+            {
+                std::cerr << "The kit-source control did not update in every supported language.\n";
+                magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+                editor.applyLanguage();
+                return 13;
+            }
+        }
+        magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+        editor.applyLanguage();
+        editor.pluginProgramScanRunning = true;
+        editor.updatePluginActionButtons();
+        if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Cancel program scan")
+            || !editor.choosePluginPresetButton.isEnabled())
+        {
+            std::cerr << "The kit-source control should become the visible program-scan cancel action.\n";
+            return 14;
+        }
+        editor.pluginProgramScanRunning = false;
+        editor.updatePluginActionButtons();
         if (!editor.importPluginKitButton.isVisible() || !editor.scanPluginKitButton.isVisible()
             || editor.importPluginPresetButton.isVisible() || editor.importPluginProgramButton.isVisible()
             || editor.scanPluginNotesButton.isVisible() || editor.cancelPluginNotesButton.isVisible())
