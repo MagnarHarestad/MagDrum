@@ -963,8 +963,15 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     const auto presetFile = juce::File(request->getProperty("presetFile").toString());
     const auto stateFile = juce::File(request->getProperty("stateFile").toString());
     const auto resultFile = juce::File(request->getProperty("resultFile").toString());
+    const auto progressFile = juce::File(request->getProperty("progressFile").toString());
     const auto operation = request->getProperty("operation").toString();
     const auto workingDirectory = requestFile.getParentDirectory();
+    const auto writeProgramProgress = [&progressFile, &operation, &workingDirectory](const juce::String& phase)
+    {
+        if (operation == "enumeratePrograms" && progressFile != juce::File()
+            && progressFile.getParentDirectory() == workingDirectory)
+            progressFile.replaceWithText(phase);
+    };
     const auto writeResult = [&resultFile](bool ok, const juce::String& message)
     {
         auto* result = new juce::DynamicObject();
@@ -976,6 +983,8 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
         || stateFile.getParentDirectory() != workingDirectory
         || resultFile.getParentDirectory() != workingDirectory
         || (operation != "enumeratePrograms" && operation != "loadProgram" && operation != "loadPreset")
+        || (operation == "enumeratePrograms"
+            && (progressFile == juce::File() || progressFile.getParentDirectory() != workingDirectory))
         || (operation == "loadPreset" && (! presetFile.existsAsFile()
             || ! presetFile.getFileExtension().equalsIgnoreCase(".vstpreset")
             || presetFile.getSize() <= 0 || presetFile.getSize() > 512LL * 1024LL * 1024LL)))
@@ -993,15 +1002,18 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     juce::AudioPluginFormatManager formats;
     juce::addHeadlessDefaultFormatsToManager(formats);
     juce::String loadError;
+    writeProgramProgress("loading");
     auto plugin = formats.createPluginInstance(description, 44100.0, 512, loadError);
     if (plugin == nullptr)
     {
+        writeProgramProgress("failed");
         writeResult(false, magdrum::ui::localisedText("Could not load the instrument in the isolated helper: ") + loadError);
         return 5;
     }
 
     if (operation == "enumeratePrograms")
     {
+        writeProgramProgress("enumerating");
         const auto discovered = discoverPluginPrograms(*plugin);
         if (discovered.exceedsLimit)
         {
@@ -1020,7 +1032,9 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
         result->setProperty("ok", true);
         result->setProperty("message", juce::String());
         result->setProperty("programs", programs);
-        return resultFile.replaceWithText(juce::JSON::toString(juce::var(result), true)) ? 0 : 9;
+        const bool saved = resultFile.replaceWithText(juce::JSON::toString(juce::var(result), true));
+        writeProgramProgress(saved ? "complete" : "failed");
+        return saved ? 0 : 9;
     }
 
     if (operation == "loadProgram")

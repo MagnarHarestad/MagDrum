@@ -1591,12 +1591,14 @@ public:
         const auto stateFile = work.getChildFile("unused-state.bin");
         const auto resultFile = work.getChildFile("result.json");
         const auto requestFile = work.getChildFile("request.json");
+        const auto progressFile = work.getChildFile("progress.txt");
         const auto xml = description.createXml();
         auto* request = new juce::DynamicObject();
         request->setProperty("descriptionFile", descriptionFile.getFullPathName());
         request->setProperty("operation", "enumeratePrograms");
         request->setProperty("stateFile", stateFile.getFullPathName());
         request->setProperty("resultFile", resultFile.getFullPathName());
+        request->setProperty("progressFile", progressFile.getFullPathName());
         if (xml == nullptr || ! xml->writeTo(descriptionFile)
             || ! requestFile.replaceWithText(juce::JSON::toString(juce::var(request), true)))
         {
@@ -1615,6 +1617,7 @@ public:
         constexpr juce::uint32 programDiscoveryTimeoutMilliseconds = 90000;
         const auto processStartedAt = juce::Time::getMillisecondCounter();
         bool timedOut = false;
+        juce::String lastProgress;
         while (child.isRunning() && ! shouldExit() && ! cancellation->load())
         {
             if (static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - processStartedAt)
@@ -1624,6 +1627,28 @@ public:
                 child.kill();
                 child.waitForProcessToFinish(3000);
                 break;
+            }
+            if (progressFile.existsAsFile())
+            {
+                const auto phase = progressFile.loadFileAsString().trim();
+                if (phase != lastProgress)
+                {
+                    lastProgress = phase;
+                    const auto phaseMessage = phase == "loading"
+                        ? magdrum::ui::localisedText("Loading VST3 instrument…")
+                        : phase == "enumerating"
+                            ? magdrum::ui::localisedText("Reading instrument programs…")
+                            : juce::String();
+                    if (phaseMessage.isNotEmpty())
+                    {
+                        const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
+                        juce::MessageManager::callAsync([safe, phaseMessage]
+                        {
+                            if (safe != nullptr)
+                                safe->updatePluginProgramDiscoveryStatus(phaseMessage);
+                        });
+                    }
+                }
             }
             child.waitForProcessToFinish(100);
         }
@@ -3589,6 +3614,12 @@ void MagDrumAudioProcessorEditor::finishPluginProgramDiscovery(int exitCode, boo
     status.setText(programs.isEmpty() ? magdrum::ui::localisedText("No programs exposed by this instrument.")
                                       : magdrum::ui::localisedText("Instrument programs loaded: ") + juce::String(programs.size()),
                    juce::dontSendNotification);
+}
+
+void MagDrumAudioProcessorEditor::updatePluginProgramDiscoveryStatus(const juce::String& message)
+{
+    if (pluginProgramScanRunning)
+        status.setText(message, juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::startPluginProgramImport()

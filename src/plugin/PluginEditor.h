@@ -160,6 +160,7 @@ private:
     void startPluginProgramDiscovery();
     void finishPluginProgramDiscovery(int exitCode, bool cancelled, juce::StringArray programs,
                                       const juce::String& message);
+    void updatePluginProgramDiscoveryStatus(const juce::String& message);
     void startPluginProgramImport();
     void finishPluginPresetImport(int exitCode, bool cancelled, juce::MemoryBlock state,
                                   const juce::String& message, const juce::String& pluginIdentifier,

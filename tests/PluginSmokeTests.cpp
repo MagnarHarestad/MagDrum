@@ -1147,6 +1147,32 @@ public:
         }
         magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
         editor.applyLanguage();
+        for (const auto language : sourceMenuLanguages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            editor.pluginProgramScanRunning = true;
+            editor.updatePluginProgramDiscoveryStatus(magdrum::ui::localisedText("Loading VST3 instrument…"));
+            if (editor.status.getText() != magdrum::ui::localisedText("Loading VST3 instrument…"))
+            {
+                std::cerr << "The program-loading status did not use the selected language.\n";
+                editor.pluginProgramScanRunning = false;
+                magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+                editor.applyLanguage();
+                return 16;
+            }
+            editor.updatePluginProgramDiscoveryStatus(magdrum::ui::localisedText("Reading instrument programs…"));
+            if (editor.status.getText() != magdrum::ui::localisedText("Reading instrument programs…"))
+            {
+                std::cerr << "The program-reading status did not use the selected language.\n";
+                editor.pluginProgramScanRunning = false;
+                magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+                editor.applyLanguage();
+                return 17;
+            }
+        }
+        editor.pluginProgramScanRunning = false;
+        magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+        editor.applyLanguage();
         editor.pluginProgramScanRunning = true;
         editor.updatePluginActionButtons();
         if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Cancel program scan")
