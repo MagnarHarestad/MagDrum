@@ -14,6 +14,10 @@ struct CachedVst3ModuleInfo
     bool hasFileModTime = false;
     bool cachedModTimesAgree = true;
     juce::Time fileModTime;
+    juce::String filePath;
+    bool cachedFilePathsAgree = true;
+    bool hasPluginDescriptions = false;
+    bool hasInstrumentDescription = false;
 };
 using CachedVst3ModuleIndex = std::unordered_map<std::string, CachedVst3ModuleInfo>;
 
@@ -22,6 +26,9 @@ struct Vst3ModuleInstrumentCacheEntry
     juce::String metadataPath;
     juce::int64 metadataSize = 0;
     juce::int64 metadataModifiedMilliseconds = 0;
+    juce::String binaryPath;
+    juce::int64 binarySize = 0;
+    juce::int64 binaryModifiedMilliseconds = 0;
     bool mayBeInstrument = true;
 };
 using Vst3ModuleInstrumentCache = std::unordered_map<std::string, Vst3ModuleInstrumentCacheEntry>;

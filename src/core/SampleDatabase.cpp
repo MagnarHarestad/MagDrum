@@ -2763,9 +2763,14 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
                        + " AND NOT (s.duration>=4.0 AND s.transient_count>=8) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
         case 2: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND (" + loopTerms
                        + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
-        case 3: contentPredicate = "(" + bassFamily + ")"; break;
-        case 4: contentPredicate = synthTerms + " AND (" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
-        case 5: contentPredicate = loopTerms + " AND NOT (" + drumCategory + " OR " + drumTerms
+        case 3: contentPredicate = "(" + bassFamily + ") AND NOT " + loopTerms
+                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8)"; break;
+        case 4: contentPredicate = "(" + bassFamily + ") AND (" + loopTerms
+                       + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
+        case 5: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND NOT " + loopTerms
+                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8)"; break;
+        case 6: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND (" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
+        case 7: contentPredicate = loopTerms + " AND NOT (" + drumCategory + " OR " + drumTerms
                        + " OR (" + bassFamily + ") OR " + synthTerms + ")"; break;
         default: break;
     }

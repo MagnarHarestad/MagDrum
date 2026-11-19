@@ -7,12 +7,36 @@
 
 namespace
 {
+juce::File vst3BundleRootForPluginPath(const juce::File& pluginPath)
+{
+    if (pluginPath.isDirectory() && pluginPath.getFileExtension().equalsIgnoreCase(".vst3"))
+        return pluginPath;
+    for (auto parent = pluginPath.getParentDirectory(); parent != juce::File{};)
+    {
+        if (parent.isDirectory() && parent.getFileExtension().equalsIgnoreCase(".vst3"))
+            return parent;
+        const auto nextParent = parent.getParentDirectory();
+        if (nextParent == parent)
+            break;
+        parent = nextParent;
+    }
+    return {};
+}
+
 juce::File vst3ModuleManifestFile(const juce::File& bundle)
 {
     const auto resourcesManifest = bundle.getChildFile("Contents").getChildFile("Resources")
         .getChildFile("moduleinfo.json");
     if (resourcesManifest.existsAsFile()) return resourcesManifest;
     return bundle.getChildFile("Contents").getChildFile("moduleinfo.json");
+}
+
+juce::File vst3ModuleBinaryFile(const juce::File& bundle)
+{
+    if (bundle.existsAsFile()) return bundle;
+    const auto binary = bundle.getChildFile("Contents").getChildFile("x86_64-win")
+        .getChildFile(bundle.getFileName());
+    return binary.existsAsFile() ? binary : juce::File{};
 }
 }
 
@@ -28,7 +52,16 @@ juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
 bool magdrum::plugins::vst3ModuleMayBeInstrument(const juce::File& bundle)
 {
     const auto metadataFile = vst3ModuleManifestFile(bundle);
-    if (!metadataFile.existsAsFile()) return true;
+    if (!metadataFile.existsAsFile())
+    {
+        const auto moduleName = bundle.getFileNameWithoutExtension();
+        static constexpr const char* effectNameCues[]{"compressor", "imager", "equalizer", "equaliser",
+            "limiter", "reverb", "delay", "dynamics", "de-esser", "deesser", "meter", "analyzer",
+            "analyser", "maximizer", "maximiser", "exciter", "distortion", "phaser", "flanger", "chorus"};
+        for (const auto* cue : effectNameCues)
+            if (moduleName.containsWholeWordIgnoreCase(cue)) return false;
+        return true;
+    }
 
     const auto parsed = juce::JSON::parse(metadataFile.loadFileAsString());
     const auto* root = parsed.getDynamicObject();
@@ -60,7 +93,7 @@ magdrum::plugins::Vst3ModuleInstrumentCache magdrum::plugins::loadVst3ModuleInst
     if (!cacheFile.existsAsFile()) return cache;
     const auto xml = juce::XmlDocument::parse(cacheFile);
     if (xml == nullptr || xml->getTagName() != "MAGDRUM_VST3_MODULE_FILTER_CACHE"
-        || xml->getIntAttribute("version", 0) != 1)
+        || (xml->getIntAttribute("version", 0) != 1 && xml->getIntAttribute("version", 0) != 2))
         return cache;
 
     for (auto* child = xml->getFirstChildElement(); child != nullptr; child = child->getNextElement())
@@ -68,13 +101,20 @@ magdrum::plugins::Vst3ModuleInstrumentCache magdrum::plugins::loadVst3ModuleInst
         if (child->getTagName() != "MODULE") continue;
         const auto modulePath = child->getStringAttribute("path");
         const auto metadataPath = child->getStringAttribute("metadataPath");
-        if (modulePath.isEmpty() || metadataPath.isEmpty()) continue;
+        if (modulePath.isEmpty()) continue;
         Vst3ModuleInstrumentCacheEntry entry;
         entry.metadataPath = metadataPath;
         entry.metadataSize = child->getStringAttribute("metadataSize", "-1").getLargeIntValue();
         entry.metadataModifiedMilliseconds = child->getStringAttribute("metadataModifiedMs", "-1").getLargeIntValue();
+        entry.binaryPath = child->getStringAttribute("binaryPath");
+        entry.binarySize = child->getStringAttribute("binarySize", "-1").getLargeIntValue();
+        entry.binaryModifiedMilliseconds = child->getStringAttribute("binaryModifiedMs", "-1").getLargeIntValue();
         entry.mayBeInstrument = child->getBoolAttribute("mayBeInstrument", true);
-        if (entry.metadataSize < 0 || entry.metadataModifiedMilliseconds < 0) continue;
+        const bool hasManifestCache = entry.metadataPath.isNotEmpty() && entry.metadataSize >= 0
+            && entry.metadataModifiedMilliseconds >= 0;
+        const bool hasBinaryCache = entry.binaryPath.isNotEmpty() && entry.binarySize >= 0
+            && entry.binaryModifiedMilliseconds >= 0;
+        if (!hasManifestCache && !hasBinaryCache) continue;
         cache[modulePath.toStdString()] = std::move(entry);
     }
     return cache;
@@ -84,14 +124,24 @@ std::optional<bool> magdrum::plugins::cachedVst3ModuleMayBeInstrument(
     const Vst3ModuleInstrumentCache& cache, const juce::File& bundle)
 {
     const auto manifest = vst3ModuleManifestFile(bundle);
-    if (!manifest.existsAsFile()) return {};
     const auto found = cache.find(bundle.getFullPathName().toStdString());
     if (found == cache.end()) return {};
     const auto& entry = found->second;
-    if (entry.metadataPath != manifest.getFullPathName()
-        || entry.metadataSize != manifest.getSize()
-        || entry.metadataModifiedMilliseconds != manifest.getLastModificationTime().toMilliseconds())
-        return {};
+    if (manifest.existsAsFile())
+    {
+        if (entry.metadataPath != manifest.getFullPathName()
+            || entry.metadataSize != manifest.getSize()
+            || entry.metadataModifiedMilliseconds != manifest.getLastModificationTime().toMilliseconds())
+            return {};
+    }
+    else
+    {
+        const auto binary = vst3ModuleBinaryFile(bundle);
+        if (entry.binaryPath != binary.getFullPathName() || !binary.existsAsFile()
+            || entry.binarySize != binary.getSize()
+            || entry.binaryModifiedMilliseconds != binary.getLastModificationTime().toMilliseconds())
+            return {};
+    }
     return entry.mayBeInstrument;
 }
 
@@ -99,11 +149,21 @@ void magdrum::plugins::rememberVst3ModuleInstrumentStatus(
     Vst3ModuleInstrumentCache& cache, const juce::File& bundle, bool mayBeInstrument)
 {
     const auto manifest = vst3ModuleManifestFile(bundle);
-    if (!manifest.existsAsFile()) return;
     Vst3ModuleInstrumentCacheEntry entry;
-    entry.metadataPath = manifest.getFullPathName();
-    entry.metadataSize = manifest.getSize();
-    entry.metadataModifiedMilliseconds = manifest.getLastModificationTime().toMilliseconds();
+    if (manifest.existsAsFile())
+    {
+        entry.metadataPath = manifest.getFullPathName();
+        entry.metadataSize = manifest.getSize();
+        entry.metadataModifiedMilliseconds = manifest.getLastModificationTime().toMilliseconds();
+    }
+    else
+    {
+        const auto binary = vst3ModuleBinaryFile(bundle);
+        if (!binary.existsAsFile()) return;
+        entry.binaryPath = binary.getFullPathName();
+        entry.binarySize = binary.getSize();
+        entry.binaryModifiedMilliseconds = binary.getLastModificationTime().toMilliseconds();
+    }
     entry.mayBeInstrument = mayBeInstrument;
     cache[bundle.getFullPathName().toStdString()] = std::move(entry);
 }
@@ -128,7 +188,7 @@ bool magdrum::plugins::saveVst3ModuleInstrumentCache(
     const juce::File& cacheFile, const Vst3ModuleInstrumentCache& cache)
 {
     juce::XmlElement root("MAGDRUM_VST3_MODULE_FILTER_CACHE");
-    root.setAttribute("version", 1);
+    root.setAttribute("version", 2);
     std::vector<std::pair<std::string, const Vst3ModuleInstrumentCacheEntry*>> ordered;
     ordered.reserve(cache.size());
     for (const auto& [path, entry] : cache) ordered.emplace_back(path, &entry);
@@ -141,6 +201,9 @@ bool magdrum::plugins::saveVst3ModuleInstrumentCache(
         module->setAttribute("metadataPath", entry->metadataPath);
         module->setAttribute("metadataSize", juce::String(entry->metadataSize));
         module->setAttribute("metadataModifiedMs", juce::String(entry->metadataModifiedMilliseconds));
+        module->setAttribute("binaryPath", entry->binaryPath);
+        module->setAttribute("binarySize", juce::String(entry->binarySize));
+        module->setAttribute("binaryModifiedMs", juce::String(entry->binaryModifiedMilliseconds));
         module->setAttribute("mayBeInstrument", entry->mayBeInstrument);
     }
     return cacheFile.replaceWithText(root.toString());
@@ -156,15 +219,32 @@ magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules
         if (description.pluginFormatName != "VST3")
             continue;
 
-        auto& module = decisions[description.fileOrIdentifier.toStdString()];
-        if (!module.hasFileModTime)
+        const juce::File pluginPath(description.fileOrIdentifier);
+        const auto cacheDescriptionFor = [&decisions, &description, &pluginPath](const std::string& key)
         {
-            module.fileModTime = description.lastFileModTime;
-            module.hasFileModTime = true;
-        }
-        else if (module.fileModTime != description.lastFileModTime)
+            if (key.empty()) return;
+            auto& module = decisions[key];
+            if (!module.hasFileModTime)
+            {
+                module.fileModTime = description.lastFileModTime;
+                module.filePath = pluginPath.getFullPathName();
+                module.hasFileModTime = true;
+            }
+            else
+            {
+                if (module.fileModTime != description.lastFileModTime)
+                    module.cachedModTimesAgree = false;
+                if (module.filePath != pluginPath.getFullPathName())
+                    module.cachedFilePathsAgree = false;
+            }
+            module.hasPluginDescriptions = true;
+            module.hasInstrumentDescription = module.hasInstrumentDescription || description.isInstrument;
+        };
+        cacheDescriptionFor(description.fileOrIdentifier.toStdString());
+        if (pluginPath.exists())
         {
-            module.cachedModTimesAgree = false;
+            cacheDescriptionFor(pluginPath.getFullPathName().toStdString());
+            cacheDescriptionFor(vst3BundleRootForPluginPath(pluginPath).getFullPathName().toStdString());
         }
     }
     return decisions;
@@ -173,8 +253,14 @@ magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules
 bool magdrum::plugins::isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached,
                                                    const juce::File& module)
 {
-    return cached.hasFileModTime && cached.cachedModTimesAgree && module.exists()
-        && module.getLastModificationTime() == cached.fileModTime;
+    if (!cached.hasFileModTime || !cached.cachedModTimesAgree || !cached.cachedFilePathsAgree
+        || !module.exists())
+        return false;
+    const juce::File cachedFile(cached.filePath);
+    const bool pathMatchesModule = cachedFile == module
+        || (module.isDirectory() && cachedFile.isAChildOf(module));
+    return pathMatchesModule && cachedFile.exists()
+        && cachedFile.getLastModificationTime() == cached.fileModTime;
 }
 
 namespace

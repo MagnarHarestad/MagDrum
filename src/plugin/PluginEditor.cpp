@@ -1426,9 +1426,11 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     contentTypeFilter.addItem(magdrum::ui::localisedText("All sounds"),1);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Drum one-shots"),2);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Drum loops & beats"),3);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass & bass beats"),4);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"),5);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"),6);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass one-shots"),4);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass loops & beats"),5);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth one-shots"),6);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"),7);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"),8);
     contentTypeFilter.setSelectedId(2);
     addAndMakeVisible(contentTypeFilter);
     const char* features[]{"All sound features","Very short","Short","Medium","Long","Dark","Mid brightness","Bright"};for(int i=0;i<8;++i)featureFilter.addItem(magdrum::ui::localisedText(features[i]),i+1);featureFilter.setSelectedId(1);addAndMakeVisible(featureFilter);
@@ -2252,14 +2254,16 @@ void MagDrumAudioProcessorEditor::applyLanguage()
 {
     libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));pluginScannerTab.setButtonText(magdrum::ui::localisedText("PLUGIN SCANNER"));manageLayersButton.setButtonText(magdrum::ui::localisedText("Layers"));manageLayersButton.setTooltip(magdrum::ui::localisedText("Manage velocity layers for the selected pad."));languageButton.setTooltip(magdrum::ui::localisedText("Menu"));
     sampleSearch.setTextToShowWhenEmpty(magdrum::ui::localisedText("Search indexed samples"),Palette::Muted);
-    const int contentTypeId = juce::jlimit(1, 6, contentTypeFilter.getSelectedId());
+    const int contentTypeId = juce::jlimit(1, 8, contentTypeFilter.getSelectedId());
     contentTypeFilter.clear(juce::dontSendNotification);
     contentTypeFilter.addItem(magdrum::ui::localisedText("All sounds"), 1);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Drum one-shots"), 2);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Drum loops & beats"), 3);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass & bass beats"), 4);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"), 5);
-    contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"), 6);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass one-shots"), 4);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Bass loops & beats"), 5);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth one-shots"), 6);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"), 7);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"), 8);
     contentTypeFilter.setSelectedId(contentTypeId, juce::dontSendNotification);
     const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());
     midiFallbackPolicy.clear(juce::dontSendNotification);
@@ -3394,7 +3398,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
 
     SampleBrowseFilter options;
     options.query = sampleSearch.getText();
-    options.contentKind = juce::jlimit(0, 5, contentTypeFilter.getSelectedId() - 1);
+    options.contentKind = juce::jlimit(0, 7, contentTypeFilter.getSelectedId() - 1);
     if (categoryFilter.getSelectedId() > 1)
     {
         static constexpr const char* categories[]{"All sounds", "Kick", "Snare", "Closed hi-hat", "Open hi-hat",

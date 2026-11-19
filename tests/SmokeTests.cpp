@@ -303,8 +303,10 @@ int runSmokeTests(int argc,char** argv)
     const auto instrumentBundle = customPluginRoot.getChildFile("DrumInstrument.vst3");
     const auto mixedBundle = customPluginRoot.getChildFile("MultiClassInstrument.vst3");
     const auto legacyBundle = customPluginRoot.getChildFile("LegacyInstrument.vst3");
+    const auto legacyEffectBundle = customPluginRoot.getChildFile("Ozone 11 Imager.vst3");
     if (!effectBundle.createDirectory().wasOk() || !instrumentBundle.createDirectory().wasOk()
-        || !mixedBundle.createDirectory().wasOk() || !legacyBundle.createDirectory().wasOk()) return 215;
+        || !mixedBundle.createDirectory().wasOk() || !legacyBundle.createDirectory().wasOk()
+        || !legacyEffectBundle.createDirectory().wasOk()) return 215;
     const auto effectManifest = effectBundle.getChildFile("Contents/Resources/moduleinfo.json");
     const auto instrumentManifest = instrumentBundle.getChildFile("Contents/Resources/moduleinfo.json");
     const auto mixedManifest = mixedBundle.getChildFile("Contents/moduleinfo.json");
@@ -317,21 +319,28 @@ int runSmokeTests(int argc,char** argv)
     if (magdrum::plugins::vst3ModuleMayBeInstrument(effectBundle)
         || !magdrum::plugins::vst3ModuleMayBeInstrument(instrumentBundle)
         || !magdrum::plugins::vst3ModuleMayBeInstrument(mixedBundle)
-        || !magdrum::plugins::vst3ModuleMayBeInstrument(legacyBundle))
+        || !magdrum::plugins::vst3ModuleMayBeInstrument(legacyBundle)
+        || magdrum::plugins::vst3ModuleMayBeInstrument(legacyEffectBundle))
     {
         std::cerr << "VST3 discovery did not filter known effects while retaining instruments and legacy modules.\n";
         return 218;
     }
     const auto moduleFilterCacheFile = root.getChildFile("vst3-module-filter-cache.xml");
+    const auto legacyModuleBinary = legacyBundle.getChildFile("Contents/x86_64-win/LegacyInstrument.vst3");
+    if (!legacyModuleBinary.getParentDirectory().createDirectory().wasOk()
+        || !legacyModuleBinary.replaceWithText("test legacy module")) return 220;
     magdrum::plugins::Vst3ModuleInstrumentCache moduleFilterCache;
     magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, effectBundle, false);
     magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, instrumentBundle, true);
+    magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, legacyBundle, false);
     if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, effectBundle) != std::optional<bool>(false)
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, instrumentBundle) != std::optional<bool>(true)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, legacyBundle) != std::optional<bool>(false)
         || !magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache)) return 220;
     const auto restoredModuleFilterCache = magdrum::plugins::loadVst3ModuleInstrumentCache(moduleFilterCacheFile);
     if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, effectBundle) != std::optional<bool>(false)
-        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, instrumentBundle) != std::optional<bool>(true))
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, instrumentBundle) != std::optional<bool>(true)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, legacyBundle) != std::optional<bool>(false))
         return 221;
     if (!effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx","Dynamics","Updated"]}]})")
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, effectBundle).has_value()) return 222;
@@ -341,6 +350,9 @@ int runSmokeTests(int argc,char** argv)
             + juce::RelativeTime::seconds(5))
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(timestampInvalidationCache, effectBundle).has_value())
         return 223;
+    if (!legacyModuleBinary.setLastModificationTime(legacyModuleBinary.getLastModificationTime()
+            + juce::RelativeTime::seconds(5))
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, legacyBundle).has_value()) return 223;
     auto classificationCache = magdrum::plugins::Vst3ModuleInstrumentCache{};
     magdrum::plugins::rememberVst3ModuleInstrumentStatus(classificationCache, effectBundle, false);
     if (magdrum::plugins::classifyVst3ModuleForDiscovery(classificationCache, effectBundle, true)
@@ -369,7 +381,12 @@ int runSmokeTests(int argc,char** argv)
     const auto cachedModuleIndex=magdrum::plugins::indexCachedVst3Modules(cachedPluginDescriptions);
     if(cachedModuleIndex.size()!=4099||cachedModuleIndex.count("other-format")!=0
         ||!cachedModuleIndex.at("multi-class-module").hasFileModTime
-        ||!cachedModuleIndex.at("multi-class-module").cachedModTimesAgree)return 210;
+        ||!cachedModuleIndex.at("multi-class-module").cachedModTimesAgree
+        ||!cachedModuleIndex.at("multi-class-module").hasPluginDescriptions
+        ||!cachedModuleIndex.at("multi-class-module").hasInstrumentDescription
+        ||!cachedModuleIndex.at("effect-module").hasPluginDescriptions
+        ||cachedModuleIndex.at("effect-module").hasInstrumentDescription
+        ||!cachedModuleIndex.at("instrument-module").hasInstrumentDescription)return 210;
     const auto cachedVst3File = root.getChildFile("cached-module.vst3");
     if(!cachedVst3File.replaceWithText("test module"))return 211;
     juce::Array<juce::PluginDescription> timestampedDescriptions;
@@ -381,6 +398,24 @@ int runSmokeTests(int argc,char** argv)
     if(magdrum::plugins::isCachedVst3ModuleUpToDate(conflictingTimestampIndex.at(cachedVst3File.getFullPathName().toStdString()),cachedVst3File))return 213;
     auto staleTimestamp=timestampedIndex.at(cachedVst3File.getFullPathName().toStdString());staleTimestamp.fileModTime=juce::Time();
     if(magdrum::plugins::isCachedVst3ModuleUpToDate(staleTimestamp,cachedVst3File))return 214;
+    const auto cachedVst3Bundle = root.getChildFile("cached-bundle.vst3");
+    const auto cachedVst3BundleBinary = cachedVst3Bundle.getChildFile("Contents/x86_64-win/cached-bundle.vst3");
+    if (!cachedVst3BundleBinary.getParentDirectory().createDirectory().wasOk()
+        || !cachedVst3BundleBinary.replaceWithText("test VST3 bundle binary")) return 214;
+    juce::PluginDescription bundledInstrument;
+    bundledInstrument.fileOrIdentifier = cachedVst3BundleBinary.getFullPathName();
+    bundledInstrument.pluginFormatName = "VST3";
+    bundledInstrument.isInstrument = true;
+    bundledInstrument.lastFileModTime = cachedVst3BundleBinary.getLastModificationTime();
+    juce::Array<juce::PluginDescription> bundledDescriptions;
+    bundledDescriptions.add(bundledInstrument);
+    const auto bundledIndex = magdrum::plugins::indexCachedVst3Modules(bundledDescriptions);
+    const auto cachedBundleEntry = bundledIndex.find(cachedVst3Bundle.getFullPathName().toStdString());
+    if (cachedBundleEntry == bundledIndex.end()
+        || !magdrum::plugins::isCachedVst3ModuleUpToDate(cachedBundleEntry->second, cachedVst3Bundle)) return 214;
+    if (!cachedVst3BundleBinary.setLastModificationTime(cachedVst3BundleBinary.getLastModificationTime()
+            + juce::RelativeTime::seconds(5))
+        || magdrum::plugins::isCachedVst3ModuleUpToDate(cachedBundleEntry->second, cachedVst3Bundle)) return 214;
     const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
     midiFixture.deleteRecursively();
     const auto midiRoot=midiFixture.getChildFile("midi-discovery");
@@ -546,9 +581,11 @@ int runSmokeTests(int argc,char** argv)
         ||!addContentFilterFixture("bass-drum-one-shot.wav","Kick",0.2,1,{})
         ||!addContentFilterFixture("drum-break-loop.wav","Unknown",8.0,16,"Loop")
         ||!addContentFilterFixture("bass-drum-loop.wav","Unknown",8.0,16,"Loop")
+        ||!addContentFilterFixture("bass-note-one-shot.wav","Unknown",0.5,1,{})
         ||!addContentFilterFixture("bass-beat-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("synth-pad-one-shot.wav","Unknown",2.4,1,{})
         ||!addContentFilterFixture("synth-pad-loop.wav","Unknown",4.0,8,"Loop")
+        ||!addContentFilterFixture("synth-bass-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("Beat Agent\\kick-agent-fixture.wav","Kick",0.2,1,{}))return 243;
@@ -558,12 +595,33 @@ int runSmokeTests(int argc,char** argv)
         const auto page=contentFilterDb.searchSampleBrowseRecords(filter,20,0);
         return std::any_of(page.records.begin(),page.records.end(),[&expected](const auto& sample){return sample.file.getFileName()==expected;});
     };
-    if(!hasContentFixture(1,"single-kick.wav")||!hasContentFixture(1,"bass-drum-one-shot.wav")||hasContentFixture(1,"drum-break-loop.wav")
-        ||!hasContentFixture(1,"kick-agent-fixture.wav")||hasContentFixture(2,"kick-agent-fixture.wav")
-        ||!hasContentFixture(2,"drum-break-loop.wav")||!hasContentFixture(2,"bass-drum-loop.wav")||hasContentFixture(2,"single-kick.wav")
-        ||!hasContentFixture(3,"bass-beat-loop.wav")||hasContentFixture(3,"drum-break-loop.wav")||hasContentFixture(3,"bass-drum-one-shot.wav")||hasContentFixture(3,"bass-drum-loop.wav")
-        ||hasContentFixture(4,"synth-pad-one-shot.wav")||!hasContentFixture(4,"synth-pad-loop.wav")||!hasContentFixture(5,"orchestral-phrase-loop.wav")
-        ||!hasContentFixture(5,"multi-sampled-loop.wav"))return 244;
+    const auto expectContentFixture = [&hasContentFixture](int kind, const juce::String& name, bool expected)
+    {
+        const bool actual = hasContentFixture(kind, name);
+        if (actual != expected) std::cerr << "Content filter " << kind << " expected " << name << " present=" << expected << " actual=" << actual << '\n';
+        return actual == expected;
+    };
+    if(!expectContentFixture(1,"single-kick.wav",true)||!expectContentFixture(1,"bass-drum-one-shot.wav",true)||!expectContentFixture(1,"drum-break-loop.wav",false)
+        ||!expectContentFixture(1,"kick-agent-fixture.wav",true)||!expectContentFixture(2,"kick-agent-fixture.wav",false)
+        ||!expectContentFixture(2,"drum-break-loop.wav",true)||!expectContentFixture(2,"bass-drum-loop.wav",true)||!expectContentFixture(2,"single-kick.wav",false)
+        ||!expectContentFixture(3,"bass-note-one-shot.wav",true)||!expectContentFixture(3,"bass-beat-loop.wav",false)
+        ||!expectContentFixture(3,"bass-drum-one-shot.wav",false)||!expectContentFixture(3,"bass-drum-loop.wav",false)
+        ||!expectContentFixture(4,"bass-beat-loop.wav",true)||!expectContentFixture(4,"synth-bass-loop.wav",true)
+        ||!expectContentFixture(4,"bass-note-one-shot.wav",false)||!expectContentFixture(4,"drum-break-loop.wav",false)
+        ||!expectContentFixture(5,"synth-pad-one-shot.wav",true)||!expectContentFixture(5,"synth-pad-loop.wav",false)
+        ||!expectContentFixture(6,"synth-pad-loop.wav",true)||!expectContentFixture(7,"orchestral-phrase-loop.wav",true)
+        ||!expectContentFixture(7,"multi-sampled-loop.wav",true))
+    {
+        for (int kind = 1; kind <= 7; ++kind)
+        {
+            SampleBrowseFilter debugFilter; debugFilter.contentKind = kind;
+            const auto page = contentFilterDb.searchSampleBrowseRecords(debugFilter, 20, 0);
+            std::cerr << "Content filter " << kind << ':';
+            for (const auto& record : page.records) std::cerr << ' ' << record.file.getFileName();
+            std::cerr << '\n';
+        }
+        return 244;
+    }
     auto updatedClassification=classifiedSamples.getFirst();updatedClassification.classificationTags.clear();updatedClassification.classificationTags.add("Bright");const auto preservedManualTags=classificationTagDb.getUserTags(classifiedFile);if(!classificationTagDb.insertSample(updatedClassification)||classificationTagDb.getClassificationTags(classifiedFile).size()!=1||!classificationTagDb.getClassificationTags(classifiedFile).contains("Bright")||preservedManualTags.size()!=1||!preservedManualTags.contains("Reviewed")||classificationTagDb.getCategory(classifiedFile)!="Snare")return 157;
     classificationTagFilter.query="Electronic";if(!classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0).records.isEmpty())return 158;classificationTagFilter.query="Reviewed";if(classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0).records.size()!=1)return 159;
     auto priorClassifierVersion=updatedClassification;priorClassifierVersion.analysisVersion=currentSampleAnalysisVersion-1;priorClassifierVersion.classificationTags.clear();if(!classificationTagDb.insertSample(priorClassifierVersion)||classificationTagDb.isSampleUnchanged(classifiedFile,static_cast<std::int64_t>(classifiedFile.getSize()),classifiedFile.getLastModificationTime().toMilliseconds()))return 171;

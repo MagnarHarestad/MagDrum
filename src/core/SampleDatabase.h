@@ -84,7 +84,7 @@ struct SampleBrowseRecord
 struct SampleBrowseFilter
 {
     juce::String query, category, sourceType, sourceIdentifier, pluginName, kitName;
-    int contentKind = 0; // 0=all, 1=drum hits, 2=drum loops, 3=bass, 4=synth loops, 5=other loops
+    int contentKind = 0; // 0=all, then drum hits/loops, bass hits/loops, synth hits/loops, other loops
     int feature = 1; // 1=all, 2-5 duration bands, 6-8 spectral brightness bands
     int sort = 1; // 1=name, 2=shortest, 3=longest, 4=brightest, 5=darkest
     bool needsReview = false;

@@ -760,7 +760,7 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     for (const auto& candidate : candidates)
     {
         const auto module = juce::File(candidate);
-        const auto cachedModule = cachedModuleIndex.find(candidate.toStdString());
+        const auto cachedModule = cachedModuleIndex.find(module.getFullPathName().toStdString());
         const bool cachedBinaryIsUpToDate = cachedModule != cachedModuleIndex.end()
             && magdrum::plugins::isCachedVst3ModuleUpToDate(cachedModule->second, module);
         const bool hasSidecarManifest = module.getChildFile("Contents").getChildFile("Resources")
@@ -784,6 +784,14 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
                 instrumentCandidates.add(candidate);
             continue;
         }
+
+        if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(moduleFilterCache, module)
+                == std::optional<bool>(false))
+            continue;
+
+        if (cachedBinaryIsUpToDate && cachedModule->second.hasPluginDescriptions
+            && !cachedModule->second.hasInstrumentDescription)
+            continue;
 
         if (cachedBinaryIsUpToDate)
             continue;
@@ -812,6 +820,23 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         publishProgress(progressBase + completed, overallTotal, candidateName);
         juce::String name;
         scanner.scanNextFile(true, name);
+        const auto candidatePath = juce::File(instrumentCandidates[completed]);
+        const bool candidateHasSidecarManifest = candidatePath.getChildFile("Contents")
+            .getChildFile("Resources").getChildFile("moduleinfo.json").existsAsFile()
+            || candidatePath.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
+        if (!candidateHasSidecarManifest)
+        {
+            const auto moduleHasInstrument = std::any_of(knownPlugins.getTypes().begin(), knownPlugins.getTypes().end(),
+                [&candidatePath](const auto& description)
+                {
+                    const juce::File descriptionPath(description.fileOrIdentifier);
+                    return description.pluginFormatName == "VST3" && description.isInstrument
+                        && (descriptionPath == candidatePath || descriptionPath.isAChildOf(candidatePath));
+                });
+            magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, candidatePath,
+                moduleHasInstrument);
+            magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);
+        }
         // Commit discoveries incrementally. If a third-party binary crashes
         // this helper, a later scan keeps completed results and the JUCE
         // dead-man's pedal skips the module that was being scanned.
