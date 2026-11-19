@@ -1136,9 +1136,10 @@ public:
         {
             magdrum::ui::setLanguage(language, false);
             editor.applyLanguage();
-            if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"...")
+            if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"..."
+                || editor.pluginKitSelect.getTextWhenNothingSelected() != magdrum::ui::localisedText("Saved kits"))
             {
-                std::cerr << "The kit-source control did not update in every supported language.\n";
+                std::cerr << "The kit-source controls did not update in every supported language.\n";
                 magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
                 editor.applyLanguage();
                 return 13;

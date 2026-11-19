@@ -2158,6 +2158,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     for(auto* button:{&saveProfileButton,&importCsvButton,&exportCsvButton,&setMappingButton,&removeMappingButton,&profileCsvActionsButton,&mappingActionsButton}){button->addListener(this);addAndMakeVisible(*button);}
     mappingSummary.setColour(juce::Label::textColourId,Palette::Text);mappingSummary.setJustificationType(juce::Justification::topLeft);addAndMakeVisible(mappingSummary);
     pluginInstrumentSelect.onChange=[this]{selectedPluginPresetFile=juce::File();pluginProgramSelect.clear(juce::dontSendNotification);importPluginPresetButton.setEnabled(false);importPluginProgramButton.setEnabled(false);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);refreshPluginKits();};addAndMakeVisible(pluginInstrumentSelect);
+    pluginKitSelect.setTextWhenNothingSelected(magdrum::ui::localisedText("Saved kits"));
     pluginKitSelect.onChange=[this]{scanPluginNotesButton.setEnabled(!pluginScanRunning&&pluginKitSelect.getSelectedId()>0);updatePluginActionButtons();};addAndMakeVisible(pluginKitSelect);
     pluginProgramSelect.setTextWhenNothingSelected(magdrum::ui::localisedText("Instrument programs"));
     pluginProgramSelect.onChange=[this]{if(pluginProgramSelect.getSelectedId()>0){selectedPluginPresetFile=juce::File();importPluginPresetButton.setEnabled(false);pluginPresetKitName.setText(pluginProgramSelect.getText(),juce::dontSendNotification);}importPluginProgramButton.setEnabled(pluginProgramSelect.getSelectedId()>0&&!pluginPresetImportRunning);updatePluginActionButtons();};addAndMakeVisible(pluginProgramSelect);
@@ -2608,6 +2609,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     scanPluginProgramsButton.setButtonText(magdrum::ui::localisedText(pluginProgramScanRunning ? "Cancel program scan" : "Scan programs"));
     importPluginProgramButton.setButtonText(magdrum::ui::localisedText(pluginPresetImportRunning && pluginPresetImportFromProgram ? "Cancel preset import" : "Import program as kit"));
     pluginProgramSelect.setTextWhenNothingSelected(magdrum::ui::localisedText("Instrument programs"));
+    pluginKitSelect.setTextWhenNothingSelected(magdrum::ui::localisedText("Saved kits"));
     pluginPresetKitName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Preset kit name"),Palette::Muted);
     scanPluginNotesButton.setButtonText(magdrum::ui::localisedText("Scan kit notes"));
     cancelPluginNotesButton.setButtonText(magdrum::ui::localisedText("Cancel scan"));
