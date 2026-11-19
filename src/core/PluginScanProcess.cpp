@@ -709,6 +709,10 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     PluginNoteScanSettings settings;
     settings.sampleRate = sampleRate;
     settings.blockSize = blockSize;
+    const auto firstMidiNote = request->getProperty("firstMidiNote");
+    const auto lastMidiNote = request->getProperty("lastMidiNote");
+    if (!firstMidiNote.isVoid()) settings.firstMidiNote = static_cast<int>(firstMidiNote);
+    if (!lastMidiNote.isVoid()) settings.lastMidiNote = static_cast<int>(lastMidiNote);
     settings.repeatCount = request->getProperty("repeatCount");
     settings.noteDurationSeconds = request->getProperty("noteDurationSeconds");
     settings.releaseSeconds = request->getProperty("releaseSeconds");
@@ -728,7 +732,15 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     for (const auto& velocity : *velocities)
         settings.velocityLevels.push_back(static_cast<int>(velocity));
 
-    const auto totalScans = 128 * static_cast<int>(settings.velocityLevels.size()) * settings.repeatCount;
+    if (settings.firstMidiNote < 0 || settings.firstMidiNote > 127
+        || settings.lastMidiNote < settings.firstMidiNote || settings.lastMidiNote > 127)
+    {
+        writeJson(resultFile, makeErrorManifest("The MIDI note range must be between 0 and 127, with the first note no greater than the last."));
+        return 9;
+    }
+
+    const auto totalScans = (settings.lastMidiNote - settings.firstMidiNote + 1)
+        * static_cast<int>(settings.velocityLevels.size()) * settings.repeatCount;
     writeProgress("preparing", 0, totalScans, 0,
                   settings.velocityLevels.empty() ? 0 : settings.velocityLevels.front());
     std::unique_ptr<juce::FileOutputStream> captureLog(captureLogFile.createOutputStream());

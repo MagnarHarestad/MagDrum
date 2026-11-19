@@ -1258,6 +1258,8 @@ public:
         request->setProperty("resultFile", resultFile.getFullPathName());
         request->setProperty("sampleRate", settings.sampleRate);
         request->setProperty("blockSize", settings.blockSize);
+        request->setProperty("firstMidiNote", settings.firstMidiNote);
+        request->setProperty("lastMidiNote", settings.lastMidiNote);
         request->setProperty("repeatCount", settings.repeatCount);
         request->setProperty("noteDurationSeconds", settings.noteDurationSeconds);
         request->setProperty("releaseSeconds", settings.releaseSeconds);
@@ -1777,6 +1779,12 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     pluginRepeatCount.setTextToShowWhenEmpty(magdrum::ui::localisedText("Repeats"),Palette::Muted);
     pluginVelocityLabel.setText(magdrum::ui::localisedText("Velocity levels"),juce::dontSendNotification);pluginNoteDurationLabel.setText(magdrum::ui::localisedText("Note seconds"),juce::dontSendNotification);pluginReleaseLabel.setText(magdrum::ui::localisedText("Release seconds"),juce::dontSendNotification);pluginCaptureLabel.setText(magdrum::ui::localisedText("Capture seconds"),juce::dontSendNotification);pluginRepeatLabel.setText(magdrum::ui::localisedText("Repeats"),juce::dontSendNotification);
     const int renderMode=pluginRenderMode.getSelectedId();pluginRenderMode.clear(juce::dontSendNotification);pluginRenderMode.addItem(magdrum::ui::localisedText("Offline"),1);pluginRenderMode.addItem(magdrum::ui::localisedText("Real-time paced"),2);pluginRenderMode.addItem(magdrum::ui::localisedText("Audio device"),3);pluginRenderMode.setSelectedId(renderMode>0?renderMode:1,juce::dontSendNotification);
+    const int noteRange = pluginNoteRange.getSelectedId();
+    pluginNoteRange.clear(juce::dontSendNotification);
+    pluginNoteRange.addItem(magdrum::ui::localisedText("All MIDI notes (0-127)"), 1);
+    pluginNoteRange.addItem(magdrum::ui::localisedText("GM percussion (35-81)"), 2);
+    pluginNoteRange.setSelectedId(noteRange > 0 ? noteRange : 1, juce::dontSendNotification);
+    pluginNoteRange.setTooltip(magdrum::ui::localisedText("Choose which MIDI notes to scan; all MIDI notes is the default."));
     instrumentScannerButton.setTooltip(magdrum::ui::localisedText("Open MagDrum's isolated instrument browser to load VST instruments, choose kits and capture MIDI notes."));
     indexedList.setModel(this);indexedList.setRowHeight(43);indexedList.setMultipleSelectionEnabled(true);addAndMakeVisible(indexedList);
     sampleMap->onSelect=[this](int index) { selectSampleMapSample(index); };
@@ -2161,6 +2169,12 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     pluginKitSelect.onChange=[this]{scanPluginNotesButton.setEnabled(!pluginScanRunning&&pluginKitSelect.getSelectedId()>0);updatePluginActionButtons();};addAndMakeVisible(pluginKitSelect);
     pluginProgramSelect.setTextWhenNothingSelected(magdrum::ui::localisedText("Instrument programs"));
     pluginProgramSelect.onChange=[this]{if(pluginProgramSelect.getSelectedId()>0){selectedPluginPresetFile=juce::File();importPluginPresetButton.setEnabled(false);pluginPresetKitName.setText(pluginProgramSelect.getText(),juce::dontSendNotification);}importPluginProgramButton.setEnabled(pluginProgramSelect.getSelectedId()>0&&!pluginPresetImportRunning);updatePluginActionButtons();};addAndMakeVisible(pluginProgramSelect);
+    pluginNoteRange.addItem(magdrum::ui::localisedText("All MIDI notes (0-127)"), 1);
+    pluginNoteRange.addItem(magdrum::ui::localisedText("GM percussion (35-81)"), 2);
+    pluginNoteRange.setSelectedId(1, juce::dontSendNotification);
+    pluginNoteRange.setTooltip(magdrum::ui::localisedText("Choose which MIDI notes to scan; all MIDI notes is the default."));
+    pluginNoteRange.onChange = [this] { savePluginEditorState(); };
+    addAndMakeVisible(pluginNoteRange);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders") + "...");scanPluginInventoryButton.addListener(this);addAndMakeVisible(scanPluginInventoryButton);
     pluginInventoryProgress.setTextToDisplay(juce::String{});pluginInventoryProgress.setPercentageDisplay(true);pluginInventoryProgress.setColour(juce::ProgressBar::foregroundColourId,Palette::Accent);pluginInventoryProgress.setColour(juce::ProgressBar::backgroundColourId,Palette::Panel);addAndMakeVisible(pluginInventoryProgress);
     pluginPresetKitName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Preset kit name"),Palette::Muted);pluginPresetKitName.setJustification(juce::Justification::centredLeft);addAndMakeVisible(pluginPresetKitName);
@@ -2361,7 +2375,7 @@ void MagDrumAudioProcessorEditor::resized()
         }
     playSequenceButton.setVisible(page==2);sequenceActionsButton.setVisible(page==2);clearSequenceButton.setVisible(false);exportSequenceButton.setVisible(false);importMidiButton.setVisible(false);browseMidiButton.setVisible(false);editMidiEventsButton.setVisible(false);reviewMidiButton.setVisible(false);midiFallbackPolicy.setVisible(page==2);tempoEditor.setVisible(page==2);barSelect.setVisible(page==2);meterSelect.setVisible(page==2);lengthSelect.setVisible(page==2);gridResolutionLabel.setVisible(page==2);gridResolutionSelect.setVisible(page==2);metadataType.setVisible(page==2);metadataBeat.setVisible(page==2);metadataValue.setVisible(page==2);metadataActionsButton.setVisible(page==2);setMetadataButton.setVisible(false);removeMetadataButton.setVisible(false);metadataSummary.setVisible(page==2);
     profileSelect.setVisible(page==3);profileName.setVisible(page==3);mappingInstrument.setVisible(page==3);mappingArticulation.setVisible(page==3);mappingNote.setVisible(page==3);mappingSummary.setVisible(page==3);saveProfileButton.setVisible(page==3);profileCsvActionsButton.setVisible(page==3);mappingActionsButton.setVisible(page==3);importCsvButton.setVisible(false);exportCsvButton.setVisible(false);setMappingButton.setVisible(false);removeMappingButton.setVisible(false);
-    for(auto* control:{static_cast<juce::Component*>(&pluginInstrumentSelect),static_cast<juce::Component*>(&pluginKitSelect),static_cast<juce::Component*>(&pluginRenderMode),static_cast<juce::Component*>(&pluginPresetKitName),static_cast<juce::Component*>(&pluginProgramSelect),static_cast<juce::Component*>(&pluginVelocities),static_cast<juce::Component*>(&pluginNoteDuration),static_cast<juce::Component*>(&pluginRelease),static_cast<juce::Component*>(&pluginCaptureLength),static_cast<juce::Component*>(&pluginRepeatCount),static_cast<juce::Component*>(&pluginScanProgress),static_cast<juce::Component*>(&pluginScanInfo),static_cast<juce::Component*>(&pluginVelocityLabel),static_cast<juce::Component*>(&pluginNoteDurationLabel),static_cast<juce::Component*>(&pluginReleaseLabel),static_cast<juce::Component*>(&pluginCaptureLabel),static_cast<juce::Component*>(&pluginRepeatLabel)})control->setVisible(hasPluginScannerPage&&page==4);
+    for(auto* control:{static_cast<juce::Component*>(&pluginInstrumentSelect),static_cast<juce::Component*>(&pluginKitSelect),static_cast<juce::Component*>(&pluginRenderMode),static_cast<juce::Component*>(&pluginNoteRange),static_cast<juce::Component*>(&pluginPresetKitName),static_cast<juce::Component*>(&pluginProgramSelect),static_cast<juce::Component*>(&pluginVelocities),static_cast<juce::Component*>(&pluginNoteDuration),static_cast<juce::Component*>(&pluginRelease),static_cast<juce::Component*>(&pluginCaptureLength),static_cast<juce::Component*>(&pluginRepeatCount),static_cast<juce::Component*>(&pluginScanProgress),static_cast<juce::Component*>(&pluginScanInfo),static_cast<juce::Component*>(&pluginVelocityLabel),static_cast<juce::Component*>(&pluginNoteDurationLabel),static_cast<juce::Component*>(&pluginReleaseLabel),static_cast<juce::Component*>(&pluginCaptureLabel),static_cast<juce::Component*>(&pluginRepeatLabel)})control->setVisible(hasPluginScannerPage&&page==4);
     for(auto* button:{&scanPluginInventoryButton,&choosePluginPresetButton})button->setVisible(hasPluginScannerPage&&page==4);
     scanPluginProgramsButton.setVisible(false);
     for(auto* button:{&importPluginPresetButton,&importPluginProgramButton,&scanPluginNotesButton,&cancelPluginNotesButton})button->setVisible(false);
@@ -2557,7 +2571,7 @@ void MagDrumAudioProcessorEditor::resized()
             row = bounds.removeFromTop(36);
         }
         openPluginManagerButton.setBounds({});
-        bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginKitSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);pluginPresetKitName.setBounds(row.removeFromLeft(235));row.removeFromLeft(8);choosePluginPresetButton.setBounds(row.removeFromLeft(165));row.removeFromLeft(6);importPluginKitButton.setBounds(row.removeFromLeft(175));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginProgramSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);scanPluginProgramsButton.setBounds({});row.removeFromLeft(12);pluginRenderMode.setBounds(row.removeFromLeft(200));importPluginPresetButton.setBounds({});importPluginProgramButton.setBounds({});bounds.removeFromTop(8);auto labels=bounds.removeFromTop(18);pluginVelocityLabel.setBounds(labels.removeFromLeft(250));labels.removeFromLeft(8);pluginNoteDurationLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginReleaseLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginCaptureLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginRepeatLabel.setBounds(labels.removeFromLeft(90));row=bounds.removeFromTop(36);pluginVelocities.setBounds(row.removeFromLeft(250));row.removeFromLeft(8);pluginNoteDuration.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRelease.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginCaptureLength.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRepeatCount.setBounds(row.removeFromLeft(90));bounds.removeFromTop(10);row=bounds.removeFromTop(36);scanPluginKitButton.setBounds(row.removeFromLeft(160));scanPluginNotesButton.setBounds({});cancelPluginNotesButton.setBounds({});row.removeFromLeft(12);pluginScanProgress.setBounds(row);bounds.removeFromTop(12);pluginScanInfo.setBounds(bounds);
+        bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginKitSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);pluginPresetKitName.setBounds(row.removeFromLeft(235));row.removeFromLeft(8);choosePluginPresetButton.setBounds(row.removeFromLeft(165));row.removeFromLeft(6);importPluginKitButton.setBounds(row.removeFromLeft(175));bounds.removeFromTop(8);row=bounds.removeFromTop(36);pluginProgramSelect.setBounds(row.removeFromLeft(270));row.removeFromLeft(8);scanPluginProgramsButton.setBounds({});row.removeFromLeft(12);pluginRenderMode.setBounds(row.removeFromLeft(200));importPluginPresetButton.setBounds({});importPluginProgramButton.setBounds({});bounds.removeFromTop(8);auto labels=bounds.removeFromTop(18);pluginVelocityLabel.setBounds(labels.removeFromLeft(250));labels.removeFromLeft(8);pluginNoteDurationLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginReleaseLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginCaptureLabel.setBounds(labels.removeFromLeft(118));labels.removeFromLeft(8);pluginRepeatLabel.setBounds(labels.removeFromLeft(90));row=bounds.removeFromTop(36);pluginVelocities.setBounds(row.removeFromLeft(250));row.removeFromLeft(8);pluginNoteDuration.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRelease.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginCaptureLength.setBounds(row.removeFromLeft(118));row.removeFromLeft(8);pluginRepeatCount.setBounds(row.removeFromLeft(90));bounds.removeFromTop(10);row=bounds.removeFromTop(36);scanPluginKitButton.setBounds(row.removeFromLeft(160));row.removeFromLeft(8);pluginNoteRange.setBounds(row.removeFromLeft(220));scanPluginNotesButton.setBounds({});cancelPluginNotesButton.setBounds({});row.removeFromLeft(12);pluginScanProgress.setBounds(row);bounds.removeFromTop(12);pluginScanInfo.setBounds(bounds);
     }
     if (inAppSubview != nullptr)
     {
@@ -3760,6 +3774,11 @@ void MagDrumAudioProcessorEditor::startPluginNoteScan()
     }
 
     PluginNoteScanSettings settings;
+    if (pluginNoteRange.getSelectedId() == 2)
+    {
+        settings.firstMidiNote = 35;
+        settings.lastMidiNote = 81;
+    }
     settings.velocityLevels.clear();
     juce::StringArray tokens;
     tokens.addTokens(pluginVelocities.getText(), ",; ", "");
@@ -4894,6 +4913,7 @@ void MagDrumAudioProcessorEditor::savePluginEditorState()
     const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());
     saved.setAttribute("fallbackPolicy",fallbackPolicyId-1);
     saved.setAttribute("allowArticulationFallback",fallbackPolicyId>1);
+    saved.setAttribute("pluginNoteRange", pluginNoteRange.getSelectedId() == 2 ? 2 : 1);
     for(size_t lane=0;lane<sequenceStepActive.size();++lane)for(size_t step=0;step<sequenceStepActive[lane].size();++step)if(sequenceStepActive[lane][step]){auto* cell=saved.createNewChildElement("STEP");cell->setAttribute("lane",static_cast<int>(lane));cell->setAttribute("step",static_cast<int>(step));cell->setAttribute("velocity",stepVelocities[lane][step]);}
     for(const auto& meta:sequenceMetadata){
         auto* child=saved.createNewChildElement("META");child->setAttribute("beat",meta.positionBeats);
@@ -4908,6 +4928,8 @@ void MagDrumAudioProcessorEditor::savePluginEditorState()
 void MagDrumAudioProcessorEditor::restorePluginEditorState()
 {
     const auto saved=processor.getPluginEditorState();if(!saved)return;
+    pluginNoteRange.setSelectedId(saved->getIntAttribute("pluginNoteRange", 1) == 2 ? 2 : 1,
+                                  juce::dontSendNotification);
     const int storedFallbackPolicy=saved->getIntAttribute("fallbackPolicy",-1);
     const int fallbackPolicyId=storedFallbackPolicy>=0&&storedFallbackPolicy<=2
         ?storedFallbackPolicy+1:(saved->getBoolAttribute("allowArticulationFallback",false)?3:1);

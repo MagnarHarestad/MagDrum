@@ -308,7 +308,7 @@ private:
     juce::TextButton saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
     juce::TextButton profileCsvActionsButton{"Import CSV..."}, mappingActionsButton{"Set mapping..."};
     juce::Label mappingSummary;
-    juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect;
+    juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect, pluginNoteRange;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
     double pluginInventoryProgressValue = 0.0;
     juce::ProgressBar pluginInventoryProgress{pluginInventoryProgressValue};

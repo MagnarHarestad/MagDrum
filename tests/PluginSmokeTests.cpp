@@ -288,6 +288,33 @@ public:
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksPluginScanNoteRangePersists(MagDrumAudioProcessorEditor& editor)
+    {
+        const juce::Point<int> originalSize{editor.getWidth(), editor.getHeight()};
+        editor.setPage(4);
+        if (!editor.pluginNoteRange.isVisible()
+            || editor.pluginNoteRange.getItemText(0) != magdrum::ui::localisedText("All MIDI notes (0-127)")
+            || editor.pluginNoteRange.getItemText(1) != magdrum::ui::localisedText("GM percussion (35-81)"))
+            return 1;
+        editor.setSize(1000, 620);
+        editor.resized();
+        if (!editor.getLocalBounds().contains(editor.pluginNoteRange.getBounds())
+            || !editor.getLocalBounds().contains(editor.scanPluginKitButton.getBounds())
+            || editor.pluginNoteRange.getBounds().getWidth() < 180)
+            return 4;
+        editor.pluginNoteRange.setSelectedId(2, juce::dontSendNotification);
+        editor.savePluginEditorState();
+        const auto saved = editor.processor.getPluginEditorState();
+        if (!saved || saved->getIntAttribute("pluginNoteRange", 0) != 2) return 2;
+        editor.pluginNoteRange.setSelectedId(1, juce::dontSendNotification);
+        editor.restorePluginEditorState();
+        if (editor.pluginNoteRange.getSelectedId() != 2) return 3;
+        editor.setSize(originalSize.x, originalSize.y);
+        editor.resized();
+        editor.setPage(0);
+        return 0;
+    }
+
     static int checksProgressiveSampleFilters(MagDrumAudioProcessorEditor& editor)
     {
         editor.setPage(0);
@@ -700,6 +727,16 @@ public:
             }
             stream->flush();
         }
+        editor.setPage(4);
+        editor.pluginNoteRange.setSelectedId(2, juce::dontSendNotification);
+        editor.resized();
+        const auto gmRangeImage = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
+        const auto gmRangeFile = outputDirectory.getChildFile("plugin-scanner-gm-range.png");
+        if (!gmRangeImage.isValid() || (gmRangeFile.existsAsFile() && !gmRangeFile.deleteFile())) return 5;
+        std::unique_ptr<juce::FileOutputStream> gmRangeStream(gmRangeFile.createOutputStream());
+        if (gmRangeStream == nullptr || !gmRangeStream->openedOk() || !png.writeImageToStream(gmRangeImage, *gmRangeStream)) return 5;
+        gmRangeStream->flush();
+        editor.pluginNoteRange.setSelectedId(1, juce::dontSendNotification);
         editor.setPage(0);
         editor.advancedSampleFiltersOpen = true;
         editor.updateAdvancedSampleFiltersButton();
@@ -1962,22 +1999,22 @@ int main(int argc, char** argv)
     struct LocalizationFixture
     {
         Language language;
-        std::array<const char*, 12> expected;
+        std::array<const char*, 15> expected;
     };
     const std::array<LocalizationFixture, 8> localizedTabs{{
-        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Name A-Z", "Off-grid hits in this step remain; use Edit hits to review them.", "While the host transport is playing, the sequencer follows its tempo and position.", "Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.", "No MIDI mapping", "Load sample", "Sample index unavailable. Choose an audio file or scan a folder here.", "Hi-hat", "Side stick"}},
-        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Name A-Z", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“.", "Während der Host-Transport läuft, folgt der Sequenzer dessen Tempo und Position.", "Der Sequenzer überspringt {count} Schläge ohne exakte MIDI-Zuordnung. Überprüfe MIDI-Zuordnungen.", "Keine MIDI-Zuordnung", "Sample laden", "Sampleindex nicht verfügbar. Lade eine Audiodatei oder scanne hier einen Ordner.", "Hi-Hat", "Seitenschlag"}},
-        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Nom A-Z", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes.", "Pendant la lecture du transport hôte, le séquenceur suit son tempo et sa position.", "Le séquenceur ignore {count} frappes sans correspondance MIDI exacte. Vérifiez les correspondances MIDI.", "Aucune correspondance MIDI", "Charger un son", "Index des sons indisponible. Choisissez un fichier audio ou analysez un dossier ici.", "Charleston", "Coup sur le bord"}},
-        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Nombre A-Z", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes.", "Mientras el transporte del anfitrión está en marcha, el secuenciador sigue su tempo y posición.", "El secuenciador omite {count} golpes sin una asignación MIDI exacta. Revisa los mapas MIDI.", "Sin asignación MIDI", "Cargar muestra", "Índice de muestras no disponible. Elige un archivo de audio o analiza una carpeta aquí.", "Hi-hat", "Golpe lateral"}},
-        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Namn A-Ö", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag.", "När värdens transport spelar följer sequencern dess tempo och position.", "Sequencern hoppar över {count} slag utan exakt MIDI-mappning. Granska MIDI-mappningarna.", "Ingen MIDI-mappning", "Ladda sample", "Sampleindexet är inte tillgängligt. Välj en ljudfil eller skanna en mapp här.", "Hi-hat", "Kantslag"}},
-        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Navn A-Å", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag.", "Når vertens transport spiller, følger sequenceren tempoet og posisjonen.", "Sequenceren hopper over {count} slag uten nøyaktig MIDI-tilordning. Se gjennom MIDI-kartene.", "Ingen MIDI-tilordning", "Last inn sample", "Sampleindeksen er ikke tilgjengelig. Velg en lydfil eller skann en mappe her.", "Hi-hat", "Kantslag"}},
-        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Navn A-Å", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag.", "Når værtens transport afspiller, følger sequenceren dens tempo og position.", "Sequenceren springer {count} slag over uden en præcis MIDI-tilknytning. Gennemgå MIDI-kortene.", "Ingen MIDI-tilknytning", "Indlæs sample", "Sampleindekset er ikke tilgængeligt. Vælg en lydfil eller scan en mappe her.", "Hi-hat", "Kantslag"}},
-        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Nimi A-Ö", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja.", "Kun isännän kuljetus toistaa, sekvensseri seuraa sen tempoa ja sijaintia.", "Sekvensseri ohittaa {count} iskua, joilla ei ole tarkkaa MIDI-määritystä. Tarkista MIDI-kartat.", "Ei MIDI-määritystä", "Lataa näyte", "Näyteindeksi ei ole käytettävissä. Valitse äänitiedosto tai skannaa kansio tässä.", "Hi-hat", "Sivulyönti"}}
+        {Language::english, {"DRUM MACHINE", "Sample Library", "Duration shortest", "Name A-Z", "Off-grid hits in this step remain; use Edit hits to review them.", "While the host transport is playing, the sequencer follows its tempo and position.", "Sequencer skips {count} hits with no exact MIDI mapping. Review MIDI Maps.", "No MIDI mapping", "Load sample", "Sample index unavailable. Choose an audio file or scan a folder here.", "Hi-hat", "Side stick", "All MIDI notes (0-127)", "GM percussion (35-81)", "Choose which MIDI notes to scan; all MIDI notes is the default."}},
+        {Language::german, {"Drum-Maschine", "Sample-Bibliothek", "Kürzeste zuerst", "Name A-Z", "Schläge außerhalb des Rasters in diesem Schritt bleiben erhalten; überprüfe sie unter „Schläge bearbeiten“.", "Während der Host-Transport läuft, folgt der Sequenzer dessen Tempo und Position.", "Der Sequenzer überspringt {count} Schläge ohne exakte MIDI-Zuordnung. Überprüfe MIDI-Zuordnungen.", "Keine MIDI-Zuordnung", "Sample laden", "Sampleindex nicht verfügbar. Lade eine Audiodatei oder scanne hier einen Ordner.", "Hi-Hat", "Seitenschlag", "Alle MIDI-Noten (0-127)", "GM-Percussion (35-81)", "Wählen Sie die zu scannenden MIDI-Noten. Standardmäßig werden alle MIDI-Noten gescannt."}},
+        {Language::french, {"Boîte à rythmes", "Bibliothèque de sons", "Durée la plus courte", "Nom A-Z", "Les frappes hors grille de ce pas sont conservées ; vérifiez-les avec Modifier les frappes.", "Pendant la lecture du transport hôte, le séquenceur suit son tempo et sa position.", "Le séquenceur ignore {count} frappes sans correspondance MIDI exacte. Vérifiez les correspondances MIDI.", "Aucune correspondance MIDI", "Charger un son", "Index des sons indisponible. Choisissez un fichier audio ou analysez un dossier ici.", "Charleston", "Coup sur le bord", "Toutes les notes MIDI (0-127)", "Percussions GM (35-81)", "Choisissez les notes MIDI à analyser ; toutes les notes MIDI sont sélectionnées par défaut."}},
+        {Language::spanish, {"Caja de ritmos", "Biblioteca de sonidos", "Duración más corta", "Nombre A-Z", "Los golpes fuera de la cuadrícula de este paso se conservan; revísalos en Editar golpes.", "Mientras el transporte del anfitrión está en marcha, el secuenciador sigue su tempo y posición.", "El secuenciador omite {count} golpes sin una asignación MIDI exacta. Revisa los mapas MIDI.", "Sin asignación MIDI", "Cargar muestra", "Índice de muestras no disponible. Elige un archivo de audio o analiza una carpeta aquí.", "Hi-hat", "Golpe lateral", "Todas las notas MIDI (0-127)", "Percusión GM (35-81)", "Elige qué notas MIDI analizar; de forma predeterminada se analizan todas."}},
+        {Language::swedish, {"Trummaskin", "Samplebibliotek", "Kortast först", "Namn A-Ö", "Slag utanför rutnätet i det här steget finns kvar; granska dem med Redigera slag.", "När värdens transport spelar följer sequencern dess tempo och position.", "Sequencern hoppar över {count} slag utan exakt MIDI-mappning. Granska MIDI-mappningarna.", "Ingen MIDI-mappning", "Ladda sample", "Sampleindexet är inte tillgängligt. Välj en ljudfil eller skanna en mapp här.", "Hi-hat", "Kantslag", "Alla MIDI-noter (0-127)", "GM-trummor (35-81)", "Välj vilka MIDI-noter som ska skannas. Alla MIDI-noter är standard."}},
+        {Language::norwegian, {"Trommemaskin", "Lydbibliotek", "Korteste først", "Navn A-Å", "Slag utenfor rutenettet i dette trinnet blir beholdt; se dem under Rediger slag.", "Når vertens transport spiller, følger sequenceren tempoet og posisjonen.", "Sequenceren hopper over {count} slag uten nøyaktig MIDI-tilordning. Se gjennom MIDI-kartene.", "Ingen MIDI-tilordning", "Last inn sample", "Sampleindeksen er ikke tilgjengelig. Velg en lydfil eller skann en mappe her.", "Hi-hat", "Kantslag", "Alle MIDI-noter (0-127)", "GM-trommer (35-81)", "Velg hvilke MIDI-noter som skal skannes. Alle MIDI-noter er standard."}},
+        {Language::danish, {"Trommemaskine", "Samplebibliotek", "Korteste først", "Navn A-Å", "Slag uden for gitteret i dette trin bevares; gennemgå dem med Rediger slag.", "Når værtens transport afspiller, følger sequenceren dens tempo og position.", "Sequenceren springer {count} slag over uden en præcis MIDI-tilknytning. Gennemgå MIDI-kortene.", "Ingen MIDI-tilknytning", "Indlæs sample", "Sampleindekset er ikke tilgængeligt. Vælg en lydfil eller scan en mappe her.", "Hi-hat", "Kantslag", "Alle MIDI-noder (0-127)", "GM-percussion (35-81)", "Vælg, hvilke MIDI-noder der skal scannes. Alle MIDI-noder er standard."}},
+        {Language::finnish, {"Rumpukone", "Samplekirjasto", "Lyhimmät ensin", "Nimi A-Ö", "Tämän askeleen ruudukon ulkopuoliset iskut säilyvät; tarkista ne kohdasta Muokkaa iskuja.", "Kun isännän kuljetus toistaa, sekvensseri seuraa sen tempoa ja sijaintia.", "Sekvensseri ohittaa {count} iskua, joilla ei ole tarkkaa MIDI-määritystä. Tarkista MIDI-kartat.", "Ei MIDI-määritystä", "Lataa näyte", "Näyteindeksi ei ole käytettävissä. Valitse äänitiedosto tai skannaa kansio tässä.", "Hi-hat", "Sivulyönti", "Kaikki MIDI-nuotit (0-127)", "GM-rummut (35-81)", "Valitse skannattavat MIDI-nuotit. Oletuksena skannataan kaikki MIDI-nuotit."}}
     }};
     for (const auto& [language, expected] : localizedTabs)
     {
         magdrum::ui::setLanguage(language, false);
-        const std::array<juce::String, 12> actual{
+        const std::array<juce::String, 15> actual{
             magdrum::ui::localisedText("DRUM MACHINE"),
             magdrum::ui::localisedText("Sample Library"),
             magdrum::ui::localisedText("Duration shortest"),
@@ -1989,7 +2026,10 @@ int main(int argc, char** argv)
             magdrum::ui::localisedText("Load sample"),
             magdrum::ui::localisedText("Sample index unavailable. Choose an audio file or scan a folder here."),
             magdrum::ui::localisedText("Hi-hat"),
-            magdrum::ui::localisedText("Side stick")
+            magdrum::ui::localisedText("Side stick"),
+            magdrum::ui::localisedText("All MIDI notes (0-127)"),
+            magdrum::ui::localisedText("GM percussion (35-81)"),
+            magdrum::ui::localisedText("Choose which MIDI notes to scan; all MIDI notes is the default.")
         };
         for (size_t item = 0; item < actual.size(); ++item)
         {
@@ -2050,6 +2090,8 @@ int main(int argc, char** argv)
         MagDrumAudioProcessor editorProcessor;
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
+        const int pluginScanRangeCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginScanNoteRangePersists(editor);
+        if (pluginScanRangeCheck != 0) return 400 + pluginScanRangeCheck;
         if (!MagDrumAudioProcessorEditorTestAccess::mappingNotePlaceholderMatchesLanguage(editor))
         {
             std::cerr << "The MIDI note placeholder does not match the selected language key.\n";

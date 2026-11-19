@@ -14,7 +14,10 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 {
     PluginNoteScanResult result;
     if (!std::isfinite(settings.sampleRate) || settings.sampleRate < 8000.0 || settings.sampleRate > 192000.0
-        || settings.blockSize < 16 || settings.blockSize > 8192 || settings.velocityLevels.empty() || settings.velocityLevels.size() > 16
+        || settings.blockSize < 16 || settings.blockSize > 8192
+        || settings.firstMidiNote < 0 || settings.firstMidiNote > 127
+        || settings.lastMidiNote < settings.firstMidiNote || settings.lastMidiNote > 127
+        || settings.velocityLevels.empty() || settings.velocityLevels.size() > 16
         || settings.repeatCount < 1 || settings.repeatCount > 8
         || !std::isfinite(settings.noteDurationSeconds) || settings.noteDurationSeconds <= 0.0 || settings.noteDurationSeconds > 10.0
         || !std::isfinite(settings.releaseSeconds) || settings.releaseSeconds < 0.0 || settings.releaseSeconds > 10.0
@@ -61,7 +64,8 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
     const int captureSamples = static_cast<int>(captureSamples64);
     const int inputChannels = juce::jlimit(0, 8, plugin.getTotalNumInputChannels());
     const int processChannels = juce::jmax(1, juce::jmax(inputChannels, outputChannels));
-    const auto totalCaptureCount = static_cast<juce::int64>(128) * static_cast<juce::int64>(settings.velocityLevels.size()) * settings.repeatCount;
+    const auto noteCount = static_cast<juce::int64>(settings.lastMidiNote - settings.firstMidiNote + 1);
+    const auto totalCaptureCount = noteCount * static_cast<juce::int64>(settings.velocityLevels.size()) * settings.repeatCount;
     const auto estimatedBytes = totalCaptureCount * captureSamples * outputChannels * static_cast<int>(sizeof(float));
     if (!captureConsumer && estimatedBytes > 512 * 1024 * 1024)
     {
@@ -118,7 +122,7 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 
         for (const auto velocity : settings.velocityLevels)
         {
-            for (int note = 0; note < 128; ++note)
+            for (int note = settings.firstMidiNote; note <= settings.lastMidiNote; ++note)
             {
                 if (shouldCancel && shouldCancel())
                 {

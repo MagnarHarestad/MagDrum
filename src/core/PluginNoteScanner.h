@@ -15,6 +15,8 @@ struct PluginNoteScanSettings
 {
     double sampleRate = 44100.0;
     int blockSize = 512;
+    int firstMidiNote = 0;
+    int lastMidiNote = 127;
     std::vector<int> velocityLevels { 100 };
     int repeatCount = 1;
     double noteDurationSeconds = 0.25;
