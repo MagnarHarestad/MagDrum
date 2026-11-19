@@ -75,3 +75,7 @@ git clone --depth 1 https://github.com/sfzinstruments/virtuosity_drums.git $sour
 pwsh -NoProfile -File .\tools\Prepare-VirtuosityEvaluation.ps1 -SourceRoot $source -OutputRoot $labeled
 & .\build\classifier-evaluation\MagDrumClassifierEvaluation_artefacts\Release\MagDrumClassifierEvaluation.exe $labeled
 ```
+
+## Current Windows baseline (2026-11-19)
+
+Re-running the evaluator built from the current Windows source against the same external labeled data confirmed the known limits. On the 121-file Virtuosity subset, filename-plus-audio cues scored 100% (121/121), while filename-hidden audio scored 70.2% accuracy / 0.737 macro F1; no audio-only category reached the 0.75 review threshold. The manually corrected-example matcher scored 87.6% / 0.881 macro F1 with one sample held out, but also produced no suggestions at the acceptance threshold. On the 52-sample, three-kit free-sample subset, filename-hidden accuracy was 48.1% / 0.420 macro F1, and leave-one-kit-out example matching produced the same score; no suggestions reached the acceptance threshold. These results support treating inferred audio categories as low-confidence review hints. Reliable cross-kit classification remains an open research item; the category filters continue to use explicit names, folders, categories and tags as the primary signals.
