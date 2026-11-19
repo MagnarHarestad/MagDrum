@@ -1093,7 +1093,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 44> checks{{
+            const std::array<LabelCheck, 45> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1106,8 +1106,9 @@ public:
                 {"MIDI import button", editor.importMidiButton.getButtonText(), magdrum::ui::localisedText("Import MIDI")},
                 {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
                 {"plugin-folder button", editor.choosePluginFolderButton.getButtonText(), magdrum::ui::localisedText("Choose VST3 folder")},
-                {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All sounds")},
+                {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All categories")},
                 {"sample content filter", editor.contentTypeFilter.getText(), magdrum::ui::localisedText("Drum one-shots")},
+                {"all content types option", editor.contentTypeFilter.getItemText(0), magdrum::ui::localisedText("All sounds")},
                 {"bass one-shot family filter", editor.contentTypeFilter.getItemText(3), magdrum::ui::localisedText("Bass one-shots")},
                 {"bass loop family filter", editor.contentTypeFilter.getItemText(4), magdrum::ui::localisedText("Bass loops & beats")},
                 {"synth one-shot family filter", editor.contentTypeFilter.getItemText(5), magdrum::ui::localisedText("Synth one-shots")},
