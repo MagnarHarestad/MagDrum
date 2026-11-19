@@ -456,6 +456,79 @@ public:
             return 12;
         }
 
+        const auto addFamilyFixture = [&editor](const juce::String& name, const juce::String& category)
+        {
+            ScannedSample sample;
+            sample.file = juce::File("C:/MagDrumTestFixtures/Family/" + name);
+            sample.durationSeconds = 0.35;
+            sample.channels = 1;
+            sample.sampleRate = 44100.0;
+            sample.format = "WAV";
+            sample.category = category;
+            return editor.database.insertSample(sample);
+        };
+        if (!addFamilyFixture("Family Fixture Kick One Shot.wav", "Kick")
+            || !addFamilyFixture("Family Fixture Bass Beat Loop.wav", "Unknown")
+            || !addFamilyFixture("Family Fixture Synth Loop.wav", "Unknown"))
+        {
+            std::cerr << "Could not seed the content-family map fixtures.\n";
+            return 13;
+        }
+        editor.sampleSearch.setText("Family Fixture", juce::dontSendNotification);
+        const std::array<std::pair<int, juce::String>, 3> familyFixtures{{
+            {2, "Family Fixture Kick One Shot.wav"},
+            {5, "Family Fixture Bass Beat Loop.wav"},
+            {7, "Family Fixture Synth Loop.wav"}}};
+        struct FamilyFilterCheckState { size_t index = 0; bool matches = true; };
+        const auto checkState = std::make_shared<FamilyFilterCheckState>();
+        const auto familyDeadline = juce::Time::getMillisecondCounter() + 10000;
+        auto poll = std::make_shared<std::function<void()>>();
+        const auto selectFamily = [&editor, &familyFixtures](size_t index)
+        {
+            editor.categoryFilter.setSelectedId(1, juce::dontSendNotification);
+            editor.contentTypeFilter.setSelectedId(familyFixtures[index].first, juce::dontSendNotification);
+            editor.refreshSamples();
+        };
+        selectFamily(0);
+        *poll = [&editor, &familyFixtures, checkState, familyDeadline, poll, selectFamily]
+        {
+            if (juce::Time::getMillisecondCounter() >= familyDeadline)
+            {
+                checkState->matches = false;
+                juce::MessageManager::getInstance()->stopDispatchLoop();
+                return;
+            }
+            if (!editor.sampleBrowseQueryPending && !editor.sampleMapQueryPending)
+            {
+                const auto& expectedName = familyFixtures[checkState->index].second;
+                const bool matches = editor.samples.size() == 1 && editor.sampleMapSamples.size() == 1
+                    && editor.samples.getFirst().file.getFileName() == expectedName
+                    && editor.sampleMapSamples.getFirst().file.getFileName() == expectedName;
+                if (!matches)
+                {
+                    checkState->matches = false;
+                    juce::MessageManager::getInstance()->stopDispatchLoop();
+                    return;
+                }
+                if (++checkState->index == familyFixtures.size())
+                {
+                    juce::MessageManager::getInstance()->stopDispatchLoop();
+                    return;
+                }
+                selectFamily(checkState->index);
+            }
+            juce::Timer::callAfterDelay(20, *poll);
+        };
+        juce::Timer::callAfterDelay(20, *poll);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        *poll = {};
+        poll.reset();
+        if (!checkState->matches)
+        {
+            std::cerr << "The sample-family selection was not applied identically to the list and acoustic map.\n";
+            return 14;
+        }
+
         editor.selectedNote = 36;
         editor.buttonClicked(&editor.assignButton);
         const auto assignmentDeadline = juce::Time::getMillisecondCounter() + 10000;
