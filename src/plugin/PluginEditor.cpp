@@ -807,7 +807,8 @@ private:
     Action onAction;bool hasInput=false,hasChoices=false;juce::TextEditor report,input;juce::ComboBox choice;juce::TextButton action;
 };
 
-class MagDrumInAppFilePicker final : public juce::Component, private juce::ChangeListener
+class MagDrumInAppFilePicker final : public juce::Component, private juce::ChangeListener,
+                                     private juce::FileBrowserListener
 {
 public:
     using Selection = std::function<void(const juce::File&)>;
@@ -818,24 +819,24 @@ public:
           browser(std::make_unique<juce::FileBrowserComponent>(flags,initial,filter.get(),nullptr)),
           onSelection(std::move(callback))
     {
+        browser->addListener(this);
         addAndMakeVisible(*browser);
         updateLocalizedLabels();
         selectButton.onClick=[safe=juce::Component::SafePointer<MagDrumInAppFilePicker>(this)]
         {
             juce::MessageManager::callAsync([safe]
             {
-                if(safe==nullptr||safe->browser==nullptr||!safe->browser->currentFileIsValid())return;
-                const auto selected=safe->browser->getSelectedFile(0);
-                auto callback=safe->onSelection;
-                if(callback)callback(selected);
+                if(safe!=nullptr)safe->selectCurrentFile();
             });
         };
         addAndMakeVisible(selectButton);
+        updateSelectEnabled();
         magdrum::ui::languageChangeBroadcaster().addChangeListener(this);
     }
     ~MagDrumInAppFilePicker() override
     {
         magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);
+        browser->removeListener(this);
     }
     void resized() override
     {
@@ -844,7 +845,25 @@ public:
         browser->setBounds(area);
     }
     void changeListenerCallback(juce::ChangeBroadcaster*) override { updateLocalizedLabels(); }
+    void selectionChanged() override { updateSelectEnabled(); }
+    void fileClicked(const juce::File&, const juce::MouseEvent&) override { updateSelectEnabled(); }
+    void fileDoubleClicked(const juce::File& file) override { completeSelection(file); }
+    void browserRootChanged(const juce::File&) override { updateSelectEnabled(); }
 private:
+    void updateSelectEnabled()
+    {
+        selectButton.setEnabled(browser!=nullptr&&browser->currentFileIsValid());
+    }
+    void selectCurrentFile()
+    {
+        if(browser!=nullptr&&browser->currentFileIsValid())completeSelection(browser->getSelectedFile(0));
+    }
+    void completeSelection(const juce::File& file)
+    {
+        if(file==juce::File())return;
+        auto callback=onSelection;
+        if(callback)callback(file);
+    }
     void updateLocalizedLabels()
     {
         selectButton.setButtonText(magdrum::ui::localisedText("Select"));

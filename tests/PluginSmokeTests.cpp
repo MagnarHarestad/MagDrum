@@ -690,6 +690,32 @@ public:
         std::unique_ptr<juce::FileOutputStream> pickerStream(pickerFile.createOutputStream());
         if(pickerStream==nullptr||!pickerStream->openedOk()||!png.writeImageToStream(pickerImage,*pickerStream))return 8;
         pickerStream->flush();editor.closeInAppSubview();
+        editor.chooseFileInApp(magdrum::ui::localisedText("Choose a drum sample"),
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("missing-sample.wav"),
+            "*.wav",juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,{});
+        picker=editor.inAppSubviewContentForTest();
+        juce::TextButton* selectFileButton=nullptr;
+        for(int child=0;picker!=nullptr&&child<picker->getNumChildComponents();++child)
+            if(auto* button=dynamic_cast<juce::TextButton*>(picker->getChildComponent(child)))selectFileButton=button;
+        if(selectFileButton==nullptr||selectFileButton->isEnabled())
+        {
+            std::cerr<<"The embedded file picker allowed opening a nonexistent file.\n";
+            return 11;
+        }
+        editor.closeInAppSubview();
+        editor.chooseFileInApp(magdrum::ui::localisedText("Export drum pattern"),
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MagDrum-test.mid"),
+            "*.mid",juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles,{});
+        picker=editor.inAppSubviewContentForTest();
+        selectFileButton=nullptr;
+        for(int child=0;picker!=nullptr&&child<picker->getNumChildComponents();++child)
+            if(auto* button=dynamic_cast<juce::TextButton*>(picker->getChildComponent(child)))selectFileButton=button;
+        if(selectFileButton==nullptr||!selectFileButton->isEnabled())
+        {
+            std::cerr<<"The embedded file picker did not enable a valid save path.\n";
+            return 12;
+        }
+        editor.closeInAppSubview();
         return 0;
     }
 
