@@ -547,6 +547,7 @@ int runSmokeTests(int argc,char** argv)
         ||!addContentFilterFixture("drum-break-loop.wav","Unknown",8.0,16,"Loop")
         ||!addContentFilterFixture("bass-drum-loop.wav","Unknown",8.0,16,"Loop")
         ||!addContentFilterFixture("bass-beat-loop.wav","Unknown",4.0,8,"Loop")
+        ||!addContentFilterFixture("synth-pad-one-shot.wav","Unknown",2.4,1,{})
         ||!addContentFilterFixture("synth-pad-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop")
@@ -561,7 +562,7 @@ int runSmokeTests(int argc,char** argv)
         ||!hasContentFixture(1,"kick-agent-fixture.wav")||hasContentFixture(2,"kick-agent-fixture.wav")
         ||!hasContentFixture(2,"drum-break-loop.wav")||!hasContentFixture(2,"bass-drum-loop.wav")||hasContentFixture(2,"single-kick.wav")
         ||!hasContentFixture(3,"bass-beat-loop.wav")||hasContentFixture(3,"drum-break-loop.wav")||hasContentFixture(3,"bass-drum-one-shot.wav")||hasContentFixture(3,"bass-drum-loop.wav")
-        ||!hasContentFixture(4,"synth-pad-loop.wav")||!hasContentFixture(5,"orchestral-phrase-loop.wav")
+        ||hasContentFixture(4,"synth-pad-one-shot.wav")||!hasContentFixture(4,"synth-pad-loop.wav")||!hasContentFixture(5,"orchestral-phrase-loop.wav")
         ||!hasContentFixture(5,"multi-sampled-loop.wav"))return 244;
     auto updatedClassification=classifiedSamples.getFirst();updatedClassification.classificationTags.clear();updatedClassification.classificationTags.add("Bright");const auto preservedManualTags=classificationTagDb.getUserTags(classifiedFile);if(!classificationTagDb.insertSample(updatedClassification)||classificationTagDb.getClassificationTags(classifiedFile).size()!=1||!classificationTagDb.getClassificationTags(classifiedFile).contains("Bright")||preservedManualTags.size()!=1||!preservedManualTags.contains("Reviewed")||classificationTagDb.getCategory(classifiedFile)!="Snare")return 157;
     classificationTagFilter.query="Electronic";if(!classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0).records.isEmpty())return 158;classificationTagFilter.query="Reviewed";if(classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0).records.size()!=1)return 159;
