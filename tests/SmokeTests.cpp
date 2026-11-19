@@ -36,7 +36,9 @@
 class SyntheticInstrument final : public juce::AudioProcessor
 {
 public:
-    SyntheticInstrument() : AudioProcessor(BusesProperties().withOutput("Stereo Out", juce::AudioChannelSet::stereo(), true)) {}
+    explicit SyntheticInstrument(int outputChannelCount = 2, int activeOutputChannel = 0)
+        : AudioProcessor(BusesProperties().withOutput("Test Out", channelSetFor(outputChannelCount), true)),
+          outputChannels(outputChannelCount), activeOutput(activeOutputChannel) {}
     const juce::String getName() const override { return "Synthetic Test Instrument"; }
     void prepareToPlay(double rate, int) override { sampleRate = rate; phase = 0.0; if (changeProgramOnPrepare) program = 0; }
     void releaseResources() override {}
@@ -54,7 +56,9 @@ public:
         for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
             const float value = activeNote >= 0 ? amplitude * static_cast<float>(std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * phase / sampleRate)) : 0.0f;
-            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) buffer.setSample(channel, i, value);
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                if (outputChannels <= 2 || channel == activeOutput)
+                    buffer.setSample(channel, i, value);
             phase += 1.0;
         }
     }
@@ -76,9 +80,16 @@ public:
     void setProgramSerializationEnabled(bool enabled) { serializeProgram = enabled; }
     void setProgramChangeOnPrepare(bool enabled) { changeProgramOnPrepare = enabled; }
 private:
+    static juce::AudioChannelSet channelSetFor(int channels)
+    {
+        if (channels == 1) return juce::AudioChannelSet::mono();
+        if (channels == 2) return juce::AudioChannelSet::stereo();
+        return juce::AudioChannelSet::discreteChannels(channels);
+    }
     double sampleRate = 44100.0, phase = 0.0;
     float amplitude = 0.0f;
     int activeNote = -1, program = 0;
+    int outputChannels = 2, activeOutput = 0;
     bool sawOfflineProcessing = false, sawRealtimeProcessing = false, serializeProgram = true, changeProgramOnPrepare = false;
 };
 
@@ -1486,6 +1497,23 @@ int runSmokeTests(int argc,char** argv)
     SyntheticInstrument instrumentWithoutStateBlob;instrumentWithoutStateBlob.setCurrentProgram(1);instrumentWithoutStateBlob.setProgramSerializationEnabled(false);instrumentWithoutStateBlob.setProgramChangeOnPrepare(true);const auto restoredProgramScan=PluginNoteScanner{}.scan(instrumentWithoutStateBlob,scanSettings,[]{return true;});if(!restoredProgramScan.cancelled||!restoredProgramScan.error.isEmpty()||instrumentWithoutStateBlob.getCurrentProgram()!=1)return 189;
     auto realtimeSettings=scanSettings;realtimeSettings.velocityLevels={100};realtimeSettings.noteDurationSeconds=.005;realtimeSettings.releaseSeconds=.005;realtimeSettings.captureLengthSeconds=.01;realtimeSettings.renderMode=PluginNoteRenderMode::realtimePaced;synthetic.clearRenderModeObservations();synthetic.setNonRealtime(true);bool stopRealtimeAfterCapture=false;int realtimeCaptures=0;const auto realtimeStart=std::chrono::steady_clock::now();const auto realtimeScan=PluginNoteScanner{}.scan(synthetic,realtimeSettings,[&]{return stopRealtimeAfterCapture;},{},[&](const PluginNoteCapture&){++realtimeCaptures;stopRealtimeAfterCapture=true;return true;});const auto realtimeElapsed=std::chrono::steady_clock::now()-realtimeStart;if(!realtimeScan.error.isEmpty()||!realtimeScan.cancelled||realtimeCaptures!=1||!synthetic.observedRealtimeProcessing()||!synthetic.isNonRealtime()||realtimeElapsed<std::chrono::milliseconds(8))return 184;synthetic.setNonRealtime(false);
     SyntheticInstrument deviceSynthetic;deviceSynthetic.prepareToPlay(8000,64);DeviceRealtimeRenderer deviceRenderer(deviceSynthetic);if(!deviceRenderer.prepareForTesting(8000,64))return 187;juce::AudioBuffer<float> deviceCapture(2,160);deviceCapture.clear();std::atomic<bool> stopDeviceDriver{false};std::thread deviceDriver([&]{float left[64]{},right[64]{};float* outputs[]{left,right};while(!stopDeviceDriver.load(std::memory_order_acquire)&&!deviceRenderer.hasActiveTestRequest())std::this_thread::sleep_for(std::chrono::milliseconds(1));while(!stopDeviceDriver.load(std::memory_order_acquire)){deviceRenderer.invokeTestCallback(outputs,2,64);std::this_thread::sleep_for(std::chrono::milliseconds(1));}});bool deviceCancelled=false;const bool deviceRendered=deviceRenderer.render(36,100,80,deviceCapture,{},deviceCancelled);stopDeviceDriver.store(true,std::memory_order_release);deviceDriver.join();deviceSynthetic.releaseResources();if(!deviceRendered||deviceCancelled||!deviceSynthetic.observedRealtimeProcessing()||deviceCapture.getRMSLevel(0,0,deviceCapture.getNumSamples())<=0.01f)return 188;
+    SyntheticInstrument multiOutputSynthetic(64, 10);
+    auto multiOutputSettings = scanSettings;
+    multiOutputSettings.velocityLevels = { 100 };
+    int multiOutputCaptureCount = 0;
+    bool multiOutputKickWasAudible = false;
+    const auto multiOutputScan = PluginNoteScanner{}.scan(multiOutputSynthetic, multiOutputSettings, {}, {},
+        [&](const PluginNoteCapture& capture)
+        {
+            ++multiOutputCaptureCount;
+            if (capture.midiNote == 36)
+                multiOutputKickWasAudible = capture.audio.getNumChannels() == 2
+                    && capture.peak > 0.01f && capture.rms > 0.01f;
+            return true;
+        });
+    if (!multiOutputScan.error.isEmpty() || multiOutputCaptureCount != 128 || !multiOutputKickWasAudible)
+        return 290;
+
     PluginNoteScanSettings largeStreamingSettings;largeStreamingSettings.sampleRate=192000;largeStreamingSettings.blockSize=8192;largeStreamingSettings.velocityLevels={1,8,16,24,32,40,48,56,64,72,80,88,96,104,112,127};largeStreamingSettings.repeatCount=8;largeStreamingSettings.noteDurationSeconds=10;largeStreamingSettings.releaseSeconds=10;largeStreamingSettings.captureLengthSeconds=20;const auto largeStreamingScan=PluginNoteScanner{}.scan(synthetic,largeStreamingSettings,[]{return true;},{},[](const PluginNoteCapture&){return true;});if(!largeStreamingScan.cancelled||!largeStreamingScan.error.isEmpty())return 182;
     PatternAudioRenderer::Samples previewSamples;for(int instrument=0;instrument<2;++instrument){auto& audio=previewSamples[static_cast<size_t>(instrument)].audio;audio.setSize(1,4410);audio.clear();for(int sample=0;sample<audio.getNumSamples();++sample)audio.setSample(0,sample,0.2f);previewSamples[static_cast<size_t>(instrument)].sampleRate=44100.0;}
     MidiPattern previewPattern;previewPattern.lengthBeats=4.0;previewPattern.tempoAndSignature={{0.0,juce::MidiMessage::tempoMetaEvent(500000)},{2.0,juce::MidiMessage::tempoMetaEvent(600000)}};previewPattern.events={{DrumInstrument::Kick,DrumArticulation::Default,127,0.0,0.1},{DrumInstrument::Snare,DrumArticulation::Default,80,1.0,0.1}};

@@ -651,20 +651,33 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     juce::AudioPluginFormatManager formats;
     juce::addHeadlessDefaultFormatsToManager(formats);
     juce::String loadError;
-    auto plugin = formats.createPluginInstance(description, sampleRate, blockSize, loadError);
+    const auto writePhase = [&progressFile](const juce::String& phase)
+    {
+        progressFile.replaceWithText(phase);
+    };
+    writePhase("loading");
+    auto createdPlugin = juce::MessageManager::callSync([&formats, &description, sampleRate, blockSize, &loadError]
+    {
+        return formats.createPluginInstance(description, sampleRate, blockSize, loadError);
+    });
+    auto plugin = createdPlugin ? std::move(*createdPlugin) : nullptr;
     if (plugin == nullptr)
     {
         writeJson(resultFile, makeErrorManifest("Could not load the plugin in the isolated scanner process: " + loadError));
         return 5;
     }
 
+    writePhase("restoring");
     juce::MemoryBlock state;
     if (!stateFile.loadFileAsData(state) || state.isEmpty() || state.getSize() > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
         writeJson(resultFile, makeErrorManifest("The saved plugin kit state could not be read."));
         return 6;
     }
-    plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    juce::MessageManager::callSync([&plugin, &state]
+    {
+        plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    });
 
     PluginNoteScanSettings settings;
     settings.sampleRate = sampleRate;
@@ -688,6 +701,7 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     for (const auto& velocity : *velocities)
         settings.velocityLevels.push_back(static_cast<int>(velocity));
 
+    writePhase("preparing");
     std::unique_ptr<juce::FileOutputStream> captureLog(captureLogFile.createOutputStream());
     if (captureLog == nullptr || !captureLog->openedOk())
     {

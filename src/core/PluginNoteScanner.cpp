@@ -32,9 +32,9 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
         }
 
     const int outputChannels = plugin.getTotalNumOutputChannels();
-    if (outputChannels < 1 || outputChannels > 8)
+    if (outputChannels < 1 || outputChannels > 64)
     {
-        result.error = "The selected plugin does not expose a supported audio output.";
+        result.error = "The selected plugin must expose between 1 and 64 audio output channels.";
         return result;
     }
 
@@ -89,12 +89,20 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                 deviceRenderer->detach();
             plugin.releaseResources();
         }
-        if (!previousState.isEmpty())
-            plugin.setStateInformation(previousState.getData(), static_cast<int>(previousState.getSize()));
-        if (previousProgram >= 0 && previousProgram < plugin.getNumPrograms()
-            && plugin.getCurrentProgram() != previousProgram)
-            plugin.setCurrentProgram(previousProgram);
-        plugin.setNonRealtime(wasNonRealtime);
+        const auto restoreHostState = [&]
+        {
+            if (!previousState.isEmpty())
+                plugin.setStateInformation(previousState.getData(), static_cast<int>(previousState.getSize()));
+            if (previousProgram >= 0 && previousProgram < plugin.getNumPrograms()
+                && plugin.getCurrentProgram() != previousProgram)
+                plugin.setCurrentProgram(previousProgram);
+            plugin.setNonRealtime(wasNonRealtime);
+        };
+        if (auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
+            messageManager != nullptr && !messageManager->isThisTheMessageThread())
+            juce::MessageManager::callSync(restoreHostState);
+        else
+            restoreHostState();
     };
 
     try
@@ -136,8 +144,6 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
 
                     juce::AudioBuffer<float> block(processChannels, blockSize);
                     juce::MidiBuffer midi;
-                    double sumSquares = 0.0;
-                    juce::int64 measuredSamples = 0;
                     const auto captureStart = std::chrono::steady_clock::now();
 
                     bool deviceCancelled = false;
@@ -150,19 +156,6 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                                 result.cancelled = true;
                             else
                                 result.error = "The default audio device stopped or timed out during real-time plugin rendering.";
-                        }
-                        for (int channel = 0; channel < outputChannels && !result.cancelled && result.error.isEmpty(); ++channel)
-                        {
-                            float* samples = capture.audio.getWritePointer(channel);
-                            for (int i = 0; i < captureSamples; ++i)
-                            {
-                                const double value = std::isfinite(samples[i]) ? samples[i] : 0.0;
-                                capture.peak = juce::jmax(capture.peak, std::abs(value));
-                                sumSquares += value * value;
-                                if (!std::isfinite(samples[i]))
-                                    samples[i] = 0.0f;
-                                ++measuredSamples;
-                            }
                         }
                     }
                     else for (int offset = 0; offset < captureSamples; offset += blockSize)
@@ -190,16 +183,81 @@ PluginNoteScanResult PluginNoteScanner::scan(juce::AudioProcessor& plugin,
                             for (int i = 0; i < count; ++i)
                             {
                                 const double value = std::isfinite(source[i]) ? source[i] : 0.0;
-                                capture.peak = juce::jmax(capture.peak, std::abs(value));
-                                sumSquares += value * value;
                                 destination[i] = static_cast<float>(value);
                             }
-                            measuredSamples += count;
                         }
                     }
 
                     if (result.cancelled || result.error.isNotEmpty())
                         break;
+                    std::vector<double> channelEnergy(static_cast<size_t>(outputChannels), 0.0);
+                    for (int channel = 0; channel < outputChannels; ++channel)
+                    {
+                        float* samples = capture.audio.getWritePointer(channel);
+                        for (int i = 0; i < captureSamples; ++i)
+                        {
+                            const float value = std::isfinite(samples[i]) ? samples[i] : 0.0f;
+                            samples[i] = value;
+                            channelEnergy[static_cast<size_t>(channel)] += static_cast<double>(value) * value;
+                        }
+                    }
+
+                    int firstChannel = 0;
+                    int secondChannel = outputChannels > 1 ? 1 : -1;
+                    if (outputChannels > 2)
+                    {
+                        double bestPairEnergy = channelEnergy[0] + channelEnergy[1];
+                        for (int channel = 2; channel + 1 < outputChannels; channel += 2)
+                        {
+                            const double pairEnergy = channelEnergy[static_cast<size_t>(channel)]
+                                + channelEnergy[static_cast<size_t>(channel + 1)];
+                            if (pairEnergy > bestPairEnergy)
+                            {
+                                bestPairEnergy = pairEnergy;
+                                firstChannel = channel;
+                                secondChannel = channel + 1;
+                            }
+                        }
+                        if ((outputChannels % 2) != 0)
+                        {
+                            const int lastChannel = outputChannels - 1;
+                            if (channelEnergy[static_cast<size_t>(lastChannel)] > bestPairEnergy)
+                            {
+                                firstChannel = lastChannel;
+                                secondChannel = -1;
+                            }
+                        }
+                    }
+
+                    if (outputChannels > 2)
+                    {
+                        juce::AudioBuffer<float> selectedOutputs(secondChannel >= 0 ? 2 : 1, captureSamples);
+                        selectedOutputs.copyFrom(0, 0, capture.audio, firstChannel, 0, captureSamples);
+                        if (secondChannel >= 0)
+                        {
+                            selectedOutputs.copyFrom(1, 0, capture.audio, secondChannel, 0, captureSamples);
+                            const double firstEnergy = channelEnergy[static_cast<size_t>(firstChannel)];
+                            const double secondEnergy = channelEnergy[static_cast<size_t>(secondChannel)];
+                            if (firstEnergy == 0.0 && secondEnergy > 0.0)
+                                selectedOutputs.copyFrom(0, 0, selectedOutputs, 1, 0, captureSamples);
+                            else if (secondEnergy == 0.0 && firstEnergy > 0.0)
+                                selectedOutputs.copyFrom(1, 0, selectedOutputs, 0, 0, captureSamples);
+                        }
+                        capture.audio = std::move(selectedOutputs);
+                    }
+
+                    double sumSquares = 0.0;
+                    juce::int64 measuredSamples = 0;
+                    for (int channel = 0; channel < capture.audio.getNumChannels(); ++channel)
+                    {
+                        const float* samples = capture.audio.getReadPointer(channel);
+                        for (int i = 0; i < captureSamples; ++i)
+                        {
+                            capture.peak = std::max(capture.peak, std::abs(static_cast<double>(samples[i])));
+                            sumSquares += static_cast<double>(samples[i]) * samples[i];
+                            ++measuredSamples;
+                        }
+                    }
                     capture.rms = measuredSamples > 0 ? std::sqrt(sumSquares / static_cast<double>(measuredSamples)) : 0.0;
                     capture.silent = capture.peak <= settings.silencePeakThreshold;
                     if (captureConsumer)

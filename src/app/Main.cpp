@@ -1003,7 +1003,11 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     juce::addHeadlessDefaultFormatsToManager(formats);
     juce::String loadError;
     writeProgramProgress("loading");
-    auto plugin = formats.createPluginInstance(description, 44100.0, 512, loadError);
+    auto createdPlugin = juce::MessageManager::callSync([&formats, &description, &loadError]
+    {
+        return formats.createPluginInstance(description, 44100.0, 512, loadError);
+    });
+    auto plugin = createdPlugin ? std::move(*createdPlugin) : nullptr;
     if (plugin == nullptr)
     {
         writeProgramProgress("failed");
@@ -1329,6 +1333,11 @@ public:
                 quit();
                 return;
             }
+#if JUCE_WINDOWS && JUCE_DEBUG
+            // Preset loading invokes third-party VST3 code in this isolated
+            // helper too. Keep vendor CRT assertions from opening a modal box.
+            makeDebugWorkerAssertionsNonInteractive();
+#endif
             const auto request = juce::File(arguments[1].unquoted());
             if (! juce::Thread::launch([this, request]
                 {
@@ -1354,6 +1363,11 @@ public:
                 quit();
                 return;
             }
+#if JUCE_WINDOWS && JUCE_DEBUG
+            // MIDI rendering executes third-party VST3 code; an assertion
+            // must fail this helper without presenting a dialog to the user.
+            makeDebugWorkerAssertionsNonInteractive();
+#endif
             const auto request = juce::File(arguments[1].unquoted());
             if (! juce::Thread::launch([request]
                 {
