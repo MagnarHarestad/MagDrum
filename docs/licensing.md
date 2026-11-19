@@ -31,6 +31,16 @@ both report product version `0.1.2.201`; the runtime signature is valid.
 `tools/Test-WindowsPackage.ps1` now repeats these checks for each x64 package.
 Package SHA-256: `dbd6d8d6a93199acdbd92028388e61d5c5f36be381871e037b790f0cb2234e3c`. The installed VST3 module SHA-256 is `ae71fe82a5aece4e5ce2a604c49b5671b2038f6fa84a44a6ac02abc7c7615c87`; it matches the module in the ZIP.
 
+The current Windows x64 release `v0.1.2-test.252` was checked from
+`latest-publish/MagDrum-Windows-x64.zip` with `tools/Test-WindowsPackage.ps1`.
+The check passed for the required application, VST3, matching helper,
+installer files, AGPLv3 and bundled third-party notices, and signed Microsoft
+runtime. The app and VST3 report product version `0.1.2.252`. ZIP SHA-256:
+`9b2a0e96add6474ccbf1c45193fc10ab97794ffef2d84171504e7ec2e572903d`. The
+installed VST3 module SHA-256 is
+`f7c38795cef7cfcbd94540985060e476af1f9faab9f4c1b81f6d5a2aec4d5a96` and
+matches the module in the release ZIP.
+
 MSVC-built Windows x64 and ARM64 packages include the matching Microsoft Visual
 C++ v14 Redistributable (vc_redist.x64.exe or vc_redist.arm64.exe). The
 installer compares its version with the installed target-architecture runtime
