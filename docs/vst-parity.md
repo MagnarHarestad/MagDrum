@@ -2,6 +2,8 @@
 
 Latest Windows x64 release: [v0.1.2-test.272](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.272), published and installed per user; .271 is preserved outside VST3 scan paths. VST Plugin Scanner can search standard VST3 preset locations or a user-selected folder in a cancellable background worker and show results in its menu for selection and kit import. Release CTest passed 3 applicable tests (Debug-only test skipped), localization (629 labels), package safeguards, Steinberg VST3 validation (47/47), exact-package state restoration, MIDI 0-127 rendering and 12 offscreen UI renders. ZIP SHA-256: `8ed45cf9ba503c02385c35c4fcc8cfbe8dab845da0e8e321c4746f8e2cef6dba`; module SHA-256: `8068C02E2045883FA796F6B0FADE8BA64146AF4CCC6BB8D8D5C3E55AF528CE75`. Cubase and third-party instrument behavior remain unverified.
 
+Current Windows source adds a separate-process UI regression for asynchronous preset search; the complete source-tree Release CTest suite passed 4/4, with the Debug-only assertion test skipped. This additional test does not change the published .272 package.
+
 The VST is intended to expose the MagDrum workflows from inside Cubase. This checklist tracks parity without claiming that the standalone app and an instrument plug-in have identical host responsibilities.
 
 | Standalone workflow | VST status | VST implementation target |
