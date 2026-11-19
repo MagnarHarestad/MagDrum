@@ -978,23 +978,14 @@ public:
         return 0;
     }
 
-    static int checksPluginFolderChooserVisibility(MagDrumAudioProcessorEditor& editor)
+    static int checksPluginInventoryMenu(MagDrumAudioProcessorEditor& editor)
     {
-        if (editor.choosePluginFolderButton.isVisible())
-        {
-            std::cerr << "Plugin-folder chooser is visible outside Plugin Scanner.\n";
-            return 1;
-        }
         editor.setPage(4);
-        if (!editor.choosePluginFolderButton.isVisible())
+        const auto inventoryMenu = editor.createPluginInventoryMenu();
+        if (inventoryMenu.getNumItems() != 3)
         {
-            std::cerr << "Plugin-folder chooser is hidden in Plugin Scanner.\n";
-            return 2;
-        }
-        if (editor.refreshPluginInventoryButton.isVisible())
-        {
-            std::cerr << "Redundant manual refresh should not occupy a permanent Plugin Scanner button.\n";
-            return 10;
+            std::cerr << "The combined scan action should expose scan, custom-folder and refresh choices.\n";
+            return 11;
         }
         if (!editor.importPluginKitButton.isVisible() || !editor.scanPluginKitButton.isVisible()
             || editor.importPluginPresetButton.isVisible() || editor.importPluginProgramButton.isVisible()
@@ -1081,11 +1072,6 @@ public:
             return 7;
         }
         editor.buttonClicked(&editor.libraryTab);
-        if (editor.choosePluginFolderButton.isVisible())
-        {
-            std::cerr << "Plugin-folder chooser stayed visible after leaving Plugin Scanner.\n";
-            return 3;
-        }
         return 0;
     }
 
@@ -1406,7 +1392,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 45> checks{{
+            const std::array<LabelCheck, 44> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1418,7 +1404,6 @@ public:
                 {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},
                 {"MIDI import button", editor.importMidiButton.getButtonText(), magdrum::ui::localisedText("Import MIDI")},
                 {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
-                {"plugin-folder button", editor.choosePluginFolderButton.getButtonText(), magdrum::ui::localisedText("Choose VST3 folder")},
                 {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All categories")},
                 {"sample content filter", editor.contentTypeFilter.getText(), magdrum::ui::localisedText("Drum one-shots")},
                 {"all content types option", editor.contentTypeFilter.getItemText(0), magdrum::ui::localisedText("All sounds")},
@@ -1832,7 +1817,7 @@ int main(int argc, char** argv)
         if (independentPadCheck != 0) return 65 + independentPadCheck;
         const int automationGestureCheck = MagDrumAudioProcessorEditorTestAccess::checksPadAutomationGesture(editor);
         if (automationGestureCheck != 0) return 330 + automationGestureCheck;
-        const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginFolderChooserVisibility(editor);
+        const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginInventoryMenu(editor);
         if (folderButtonCheck != 0) return 44;
         const int sampleScanProgressCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleScanProgress(editor);
         if (sampleScanProgressCheck != 0) return 48 + sampleScanProgressCheck;

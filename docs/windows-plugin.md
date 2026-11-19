@@ -14,7 +14,7 @@ While a sample preview is active, click **Stop** to cancel a file decode or sile
 
 To audition a pair while comparing them, Ctrl-click exactly two sample rows and choose **Sample tools > Compare two selected waveforms**. The comparison opens inside the plug-in. Use the **Preview** action under either waveform to hear that sample through the instrument output; choosing the other replaces the active comparison preview. File and folder selection for plug-in actions also stays inside the current MagDrum view, with **Back** returning to the view you came from.
 
-In **Plugin Scanner**, **Scan plugin folders** checks the standard VST3 locations. Use **Choose VST3 folder** to include a user-selected directory. Discovery runs in the separate MagDrum helper, outside Cubase.
+In **Plugin Scanner**, **Scan plugin folders...** opens one menu for scanning standard VST3 locations, choosing an additional folder, or refreshing the saved instrument list. The same button becomes **Cancel instrument scan** while discovery runs in the separate MagDrum helper, outside Cubase.
 
 Library rows also show which MIDI notes and velocity ranges currently use each sample. This updates after pad assignment, clearing a pad, and project-state restoration.
 
