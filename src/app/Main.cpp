@@ -1088,27 +1088,68 @@ int runHostTransportSequencerFixture(const juce::File& module, const juce::File&
     click(411, 110); // Sequencer tab in the standard editor layout.
     click(65, 159);  // Play button in the sequencer toolbar.
 
-    juce::AudioBuffer<float> audio(2, 128);
+    constexpr int blockSize=128;
+    constexpr int totalSamples=24024+3072;
+    constexpr std::array<int,3> hitStarts{24,12024,24024};
+    constexpr std::array<double,3> hitFrequencies{440.0,220.0,1760.0};
+    struct ToneCorrelation { double real = 0.0; double imaginary = 0.0; };
+    std::array<std::array<ToneCorrelation,3>,3> correlations{};
+    double beforeFirstHitPeak=0.0;
+    juce::AudioBuffer<float> audio(2,blockSize);
     juce::MidiBuffer midi;
-    plugin->processBlock(audio, midi);
-    double beforeHitPeak = 0.0;
-    double afterHitPeak = 0.0;
-    for (int channel = 0; channel < audio.getNumChannels(); ++channel)
-        for (int sample = 0; sample < audio.getNumSamples(); ++sample)
+    for(int blockStart=0;blockStart<totalSamples;blockStart+=blockSize)
+    {
+        audio.clear();
+        midi.clear();
+        playHead.position.setPpqPosition(static_cast<double>(blockStart)/24000.0);
+        plugin->processBlock(audio,midi);
+        for(int sample=0;sample<blockSize&&blockStart+sample<totalSamples;++sample)
         {
-            const double magnitude = std::abs(static_cast<double>(audio.getSample(channel, sample)));
-            if (sample < 24)
-                beforeHitPeak = juce::jmax(beforeHitPeak, magnitude);
-            else
-                afterHitPeak = juce::jmax(afterHitPeak, magnitude);
+            const int absoluteSample=blockStart+sample;
+            double mono=0.0;
+            for(int channel=0;channel<audio.getNumChannels();++channel)
+                mono+=audio.getSample(channel,sample)/audio.getNumChannels();
+            if(absoluteSample<24)
+                beforeFirstHitPeak=juce::jmax(beforeFirstHitPeak,std::abs(mono));
+            for(size_t eventIndex=0;eventIndex<hitStarts.size();++eventIndex)
+            {
+                const int relativeSample=absoluteSample-hitStarts[eventIndex];
+                if(relativeSample<64||relativeSample>=2048)continue;
+                for(size_t frequencyIndex=0;frequencyIndex<hitFrequencies.size();++frequencyIndex)
+                {
+                    const double phase=2.0*juce::MathConstants<double>::pi*hitFrequencies[frequencyIndex]
+                        *relativeSample/48000.0;
+                    correlations[eventIndex][frequencyIndex].real+=mono*std::cos(phase);
+                    correlations[eventIndex][frequencyIndex].imaginary-=mono*std::sin(phase);
+                }
+            }
         }
-    if (!midi.isEmpty() || beforeHitPeak > 1.0e-7 || afterHitPeak <= 0.05)
+        if(!midi.isEmpty())return 49;
+    }
+    bool routedEachSemanticLane=true;
+    for(size_t eventIndex=0;eventIndex<hitStarts.size();++eventIndex)
+    {
+        double strongestWrongLane=0.0;
+        for(size_t frequencyIndex=0;frequencyIndex<hitFrequencies.size();++frequencyIndex)
+            if(frequencyIndex!=eventIndex)
+                strongestWrongLane=juce::jmax(strongestWrongLane,std::hypot(
+                    correlations[eventIndex][frequencyIndex].real,
+                    correlations[eventIndex][frequencyIndex].imaginary));
+        const auto targetMagnitude=std::hypot(correlations[eventIndex][eventIndex].real,
+            correlations[eventIndex][eventIndex].imaginary);
+        routedEachSemanticLane=routedEachSemanticLane&&targetMagnitude>1.0
+            &&targetMagnitude>strongestWrongLane*1.5;
+    }
+    if(beforeFirstHitPeak>1.0e-7||!routedEachSemanticLane)
     {
         RECT client{};
         GetClientRect(hwnd, &client);
         stateFile.getSiblingFile("host-sequencer-render.txt").replaceWithText(
             "client=" + juce::String(client.right) + "x" + juce::String(client.bottom)
-            + ", before=" + juce::String(beforeHitPeak, 8) + ", after=" + juce::String(afterHitPeak, 8));
+            + ", before=" + juce::String(beforeFirstHitPeak, 8)
+            + ", kick=" + juce::String(std::hypot(correlations[0][0].real,correlations[0][0].imaginary), 8)
+            + ", snare=" + juce::String(std::hypot(correlations[1][1].real,correlations[1][1].imaginary), 8)
+            + ", closed-hihat=" + juce::String(std::hypot(correlations[2][2].real,correlations[2][2].imaginary), 8));
         return 49;
     }
     return 0;

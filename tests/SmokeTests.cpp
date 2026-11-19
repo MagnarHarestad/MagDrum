@@ -96,7 +96,8 @@ private:
 };
 
 bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& pluginTestsExecutable,
-    const juce::File& scannerExecutable, const juce::File& sampleFile, const juce::File& root)
+    const juce::File& scannerExecutable, const juce::File& kickSampleFile,
+    const juce::File& snareSampleFile, const juce::File& hihatSampleFile, const juce::File& root)
 {
     juce::AudioPluginFormatManager formatManager;
     juce::addHeadlessDefaultFormatsToManager(formatManager);
@@ -124,7 +125,9 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
     juce::StringArray stateCommand;
     stateCommand.add(pluginTestsExecutable.getFullPathName());
     stateCommand.add("--magdrum-test-write-plugin-state");
-    stateCommand.add(sampleFile.getFullPathName());
+    stateCommand.add(kickSampleFile.getFullPathName());
+    stateCommand.add(snareSampleFile.getFullPathName());
+    stateCommand.add(hihatSampleFile.getFullPathName());
     stateCommand.add(stateFile.getFullPathName());
     juce::ChildProcess stateWriter;
     if (!stateWriter.start(stateCommand) || !stateWriter.waitForProcessToFinish(30000)
@@ -556,19 +559,32 @@ int runSmokeTests(int argc,char** argv)
     const auto priorityFirst=root.getChildFile("preset-priority-first"),prioritySecond=root.getChildFile("preset-priority-second");if(!priorityFirst.createDirectory().wasOk()||!prioritySecond.createDirectory().wasOk()||!priorityFirst.getChildFile("Zulu.vstpreset").replaceWithText("first")||!prioritySecond.getChildFile("Alpha.vstpreset").replaceWithText("second"))return 142;juce::Array<juce::File> priorityRoots;priorityRoots.add(priorityFirst);priorityRoots.add(prioritySecond);const auto prioritySearch=findVst3PresetFiles(priorityRoots);if(prioritySearch.files.size()!=2||prioritySearch.files[0].getFileName()!="Zulu.vstpreset"||prioritySearch.files[1].getFileName()!="Alpha.vstpreset")return 143;
     auto waveFile=root.getChildFile("kick.wav");
     juce::WavAudioFormat wav;
-    auto stream=waveFile.createOutputStream();
-    if(!stream)return 2;
-    std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(stream.get(),44100.0,1u,16,{},0));
-    if(!writer)return 3;
-    stream.release();
-    float samples[4096]{};
-    for (int i=0;i<4096;++i) samples[i]=0.5f*std::sin(2.0*juce::MathConstants<double>::pi*440.0*i/44100.0);
-    const float* channels[]{samples};
-    if(!writer->writeFromFloatArrays(channels,1,4096))return 4;
-    writer.reset();
-
-    if (argc == 4 && !runBuiltVst3WorkerFixture(juce::File(argv[1]), juce::File(argv[2]), juce::File(argv[3]), waveFile, root))
-        return 188;
+    const auto writeToneFixture=[&wav](const juce::File& file,double frequency)
+    {
+        auto output=file.createOutputStream();
+        if(!output)return false;
+        std::unique_ptr<juce::AudioFormatWriter> toneWriter(wav.createWriterFor(output.get(),44100.0,1u,16,{},0));
+        if(!toneWriter)return false;
+        output.release();
+        std::array<float,4096> tone{};
+        for(size_t index=0;index<tone.size();++index)
+            tone[index]=0.5f*static_cast<float>(std::sin(2.0*juce::MathConstants<double>::pi*frequency*index/44100.0));
+        const float* channels[]{tone.data()};
+        return toneWriter->writeFromFloatArrays(channels,1,static_cast<int>(tone.size()));
+    };
+    if(!writeToneFixture(waveFile,440.0))return 4;
+    if(argc==4)
+    {
+        const auto hostSampleDirectory=root.getSiblingFile(root.getFileName()+"-host-samples");
+        if(!hostSampleDirectory.createDirectory().wasOk())return 4;
+        const auto snareSampleFile=hostSampleDirectory.getChildFile("snare.wav");
+        const auto hihatSampleFile=hostSampleDirectory.getChildFile("closed-hihat.wav");
+        if(!writeToneFixture(snareSampleFile,220.0)||!writeToneFixture(hihatSampleFile,1760.0))return 4;
+        const bool hostFixturePassed=runBuiltVst3WorkerFixture(juce::File(argv[1]),juce::File(argv[2]),
+            juce::File(argv[3]),waveFile,snareSampleFile,hihatSampleFile,root);
+        hostSampleDirectory.deleteRecursively();
+        if(!hostFixturePassed)return 188;
+    }
 
     WavScanner scanner;
     WavScanner::Stats initialScanStats;
