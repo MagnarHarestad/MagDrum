@@ -350,6 +350,28 @@ int runSmokeTests(int argc,char** argv)
         return 291;
     }
 
+    const auto timeoutDiscoveryProgressFile = root.getChildFile("vst3-discovery-timeout-progress.json");
+    const auto firstDiscoveryModule = root.getChildFile("slow-first-instrument.vst3");
+    const auto secondDiscoveryModule = root.getChildFile("unresponsive-second-instrument.vst3");
+    const juce::StringArray discoveryCommand{
+        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
+        "--magdrum-test-vst3-discovery-timeout-fixture", timeoutDiscoveryProgressFile.getFullPathName(),
+        firstDiscoveryModule.getFullPathName(), secondDiscoveryModule.getFullPathName()};
+    const auto discoveryTimeout = magdrum::plugins::monitorVst3Discovery(discoveryCommand,
+        timeoutDiscoveryProgressFile, 300, {}, 1000);
+    magdrum::plugins::Vst3DiscoveryProgress timedOutProgress;
+    if (!discoveryTimeout.started || !discoveryTimeout.timedOut || discoveryTimeout.cancelled
+        || discoveryTimeout.timedOutModulePath != secondDiscoveryModule.getFullPathName()
+        || !magdrum::plugins::recordVst3DiscoveryModuleFailure(timeoutDiscoveryProgressFile,
+            discoveryTimeout.timedOutModulePath)
+        || !magdrum::plugins::readVst3DiscoveryProgress(timeoutDiscoveryProgressFile, timedOutProgress)
+        || timedOutProgress.completed != 1 || timedOutProgress.failedModules.size() != 1
+        || !timedOutProgress.failedModules[0].equalsIgnoreCase(secondDiscoveryModule.getFullPathName()))
+    {
+        std::cerr << "VST3 discovery did not time out and isolate only the stalled instrument.\n";
+        return 306;
+    }
+
     const auto defaultPluginRootA=root.getChildFile("default-vst3-a");
     const auto defaultPluginRootB=root.getChildFile("default-vst3-b");
     const auto customPluginRoot=root.getChildFile("custom-vst3-root");
@@ -1561,6 +1583,21 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (argc == 5 && std::strcmp(argv[1], "--magdrum-test-vst3-discovery-timeout-fixture") == 0)
+    {
+        const juce::File progressFile(argv[2]);
+        magdrum::plugins::Vst3DiscoveryProgress progress;
+        progress.total = 2;
+        progress.current = "First instrument";
+        progress.currentPath = argv[3];
+        if (!magdrum::plugins::writeVst3DiscoveryProgress(progressFile, progress)) return 307;
+        juce::Thread::sleep(200);
+        progress.current = "Stalled instrument";
+        progress.currentPath = argv[4];
+        if (!magdrum::plugins::writeVst3DiscoveryProgress(progressFile, progress)) return 308;
+        for (;;) juce::Thread::sleep(25);
+    }
+
     if (argc == 4 && std::strcmp(argv[1], "--magdrum-test-plugin-scan-progress-worker") == 0)
     {
         const juce::File progressFile(argv[2]);

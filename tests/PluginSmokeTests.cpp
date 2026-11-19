@@ -1188,11 +1188,20 @@ public:
         {
             magdrum::ui::setLanguage(language, false);
             const auto timeoutMessage = magdrum::ui::localisedText("Instrument operation timed out.");
+            const auto discoverySkipMessage = magdrum::ui::localisedText(
+                "Skipping an instrument that crashed or timed out…");
+            const auto discoveryCompleteMessage = magdrum::ui::localisedText(
+                "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.");
             if (timeoutMessage.isEmpty()
                 || (language != magdrum::ui::Language::english
-                    && timeoutMessage == "Instrument operation timed out."))
+                    && timeoutMessage == "Instrument operation timed out.")
+                || discoverySkipMessage.isEmpty()
+                || discoveryCompleteMessage.isEmpty()
+                || (language != magdrum::ui::Language::english
+                    && (discoverySkipMessage == "Skipping an instrument that crashed or timed out…"
+                        || discoveryCompleteMessage == "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")))
             {
-                std::cerr << "The isolated instrument timeout is not translated in every supported language.\n";
+                std::cerr << "The isolated instrument timeout and discovery recovery are not translated in every supported language.\n";
                 magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
                 editor.applyLanguage();
                 return 18;

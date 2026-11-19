@@ -153,7 +153,7 @@ private:
     juce::PopupMenu createPluginSourceMenu() const;
     void startPluginInventoryScan(const juce::File& additionalFolder = {});
     void pollPluginInventoryProgress();
-    void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedAfterCrash);
+    void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedProblemModules);
     void choosePluginPreset();
     void updatePluginActionButtons();
     void startPluginPresetImport();

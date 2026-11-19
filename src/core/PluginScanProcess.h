@@ -43,6 +43,15 @@ struct Vst3DiscoveryProgress
     juce::StringArray failedModules;
 };
 
+struct Vst3DiscoveryExecution
+{
+    bool started = false;
+    bool cancelled = false;
+    bool timedOut = false;
+    int exitCode = -1;
+    juce::String timedOutModulePath;
+};
+
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
 bool vst3ModuleMayBeInstrument(const juce::File& bundle);
@@ -59,6 +68,9 @@ bool saveVst3ModuleInstrumentCache(const juce::File& cacheFile,
 bool readVst3DiscoveryProgress(const juce::File& progressFile, Vst3DiscoveryProgress& progress);
 bool writeVst3DiscoveryProgress(const juce::File& progressFile, const Vst3DiscoveryProgress& progress);
 bool recordVst3DiscoveryModuleFailure(const juce::File& progressFile, const juce::String& modulePath);
+Vst3DiscoveryExecution monitorVst3Discovery(const juce::StringArray& command,
+    const juce::File& progressFile, int perModuleTimeoutMilliseconds,
+    std::function<bool()> shouldCancel = {}, int cancellationGraceMilliseconds = 3000);
 bool vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module);
 bool vst3ModuleHasInstrumentDescription(

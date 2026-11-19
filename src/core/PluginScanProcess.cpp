@@ -267,6 +267,61 @@ bool magdrum::plugins::recordVst3DiscoveryModuleFailure(const juce::File& progre
     return writeVst3DiscoveryProgress(progressFile, progress);
 }
 
+magdrum::plugins::Vst3DiscoveryExecution magdrum::plugins::monitorVst3Discovery(
+    const juce::StringArray& command, const juce::File& progressFile,
+    int perModuleTimeoutMilliseconds, std::function<bool()> shouldCancel,
+    int cancellationGraceMilliseconds)
+{
+    Vst3DiscoveryExecution result;
+    if (command.isEmpty() || perModuleTimeoutMilliseconds <= 0 || cancellationGraceMilliseconds < 0)
+        return result;
+
+    juce::ChildProcess child;
+    result.started = child.start(command, 0);
+    if (!result.started)
+        return result;
+
+    juce::String activeModulePath;
+    juce::uint32 moduleStartedAt = 0;
+    while (child.isRunning())
+    {
+        if (shouldCancel && shouldCancel())
+        {
+            result.cancelled = true;
+            child.kill();
+            child.waitForProcessToFinish(cancellationGraceMilliseconds);
+            break;
+        }
+
+        Vst3DiscoveryProgress progress;
+        if (readVst3DiscoveryProgress(progressFile, progress))
+        {
+            if (progress.currentPath != activeModulePath)
+            {
+                activeModulePath = progress.currentPath;
+                moduleStartedAt = activeModulePath.isNotEmpty()
+                    ? juce::Time::getMillisecondCounter() : 0;
+            }
+
+            if (activeModulePath.isNotEmpty()
+                && static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - moduleStartedAt)
+                    >= static_cast<juce::uint32>(perModuleTimeoutMilliseconds))
+            {
+                result.timedOut = true;
+                result.timedOutModulePath = activeModulePath;
+                child.kill();
+                child.waitForProcessToFinish(cancellationGraceMilliseconds);
+                break;
+            }
+        }
+        child.waitForProcessToFinish(100);
+    }
+
+    if (!result.cancelled && !result.timedOut)
+        result.exitCode = child.getExitCode();
+    return result;
+}
+
 bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module)
 {
