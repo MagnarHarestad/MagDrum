@@ -606,6 +606,11 @@ int runSmokeTests(int argc,char** argv)
         std::cerr << "\n";
         return 290;
     }
+    if (!PluginScanProcess::shouldPublishNoteScanProgress(1, 128)
+        || PluginScanProcess::shouldPublishNoteScanProgress(23, 128)
+        || !PluginScanProcess::shouldPublishNoteScanProgress(24, 128)
+        || !PluginScanProcess::shouldPublishNoteScanProgress(128, 128)
+        || !PluginScanProcess::shouldPublishNoteScanProgress(127, 127)) return 298;
     const auto workerManifestFile=root.getChildFile("worker-result.json");
     if(!workerManifestFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[{"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"},{"midiNote":60,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.0,"rms":0.0,"silent":true,"fileName":""}]})"))return 131;
     PluginScanProcessManifest workerManifest;

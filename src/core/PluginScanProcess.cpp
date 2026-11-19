@@ -629,6 +629,12 @@ PluginHelperExecution PluginScanProcess::monitorHelper(const juce::StringArray& 
     return result;
 }
 
+bool PluginScanProcess::shouldPublishNoteScanProgress(int completed, int total)
+{
+    return completed > 0
+        && (completed == 1 || completed % 24 == 0 || (total > 0 && completed >= total));
+}
+
 int PluginScanProcess::runWorker(const juce::File& requestFile)
 {
     const auto requestValue = readJson(requestFile);
@@ -737,7 +743,8 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
         [&cancellationFile] { return cancellationFile.existsAsFile(); },
         [&writeProgress](int completed, int total, int midiNote, int velocity)
         {
-            writeProgress("scanning", completed, total, midiNote, velocity);
+            if (PluginScanProcess::shouldPublishNoteScanProgress(completed, total))
+                writeProgress("scanning", completed, total, midiNote, velocity);
         },
         [&](const PluginNoteCapture& capture)
         {

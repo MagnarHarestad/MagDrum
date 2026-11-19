@@ -124,5 +124,6 @@ public:
     static PluginHelperExecution monitorHelper(const juce::StringArray& command,
         const juce::File& progressFile, int timeoutMilliseconds, ShouldCancel shouldCancel = {},
         TextProgress progress = {}, int cancellationGraceMilliseconds = 3000);
+    static bool shouldPublishNoteScanProgress(int completed, int total);
     static int runWorker(const juce::File& requestFile);
 };
