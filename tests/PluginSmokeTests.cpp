@@ -1328,6 +1328,33 @@ public:
                                            const juce::File& firstSample, const juce::File& secondSample)
     {
         using magdrum::ui::Language;
+        editor.processor.clearSamplesForNote(70);
+        if (!editor.processor.loadSampleForVelocityRange(70, 1, 63, firstSample)
+            || !editor.processor.loadSampleForVelocityRange(70, 64, 127, secondSample))
+        {
+            std::cerr << "Could not prepare sample layers for the compact layer-menu check.\n";
+            return 12;
+        }
+        const auto layerActions = editor.createSampleLayersMenu(editor.processor.getSampleLayersForNote(70));
+        bool hasClearAction = false;
+        juce::PopupMenu::MenuItemIterator layerActionIterator(layerActions);
+        while (layerActionIterator.next())
+        {
+            const auto& item = layerActionIterator.getItem();
+            if (item.itemID == 99 && item.text == magdrum::ui::localisedText("Clear pad"))
+                hasClearAction = true;
+        }
+        if (layerActions.getNumItems() != 3 || !hasClearAction)
+        {
+            std::cerr << "The Layers menu should group Clear pad with its assigned sample layers.\n";
+            return 13;
+        }
+        editor.clearPadSamplesForNote(70);
+        if (!editor.processor.getSampleLayersForNote(70).empty())
+        {
+            std::cerr << "Clear pad in the Layers menu did not remove every sample layer.\n";
+            return 14;
+        }
         MagDrumAudioProcessor::SampleLayerInfo previewLayer;
         previewLayer.path = firstSample.getFullPathName();
         editor.handleSampleLayerMenuAction(36, previewLayer, 0);

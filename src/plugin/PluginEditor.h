@@ -77,6 +77,8 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void updateLayerSummary();
     void manageSampleLayers();
+    juce::PopupMenu createSampleLayersMenu(const std::vector<MagDrumAudioProcessor::SampleLayerInfo>&) const;
+    void clearPadSamplesForNote(int midiNote);
     void handleSampleLayerMenuAction(int note, const MagDrumAudioProcessor::SampleLayerInfo&, int action);
     void editSampleLayerVelocityRange(const MagDrumAudioProcessor::SampleLayerInfo&);
     void refreshSamples();
@@ -265,7 +267,7 @@ private:
     bool showPhaserControls = false;
     bool updatingPadControls = false;
     juce::TextEditor velocityRange;
-    juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load sample"};
+    juce::TextButton loadButton{"Load sample"};
     juce::TextButton playSequenceButton{"Play"}, sequenceActionsButton{"MIDI"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
     juce::ComboBox midiFallbackPolicy;
     juce::TextEditor tempoEditor, metadataBeat, metadataValue;
