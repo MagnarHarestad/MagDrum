@@ -288,6 +288,60 @@ public:
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static int checksProgressiveSampleFilters(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.setPage(0);
+        editor.advancedSampleFiltersOpen = false;
+        editor.featureFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.sortFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.confidenceFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.sourceFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.kitFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.updateAdvancedSampleFiltersButton();
+        editor.resized();
+        if (editor.featureFilter.isVisible() || editor.sortFilter.isVisible()
+            || editor.confidenceFilter.isVisible() || editor.sourceFilter.isVisible()
+            || editor.kitFilter.isVisible()
+            || editor.advancedSampleFiltersButton.getButtonText() != magdrum::ui::localisedText("More filters"))
+        {
+            std::cerr << "Advanced sample filters should start collapsed with a clear entry point.\n";
+            return 1;
+        }
+
+        editor.featureFilter.setSelectedId(2, juce::dontSendNotification);
+        editor.updateAdvancedSampleFiltersButton();
+        if (editor.advancedSampleFiltersButton.getButtonText()
+            != magdrum::ui::localisedText("More filters") + " (1)")
+        {
+            std::cerr << "The collapsed filter control did not show its active-filter count.\n";
+            return 2;
+        }
+
+        editor.advancedSampleFiltersButton.setToggleState(true, juce::dontSendNotification);
+        if (editor.advancedSampleFiltersButton.onClick)
+            editor.advancedSampleFiltersButton.onClick();
+        if (!editor.advancedSampleFiltersOpen || !editor.featureFilter.isVisible()
+            || !editor.sortFilter.isVisible() || !editor.confidenceFilter.isVisible()
+            || !editor.sourceFilter.isVisible() || !editor.kitFilter.isVisible())
+        {
+            std::cerr << "Opening additional filters did not reveal the complete filter row.\n";
+            return 3;
+        }
+
+        editor.advancedSampleFiltersButton.setToggleState(false, juce::dontSendNotification);
+        if (editor.advancedSampleFiltersButton.onClick)
+            editor.advancedSampleFiltersButton.onClick();
+        editor.featureFilter.setSelectedId(1, juce::dontSendNotification);
+        editor.updateAdvancedSampleFiltersButton();
+        if (editor.advancedSampleFiltersOpen || editor.featureFilter.isVisible()
+            || editor.advancedSampleFiltersButton.getButtonText() != magdrum::ui::localisedText("More filters"))
+        {
+            std::cerr << "Collapsing additional filters did not restore the compact library layout.\n";
+            return 4;
+        }
+        return 0;
+    }
+
     static int checksMidiFallbackPolicyPersists(MagDrumAudioProcessorEditor& editor)
     {
         editor.midiFallbackPolicy.setSelectedId(2, juce::dontSendNotification);
@@ -646,6 +700,27 @@ public:
             }
             stream->flush();
         }
+        editor.setPage(0);
+        editor.advancedSampleFiltersOpen = true;
+        editor.updateAdvancedSampleFiltersButton();
+        editor.resized();
+        const auto expandedFiltersImage = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
+        const auto expandedFiltersFile = outputDirectory.getChildFile("sample-library-filters.png");
+        if (!expandedFiltersImage.isValid() || (expandedFiltersFile.existsAsFile() && !expandedFiltersFile.deleteFile()))
+        {
+            std::cerr << "Offscreen expanded filter rendering failed.\n";
+            return 4;
+        }
+        std::unique_ptr<juce::FileOutputStream> expandedFiltersStream(expandedFiltersFile.createOutputStream());
+        if (expandedFiltersStream == nullptr || !expandedFiltersStream->openedOk()
+            || !png.writeImageToStream(expandedFiltersImage, *expandedFiltersStream))
+        {
+            std::cerr << "Could not save the expanded filter image: " << expandedFiltersFile.getFullPathName() << ".\n";
+            return 4;
+        }
+        expandedFiltersStream->flush();
+        editor.advancedSampleFiltersOpen = false;
+        editor.updateAdvancedSampleFiltersButton();
         editor.setPage(1);
         editor.buttonClicked(&editor.phaserTab);
         const auto phaserImage = editor.createComponentSnapshot(editor.getLocalBounds(), true, 1.0f);
@@ -1944,6 +2019,8 @@ int main(int argc, char** argv)
             return 77;
         }
         if (editor.getWidth() < 1000 || editor.getHeight() < 620) return 41;
+        const int progressiveFiltersCheck = MagDrumAudioProcessorEditorTestAccess::checksProgressiveSampleFilters(editor);
+        if (progressiveFiltersCheck != 0) return 336 + progressiveFiltersCheck;
         const int independentPadCheck = MagDrumAudioProcessorEditorTestAccess::checksIndependentPadSoundControls(editor, editorProcessor);
         if (independentPadCheck != 0) return 65 + independentPadCheck;
         const int automationGestureCheck = MagDrumAudioProcessorEditorTestAccess::checksPadAutomationGesture(editor);
