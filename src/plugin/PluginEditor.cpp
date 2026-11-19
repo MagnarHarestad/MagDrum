@@ -154,6 +154,19 @@ int velocityMaximum(const juce::String& text)
 }
 }
 
+juce::String magdrum::plugin::midiEventRowText(const DrumEvent& event, int rowIndex)
+{
+    auto text = juce::String(rowIndex + 1) + ".  "
+        + describeMidiMapping(event.instrument, event.articulation);
+    if (event.midiNote >= 0)
+        text += "    MIDI " + juce::String(event.midiNote) + " ("
+            + juce::String::fromUTF8(formatMidiNoteName(event.midiNote).c_str()) + ")";
+    text += "    " + magdrum::ui::localisedText("Velocity") + " " + juce::String(event.velocity)
+        + "    " + magdrum::ui::localisedText("Beat") + " " + juce::String(event.positionBeats, 3)
+        + "    " + magdrum::ui::localisedText("Length in beats") + " " + juce::String(event.durationBeats, 3);
+    return text;
+}
+
 class PluginMidiEventEditor final : public juce::Component, private juce::ListBoxModel, private juce::Button::Listener, private juce::ChangeListener
 {
 public:
@@ -211,11 +224,8 @@ private:
         if(!juce::isPositiveAndBelow(row,pattern.events.size()))return;
         if(selected)g.fillAll(Palette::Selection);
         const auto& event=pattern.events[static_cast<size_t>(row)];
-        static constexpr const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};
-        static constexpr const char* articulations[]{"Default","Center","Rimshot","Side stick","Closed","Open","Pedal","Low","Mid","High","Bell","Bow","Edge"};
-        const auto instrumentIndex=static_cast<size_t>(event.instrument),articulationIndex=static_cast<size_t>(event.articulation);
-        const auto instrumentName=magdrum::ui::localisedText(instrumentIndex<9?instruments[instrumentIndex]:"Unknown");const auto articulationName=magdrum::ui::localisedText(articulationIndex<13?articulations[articulationIndex]:"Unknown");
-        g.setColour(Palette::Text);g.drawText(juce::String(row+1)+".  "+instrumentName+" / "+articulationName+"    "+magdrum::ui::localisedText("Velocity")+" "+juce::String(event.velocity)+"    "+magdrum::ui::localisedText("Beat")+" "+juce::String(event.positionBeats,3)+"    "+magdrum::ui::localisedText("Length in beats")+" "+juce::String(event.durationBeats,3),8,0,width-16,height,juce::Justification::centredLeft);
+        const auto rowText=magdrum::plugin::midiEventRowText(event,row);
+        g.setColour(Palette::Text);g.drawFittedText(rowText,juce::Rectangle<int>(8,0,width-16,height),juce::Justification::centredLeft,1);
     }
     void selectedRowsChanged(int row) override
     {

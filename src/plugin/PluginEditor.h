@@ -16,6 +16,11 @@ class MagDrumSampleMap;
 class MagDrumWaveform;
 class MagDrumSampleComparison;
 
+namespace magdrum::plugin
+{
+juce::String midiEventRowText(const DrumEvent& event, int rowIndex);
+}
+
 class MagDrumStepButton final : public juce::TextButton
 {
 public:

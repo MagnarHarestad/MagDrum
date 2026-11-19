@@ -1086,6 +1086,13 @@ public:
             std::cerr << "The VST MIDI editor did not import SMPTE events on the tempo map.\n";
             return 2;
         }
+        const auto importedEventRow = magdrum::plugin::midiEventRowText(
+            editor.sequenceEvents.front(), 0);
+        if (! importedEventRow.contains("MIDI 36 (C1)"))
+        {
+            std::cerr << "The MIDI event list did not show the imported source pitch.\n";
+            return 7;
+        }
         const auto state = processor.getPluginEditorState();
         if (state == nullptr || state->getNumChildElements() == 0
             || state->getChildByName("EVENT") == nullptr
@@ -1113,6 +1120,11 @@ public:
         {
             std::cerr << "A legacy VST project without a source MIDI pitch did not restore safely.\n";
             return 6;
+        }
+        if (magdrum::plugin::midiEventRowText(editor.sequenceEvents.front(), 0).contains("MIDI "))
+        {
+            std::cerr << "The MIDI event list showed a source pitch that legacy state did not contain.\n";
+            return 8;
         }
         return 0;
     }
