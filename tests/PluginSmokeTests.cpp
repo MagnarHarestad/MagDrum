@@ -1075,6 +1075,25 @@ public:
         return 0;
     }
 
+    static int checksMidiMapActionMenus(MagDrumAudioProcessorEditor& editor)
+    {
+        editor.setPage(3);
+        if (!editor.profileCsvActionsButton.isVisible() || !editor.mappingActionsButton.isVisible()
+            || editor.importCsvButton.isVisible() || editor.exportCsvButton.isVisible()
+            || editor.setMappingButton.isVisible() || editor.removeMappingButton.isVisible())
+        {
+            std::cerr << "MIDI Maps should keep secondary CSV and mapping actions behind the visible menu buttons.\n";
+            return 1;
+        }
+        if (editor.createProfileCsvMenu().getNumItems() != 2
+            || editor.createMappingActionsMenu().getNumItems() != 2)
+        {
+            std::cerr << "MIDI Maps action menus should expose both import/export and set/remove choices.\n";
+            return 2;
+        }
+        return 0;
+    }
+
     static int checksSampleScanProgress(MagDrumAudioProcessorEditor& editor)
     {
         const auto hasMenuItem = [](const juce::PopupMenu& menu, int id, const juce::String& text)
@@ -1392,7 +1411,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 44> checks{{
+            const std::array<LabelCheck, 45> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1403,7 +1422,8 @@ public:
                 {"sample load button", editor.loadButton.getButtonText(), magdrum::ui::localisedText("Load sample")},
                 {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},
                 {"MIDI import button", editor.importMidiButton.getButtonText(), magdrum::ui::localisedText("Import MIDI")},
-                {"mapping action button", editor.setMappingButton.getButtonText(), magdrum::ui::localisedText("Set mapping")},
+                {"profile CSV menu button", editor.profileCsvActionsButton.getButtonText(), magdrum::ui::localisedText("Import CSV") + "..."},
+                {"mapping actions menu button", editor.mappingActionsButton.getButtonText(), magdrum::ui::localisedText("Set mapping") + "..."},
                 {"sample category filter", editor.categoryFilter.getText(), magdrum::ui::localisedText("All categories")},
                 {"sample content filter", editor.contentTypeFilter.getText(), magdrum::ui::localisedText("Drum one-shots")},
                 {"all content types option", editor.contentTypeFilter.getItemText(0), magdrum::ui::localisedText("All sounds")},
@@ -1819,6 +1839,8 @@ int main(int argc, char** argv)
         if (automationGestureCheck != 0) return 330 + automationGestureCheck;
         const int folderButtonCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginInventoryMenu(editor);
         if (folderButtonCheck != 0) return 44;
+        const int midiMapActionCheck = MagDrumAudioProcessorEditorTestAccess::checksMidiMapActionMenus(editor);
+        if (midiMapActionCheck != 0) return 290 + midiMapActionCheck;
         const int sampleScanProgressCheck = MagDrumAudioProcessorEditorTestAccess::checksSampleScanProgress(editor);
         if (sampleScanProgressCheck != 0) return 48 + sampleScanProgressCheck;
         const int drumLayoutCheck = MagDrumAudioProcessorEditorTestAccess::checksDrumMachineControlLayout(editor);

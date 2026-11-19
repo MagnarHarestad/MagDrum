@@ -128,6 +128,8 @@ private:
     void finishDefaultMidiPatternSearch(std::vector<juce::File>, bool cancelled);
     void browseDefaultMidiPatterns();
     void chooseMappingCsv(bool exportCsv);
+    juce::PopupMenu createProfileCsvMenu() const;
+    juce::PopupMenu createMappingActionsMenu() const;
     void chooseSampleFolder(bool chooseDifferentFolder = false);
     void scanDefaultLibraryFolders();
     void updateSampleScanActionButton();
@@ -295,7 +297,8 @@ private:
     std::array<int, 16> mappedLaneNotes{36,38,42,46,43,51,49,39,53,57,50,47,45,37,44,56};
     juce::ComboBox profileSelect, mappingInstrument, mappingArticulation;
     juce::TextEditor profileName, mappingNote;
-    juce::TextButton loadProfileButton{"Load profile"}, saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
+    juce::TextButton saveProfileButton{"Save profile"}, importCsvButton{"Import CSV"}, exportCsvButton{"Export CSV"}, setMappingButton{"Set mapping"}, removeMappingButton{"Remove mapping"};
+    juce::TextButton profileCsvActionsButton{"Import CSV..."}, mappingActionsButton{"Set mapping..."};
     juce::Label mappingSummary;
     juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;

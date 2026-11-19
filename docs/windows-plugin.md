@@ -16,6 +16,8 @@ To audition a pair while comparing them, Ctrl-click exactly two sample rows and 
 
 In **Plugin Scanner**, **Scan plugin folders...** opens one menu for scanning standard VST3 locations, choosing an additional folder, or refreshing the saved instrument list. The same button becomes **Cancel instrument scan** while discovery runs in the separate MagDrum helper, outside Cubase.
 
+In **MIDI Maps**, selecting a profile loads it immediately. Use **Save profile** to store the current name and mapping; **Import CSV...** groups CSV import and export, and **Set mapping...** groups mapping creation and removal for the selected drum and articulation.
+
 Library rows also show which MIDI notes and velocity ranges currently use each sample. This updates after pad assignment, clearing a pad, and project-state restoration.
 
 On Windows, Native Access places its default content location at `C:\Users\Public\Documents`. MagDrum scans this shared root as well as detected vendor locations, so libraries installed directly beneath it are included. Nested known vendor folders are collapsed under the root to avoid scanning the same files twice.
