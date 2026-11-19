@@ -143,6 +143,7 @@ private:
     void pollPluginInventoryProgress();
     void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedAfterCrash);
     void choosePluginPreset();
+    void updatePluginActionButtons();
     void startPluginPresetImport();
     void startPluginProgramDiscovery();
     void finishPluginProgramDiscovery(int exitCode, bool cancelled, juce::StringArray programs,
@@ -297,6 +298,7 @@ private:
     juce::ProgressBar pluginInventoryProgress{pluginInventoryProgressValue};
     juce::TextEditor pluginPresetKitName;
     juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, choosePluginFolderButton{"Choose VST3 folder"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
+    juce::TextButton importPluginKitButton{"Import preset as kit"}, scanPluginKitButton{"Scan kit notes"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
     juce::Label pluginScanProgress, pluginScanInfo;
     std::unique_ptr<MagDrumInAppSubview> inAppSubview;

@@ -991,6 +991,52 @@ public:
             std::cerr << "Plugin-folder chooser is hidden in Plugin Scanner.\n";
             return 2;
         }
+        if (editor.refreshPluginInventoryButton.isVisible())
+        {
+            std::cerr << "Redundant manual refresh should not occupy a permanent Plugin Scanner button.\n";
+            return 10;
+        }
+        if (!editor.importPluginKitButton.isVisible() || !editor.scanPluginKitButton.isVisible()
+            || editor.importPluginPresetButton.isVisible() || editor.importPluginProgramButton.isVisible()
+            || editor.scanPluginNotesButton.isVisible() || editor.cancelPluginNotesButton.isVisible())
+        {
+            std::cerr << "Plugin Scanner import and scan actions should each use one contextual button.\n";
+            return 5;
+        }
+        if (editor.importPluginKitButton.getY() != editor.choosePluginPresetButton.getY()
+            || editor.scanPluginKitButton.getY() != editor.pluginScanProgress.getY())
+        {
+            std::cerr << "Consolidated scanner actions are not aligned with their related controls.\n";
+            return 9;
+        }
+        editor.importPluginProgramButton.setEnabled(true);
+        editor.updatePluginActionButtons();
+        if (!editor.importPluginKitButton.isEnabled()
+            || editor.importPluginKitButton.getButtonText() != magdrum::ui::localisedText("Import program as kit"))
+        {
+            std::cerr << "The shared import control should reflect the selected program source.\n";
+            return 7;
+        }
+        editor.pluginPresetImportRunning = true;
+        editor.updatePluginActionButtons();
+        if (editor.importPluginKitButton.getButtonText() != magdrum::ui::localisedText("Cancel preset import"))
+        {
+            std::cerr << "The shared import control should become the active cancellation action.\n";
+            return 8;
+        }
+        editor.pluginPresetImportRunning = false;
+        editor.importPluginProgramButton.setEnabled(false);
+        editor.updatePluginActionButtons();
+        editor.pluginScanRunning = true;
+        editor.updatePluginActionButtons();
+        if (editor.scanPluginKitButton.getButtonText() != magdrum::ui::localisedText("Cancel scan")
+            || !editor.scanPluginKitButton.isEnabled())
+        {
+            std::cerr << "The kit-scan button should become the cancellation action while scanning.\n";
+            return 6;
+        }
+        editor.pluginScanRunning = false;
+        editor.updatePluginActionButtons();
         editor.pluginInventoryScanRunning = true;
         editor.resized();
         if (!editor.pluginInventoryProgress.isVisible()
