@@ -1,5 +1,7 @@
 # Standalone-to-VST functionality parity
 
+Latest public Windows x64 prerelease: [v0.1.2-test.264](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.264) (VST3 0.1.2.264). Release CTest passed 4/4; localization and package checks passed; the exact ZIP passed project-state restore and MIDI 0–127 rendering including C1; Steinberg VST 3.8.1 passed 47/47 standard and 537/537 extended tests. The .264 ZIP SHA-256 is `a54cad91d150d81d6b289d2ba33bcbf03a5a179cd3288ec1276ea835645295ce`; module SHA-256 is `1C510189030C1D2F1E453155D4C36F837961B0287B7617D0CA16D5743E36269F`. It is published but not installed; .252 remains installed. Groove Agent SE enumeration and Cubase-only checks remain unverified.
+
 The VST is intended to expose the MagDrum workflows from inside Cubase. This checklist tracks parity without claiming that the standalone app and an instrument plug-in have identical host responsibilities.
 
 | Standalone workflow | VST status | VST implementation target |
