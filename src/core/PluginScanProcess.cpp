@@ -267,6 +267,17 @@ bool magdrum::plugins::recordVst3DiscoveryModuleFailure(const juce::File& progre
     return writeVst3DiscoveryProgress(progressFile, progress);
 }
 
+bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
+    const juce::Array<juce::PluginDescription>& descriptions, const juce::File& module)
+{
+    return std::any_of(descriptions.begin(), descriptions.end(), [&module](const auto& description)
+    {
+        const juce::File descriptionPath(description.fileOrIdentifier);
+        return description.pluginFormatName == "VST3" && description.isInstrument
+            && (descriptionPath == module || descriptionPath.isAChildOf(module));
+    });
+}
+
 magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions)
 {

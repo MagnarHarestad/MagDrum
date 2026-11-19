@@ -59,6 +59,8 @@ bool saveVst3ModuleInstrumentCache(const juce::File& cacheFile,
 bool readVst3DiscoveryProgress(const juce::File& progressFile, Vst3DiscoveryProgress& progress);
 bool writeVst3DiscoveryProgress(const juce::File& progressFile, const Vst3DiscoveryProgress& progress);
 bool recordVst3DiscoveryModuleFailure(const juce::File& progressFile, const juce::String& modulePath);
+bool vst3ModuleHasInstrumentDescription(
+    const juce::Array<juce::PluginDescription>& descriptions, const juce::File& module);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
 bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);

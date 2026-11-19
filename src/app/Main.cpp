@@ -829,16 +829,10 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         if (!candidateHasSidecarManifest)
         {
             // KnownPluginList::getTypes() returns its array by value. Keep one
-            // snapshot alive for both iterators; calling it twice creates a
-            // range whose begin and end belong to different temporary arrays.
+            // snapshot alive through the range check so its iterators share storage.
             const auto discoveredTypes = knownPlugins.getTypes();
-            const auto moduleHasInstrument = std::any_of(discoveredTypes.begin(), discoveredTypes.end(),
-                [&candidatePath](const auto& description)
-                {
-                    const juce::File descriptionPath(description.fileOrIdentifier);
-                    return description.pluginFormatName == "VST3" && description.isInstrument
-                        && (descriptionPath == candidatePath || descriptionPath.isAChildOf(candidatePath));
-                });
+            const auto moduleHasInstrument = magdrum::plugins::vst3ModuleHasInstrumentDescription(
+                discoveredTypes, candidatePath);
             magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, candidatePath,
                 moduleHasInstrument);
             magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);

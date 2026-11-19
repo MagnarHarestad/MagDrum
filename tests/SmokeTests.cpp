@@ -374,6 +374,17 @@ int runSmokeTests(int argc,char** argv)
     juce::PluginDescription mixedEffect; mixedEffect.fileOrIdentifier="multi-class-module";mixedEffect.pluginFormatName="VST3";mixedEffect.isInstrument=false;cachedPluginDescriptions.add(mixedEffect);
     juce::PluginDescription mixedInstrument=mixedEffect;mixedInstrument.isInstrument=true;cachedPluginDescriptions.add(mixedInstrument);
     juce::PluginDescription otherFormat=cachedInstrument;otherFormat.fileOrIdentifier="other-format";otherFormat.pluginFormatName="AudioUnit";cachedPluginDescriptions.add(otherFormat);
+    juce::Array<juce::PluginDescription> discoveryDescriptions;
+    for(int index=0;index<4096;++index)
+    {
+        juce::PluginDescription unrelated;unrelated.fileOrIdentifier="unrelated-module-"+juce::String(index);unrelated.pluginFormatName="VST3";unrelated.isInstrument=(index%2)==0;discoveryDescriptions.add(unrelated);
+    }
+    juce::PluginDescription bundledEffect;bundledEffect.fileOrIdentifier=instrumentBundle.getChildFile("Contents/x86_64-win/DrumInstrument.vst3").getFullPathName();bundledEffect.pluginFormatName="VST3";discoveryDescriptions.add(bundledEffect);
+    juce::PluginDescription bundledWrongFormat=bundledEffect;bundledWrongFormat.pluginFormatName="AudioUnit";bundledWrongFormat.isInstrument=true;discoveryDescriptions.add(bundledWrongFormat);
+    juce::PluginDescription discoveredInstrument=bundledEffect;discoveredInstrument.isInstrument=true;discoveryDescriptions.add(discoveredInstrument);
+    if(!magdrum::plugins::vst3ModuleHasInstrumentDescription(discoveryDescriptions,instrumentBundle))return 253;
+    discoveryDescriptions.remove(discoveryDescriptions.size()-1);
+    if(magdrum::plugins::vst3ModuleHasInstrumentDescription(discoveryDescriptions,instrumentBundle))return 254;
     for(int index=0;index<4096;++index)
     {
         juce::PluginDescription bulk;bulk.fileOrIdentifier="bulk-module-"+juce::String(index);bulk.pluginFormatName="VST3";bulk.isInstrument=(index%2)==0;cachedPluginDescriptions.add(bulk);
