@@ -2752,6 +2752,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         + " OR " + containsContentTerm("multisampled") + " OR " + containsContentTerm("multi-sample") + ")";
     const auto bassTerms = juce::String("(") + containsContentTerm("bass") + " OR " + containsContentTerm("bassline")
         + " OR " + containsContentTerm("sub-bass") + " OR " + containsContentTerm("sub bass") + ")";
+    const auto bassFamily = bassTerms + " AND NOT " + containsContentTerm("bass drum") + " AND NOT " + drumCategory;
     const auto synthTerms = juce::String("(") + containsContentTerm("synth") + " OR " + containsContentTerm("synthesizer")
         + " OR " + containsContentTerm("arpeggio") + " OR " + containsContentTerm("arp") + " OR " + containsContentTerm("ambient pad")
         + " OR " + containsContentTerm("synth pad") + ")";
@@ -2759,13 +2760,13 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
     switch (filter.contentKind)
     {
         case 1: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND NOT " + loopTerms
-                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8) AND NOT " + bassTerms + " AND NOT " + synthTerms; break;
+                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
         case 2: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND (" + loopTerms
-                       + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT " + bassTerms + " AND NOT " + synthTerms; break;
-        case 3: contentPredicate = bassTerms; break;
+                       + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
+        case 3: contentPredicate = "(" + bassFamily + ")"; break;
         case 4: contentPredicate = synthTerms + " AND (" + loopTerms + " OR s.duration>=1.0)"; break;
         case 5: contentPredicate = loopTerms + " AND NOT (" + drumCategory + " OR " + drumTerms
-                       + " OR " + bassTerms + " OR " + synthTerms + ")"; break;
+                       + " OR (" + bassFamily + ") OR " + synthTerms + ")"; break;
         default: break;
     }
     const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";
