@@ -34,6 +34,15 @@ struct Vst3ModuleInstrumentCacheEntry
 using Vst3ModuleInstrumentCache = std::unordered_map<std::string, Vst3ModuleInstrumentCacheEntry>;
 enum class Vst3ModuleDiscoveryAction { Skip, ScanInstrument, ExcludeEffect };
 
+struct Vst3DiscoveryProgress
+{
+    int completed = 0;
+    int total = 0;
+    juce::String current;
+    juce::String currentPath;
+    juce::StringArray failedModules;
+};
+
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
 bool vst3ModuleMayBeInstrument(const juce::File& bundle);
@@ -47,6 +56,9 @@ Vst3ModuleDiscoveryAction classifyVst3ModuleForDiscovery(Vst3ModuleInstrumentCac
                                                           bool cachedBinaryIsUpToDate);
 bool saveVst3ModuleInstrumentCache(const juce::File& cacheFile,
                                   const Vst3ModuleInstrumentCache& cache);
+bool readVst3DiscoveryProgress(const juce::File& progressFile, Vst3DiscoveryProgress& progress);
+bool writeVst3DiscoveryProgress(const juce::File& progressFile, const Vst3DiscoveryProgress& progress);
+bool recordVst3DiscoveryModuleFailure(const juce::File& progressFile, const juce::String& modulePath);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
 bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);

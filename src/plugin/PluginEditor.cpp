@@ -1147,11 +1147,21 @@ public:
             if (exitCode == 0)
             { finish(0, false); return jobHasFinished; }
 
-            // The helper persists each completed module and JUCE records a
-            // crashing module in its dead-man's pedal file. Restarting lets the
-            // scanner skip that module and continue the remaining inventory.
-            if (exitCode < 0 && ++recoveredCrashes <= maximumPluginCrashRecoveries)
-                continue;
+            // Some VST3 modules crash MagDrum itself before JUCE can update its
+            // dead-man's-pedal file. Persist the module path from the last
+            // in-flight progress record and continue with the remaining modules.
+            if (exitCode < 0 && recoveredCrashes < maximumPluginCrashRecoveries)
+            {
+                magdrum::plugins::Vst3DiscoveryProgress progress;
+                if (magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress)
+                    && !progress.currentPath.isEmpty()
+                    && magdrum::plugins::recordVst3DiscoveryModuleFailure(progressFile,
+                        progress.currentPath))
+                {
+                    ++recoveredCrashes;
+                    continue;
+                }
+            }
 
             finish(exitCode, false);
             return jobHasFinished;
@@ -1162,9 +1172,12 @@ public:
 private:
     void finish(int exitCode, bool cancelled)
     {
+        magdrum::plugins::Vst3DiscoveryProgress progress;
+        const int skippedAfterCrash = magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress)
+            ? progress.failedModules.size() : 0;
         const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
-        juce::MessageManager::callAsync([safe, exitCode, cancelled]
-        { if (safe != nullptr) safe->finishPluginInventoryScan(exitCode, cancelled); });
+        juce::MessageManager::callAsync([safe, exitCode, cancelled, skippedAfterCrash]
+        { if (safe != nullptr) safe->finishPluginInventoryScan(exitCode, cancelled, skippedAfterCrash); });
     }
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> editor;
     std::shared_ptr<std::atomic<bool>> cancellation;
@@ -2970,9 +2983,11 @@ void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
             {
                 const int percent = juce::jlimit(0, 100, juce::roundToInt(100.0 * completed / total));
                 pluginInventoryProgressValue = static_cast<double>(percent) / 100.0;
-                const auto moduleSuffix = currentModule.isNotEmpty() && currentModule != "discovering"
+                const auto moduleLabel = currentModule == "skipped"
+                    ? magdrum::ui::localisedText("Skipping a module that crashed…") : currentModule;
+                const auto moduleSuffix = moduleLabel.isNotEmpty() && currentModule != "discovering"
                     && currentModule != "scanning" && currentModule != "complete"
-                    ? " — " + currentModule : juce::String();
+                    ? " — " + moduleLabel : juce::String();
                 status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…") + " "
                     + juce::String(percent) + "% (" + juce::String(completed) + "/"
                     + juce::String(total) + ")" + moduleSuffix, juce::dontSendNotification);
@@ -2987,7 +3002,8 @@ void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
     });
 }
 
-void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool cancelled)
+void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool cancelled,
+    int skippedAfterCrash)
 {
     pluginInventoryScanRunning = false;
     pluginInventoryScanCancellation.reset();
@@ -3001,7 +3017,10 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
     if (cancelled) { status.setText(magdrum::ui::localisedText("VST3 instrument scan cancelled."), juce::dontSendNotification); return; }
     if (exitCode != 0) { status.setText(magdrum::ui::localisedText("VST3 instrument scan failed. Check the MagDrum helper."), juce::dontSendNotification); return; }
     refreshPluginInventory();
-    status.setText(magdrum::ui::localisedText("VST3 instrument scan complete."), juce::dontSendNotification);
+    status.setText(skippedAfterCrash > 0
+        ? magdrum::ui::localisedText("VST3 instrument scan complete; %1 plug-in(s) skipped after a crash.")
+            .replace("%1", juce::String(skippedAfterCrash))
+        : magdrum::ui::localisedText("VST3 instrument scan complete."), juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::choosePluginPreset()

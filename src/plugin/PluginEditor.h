@@ -121,7 +121,7 @@ private:
     void choosePluginFolder();
     void startPluginInventoryScan(const juce::File& additionalFolder = {});
     void pollPluginInventoryProgress();
-    void finishPluginInventoryScan(int exitCode, bool cancelled);
+    void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedAfterCrash);
     void choosePluginPreset();
     void startPluginPresetImport();
     void startPluginProgramDiscovery();

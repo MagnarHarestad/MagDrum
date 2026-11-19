@@ -416,6 +416,32 @@ int runSmokeTests(int argc,char** argv)
     if (!cachedVst3BundleBinary.setLastModificationTime(cachedVst3BundleBinary.getLastModificationTime()
             + juce::RelativeTime::seconds(5))
         || magdrum::plugins::isCachedVst3ModuleUpToDate(cachedBundleEntry->second, cachedVst3Bundle)) return 214;
+    const auto discoveryProgressFile = root.getChildFile("vst3-discovery-progress.json");
+    const auto crashedModulePath = root.getChildFile("Komplete Kontrol.vst3").getFullPathName();
+    magdrum::plugins::Vst3DiscoveryProgress discoveryProgress;
+    discoveryProgress.total = 3;
+    discoveryProgress.current = "Komplete Kontrol";
+    discoveryProgress.currentPath = crashedModulePath;
+    if (!magdrum::plugins::writeVst3DiscoveryProgress(discoveryProgressFile, discoveryProgress)) return 300;
+    magdrum::plugins::Vst3DiscoveryProgress recoveredDiscoveryProgress;
+    if (!magdrum::plugins::readVst3DiscoveryProgress(discoveryProgressFile, recoveredDiscoveryProgress)
+        || recoveredDiscoveryProgress.completed != 0 || recoveredDiscoveryProgress.total != 3
+        || recoveredDiscoveryProgress.currentPath != crashedModulePath) return 301;
+    if (!magdrum::plugins::recordVst3DiscoveryModuleFailure(discoveryProgressFile,
+            crashedModulePath.toUpperCase())) return 302;
+    if (!magdrum::plugins::readVst3DiscoveryProgress(discoveryProgressFile, recoveredDiscoveryProgress)
+        || recoveredDiscoveryProgress.completed != 1 || recoveredDiscoveryProgress.total != 3
+        || recoveredDiscoveryProgress.failedModules.size() != 1
+        || !recoveredDiscoveryProgress.failedModules[0].equalsIgnoreCase(crashedModulePath)
+        || recoveredDiscoveryProgress.currentPath.isNotEmpty()) return 303;
+    if (magdrum::plugins::recordVst3DiscoveryModuleFailure(discoveryProgressFile, crashedModulePath)) return 304;
+    recoveredDiscoveryProgress.current = "Omnisphere";
+    recoveredDiscoveryProgress.currentPath = root.getChildFile("Omnisphere.vst3").getFullPathName();
+    if (!magdrum::plugins::writeVst3DiscoveryProgress(discoveryProgressFile, recoveredDiscoveryProgress)
+        || !magdrum::plugins::recordVst3DiscoveryModuleFailure(discoveryProgressFile,
+            recoveredDiscoveryProgress.currentPath)
+        || !magdrum::plugins::readVst3DiscoveryProgress(discoveryProgressFile, recoveredDiscoveryProgress)
+        || recoveredDiscoveryProgress.completed != 2 || recoveredDiscoveryProgress.failedModules.size() != 2) return 305;
     const auto midiFixture=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("LibraryDiscoveryFixture-"+juce::Uuid().toString());
     midiFixture.deleteRecursively();
     const auto midiRoot=midiFixture.getChildFile("midi-discovery");

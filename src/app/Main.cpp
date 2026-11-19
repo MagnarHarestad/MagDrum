@@ -707,27 +707,20 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     if ((! dataDirectory.isDirectory()) && ! dataDirectory.createDirectory().wasOk())
         return 2;
 
-    int progressBase = 0;
-    int progressTotal = 0;
-    if (progressFile.existsAsFile())
+    magdrum::plugins::Vst3DiscoveryProgress progressState;
+    magdrum::plugins::readVst3DiscoveryProgress(progressFile, progressState);
+    const int progressBase = progressState.completed;
+    const int progressTotal = progressState.total;
+    const auto publishProgress = [&progressFile, &progressState](int completed, int total,
+        const juce::String& current, const juce::String& currentPath)
     {
-        const auto previous = juce::JSON::parse(progressFile.loadFileAsString());
-        if (const auto* object = previous.getDynamicObject())
-        {
-            progressBase = juce::jmax(0, static_cast<int>(object->getProperty("completed")));
-            progressTotal = juce::jmax(0, static_cast<int>(object->getProperty("total")));
-        }
-    }
-    const auto publishProgress = [&progressFile](int completed, int total, const juce::String& current)
-    {
-        if (progressFile == juce::File{}) return;
-        auto* progress = new juce::DynamicObject();
-        progress->setProperty("completed", completed);
-        progress->setProperty("total", total);
-        progress->setProperty("current", current);
-        progressFile.replaceWithText(juce::JSON::toString(juce::var(progress)));
+        progressState.completed = completed;
+        progressState.total = total;
+        progressState.current = current;
+        progressState.currentPath = currentPath;
+        magdrum::plugins::writeVst3DiscoveryProgress(progressFile, progressState);
     };
-    publishProgress(progressBase, progressTotal, "discovering");
+    publishProgress(progressBase, progressTotal, "discovering", {});
 
     const auto inventoryFile = dataDirectory.getChildFile("vst3-plugins.xml");
     juce::KnownPluginList knownPlugins;
@@ -804,23 +797,32 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         if (magdrum::plugins::vst3ModuleMayBeInstrument(module))
             instrumentCandidates.add(candidate);
     }
+    for (int index = instrumentCandidates.size(); --index >= 0;)
+    {
+        const juce::File candidate(instrumentCandidates[index]);
+        const auto failed = std::find_if(progressState.failedModules.begin(), progressState.failedModules.end(),
+            [&candidate](const juce::String& failedPath)
+            { return failedPath.equalsIgnoreCase(candidate.getFullPathName()); });
+        if (failed != progressState.failedModules.end())
+            instrumentCandidates.remove(index);
+    }
     // Persist effect-module exclusions before loading any candidate binary, so
     // a crash or cancellation during discovery still accelerates the next pass.
     magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);
     const int overallTotal = juce::jmax(progressTotal,
         progressBase + instrumentCandidates.size());
-    publishProgress(progressBase, overallTotal, "scanning");
+    publishProgress(progressBase, overallTotal, "scanning", {});
     juce::PluginDirectoryScanner scanner(knownPlugins, *vst3,
         juce::FileSearchPath{}, true,
         dataDirectory.getChildFile("RecentlyCrashedPluginsList"));
     scanner.setFilesOrIdentifiersToScan(instrumentCandidates);
     for (int completed = 0; completed < instrumentCandidates.size(); ++completed)
     {
-        const auto candidateName = juce::File(instrumentCandidates[completed]).getFileNameWithoutExtension();
-        publishProgress(progressBase + completed, overallTotal, candidateName);
+        const auto candidatePath = juce::File(instrumentCandidates[completed]);
+        const auto candidateName = candidatePath.getFileNameWithoutExtension();
+        publishProgress(progressBase + completed, overallTotal, candidateName, candidatePath.getFullPathName());
         juce::String name;
         scanner.scanNextFile(true, name);
-        const auto candidatePath = juce::File(instrumentCandidates[completed]);
         const bool candidateHasSidecarManifest = candidatePath.getChildFile("Contents")
             .getChildFile("Resources").getChildFile("moduleinfo.json").existsAsFile()
             || candidatePath.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
@@ -843,9 +845,9 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         auto xml = knownPlugins.createXml();
         if (xml == nullptr || !xml->writeTo(inventoryFile))
             return 5;
-        publishProgress(progressBase + completed + 1, overallTotal, name);
+        publishProgress(progressBase + completed + 1, overallTotal, name, {});
     }
-    publishProgress(overallTotal, overallTotal, "complete");
+    publishProgress(overallTotal, overallTotal, "complete", {});
 
     if (auto xml = knownPlugins.createXml())
         return xml->writeTo(inventoryFile) ? 0 : 5;

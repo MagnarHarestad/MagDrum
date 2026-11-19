@@ -209,6 +209,64 @@ bool magdrum::plugins::saveVst3ModuleInstrumentCache(
     return cacheFile.replaceWithText(root.toString());
 }
 
+bool magdrum::plugins::readVst3DiscoveryProgress(const juce::File& progressFile,
+    Vst3DiscoveryProgress& progress)
+{
+    progress = {};
+    if (!progressFile.existsAsFile())
+        return false;
+    const auto parsed = juce::JSON::parse(progressFile.loadFileAsString());
+    const auto* object = parsed.getDynamicObject();
+    if (object == nullptr)
+        return false;
+
+    progress.completed = juce::jmax(0, static_cast<int>(object->getProperty("completed")));
+    progress.total = juce::jmax(progress.completed, static_cast<int>(object->getProperty("total")));
+    progress.current = object->getProperty("current").toString();
+    progress.currentPath = object->getProperty("currentPath").toString();
+    if (const auto* failed = object->getProperty("failedModules").getArray())
+        for (const auto& value : *failed)
+        {
+            const auto path = value.toString().trim();
+            if (path.isNotEmpty() && !progress.failedModules.contains(path))
+                progress.failedModules.add(path);
+        }
+    return true;
+}
+
+bool magdrum::plugins::writeVst3DiscoveryProgress(const juce::File& progressFile,
+    const Vst3DiscoveryProgress& progress)
+{
+    if (progressFile == juce::File{})
+        return false;
+    auto* object = new juce::DynamicObject();
+    object->setProperty("completed", juce::jmax(0, progress.completed));
+    object->setProperty("total", juce::jmax(progress.completed, progress.total));
+    object->setProperty("current", progress.current);
+    object->setProperty("currentPath", progress.currentPath);
+    juce::Array<juce::var> failed;
+    for (const auto& path : progress.failedModules)
+        failed.add(path);
+    object->setProperty("failedModules", juce::var(std::move(failed)));
+    return progressFile.replaceWithText(juce::JSON::toString(juce::var(object)));
+}
+
+bool magdrum::plugins::recordVst3DiscoveryModuleFailure(const juce::File& progressFile,
+    const juce::String& modulePath)
+{
+    Vst3DiscoveryProgress progress;
+    if (modulePath.trim().isEmpty() || !readVst3DiscoveryProgress(progressFile, progress)
+        || progress.currentPath.isEmpty() || !progress.currentPath.equalsIgnoreCase(modulePath)
+        || progress.failedModules.contains(modulePath))
+        return false;
+
+    progress.failedModules.add(modulePath);
+    progress.completed = juce::jmin(progress.total, progress.completed + 1);
+    progress.current = "skipped";
+    progress.currentPath.clear();
+    return writeVst3DiscoveryProgress(progressFile, progress);
+}
+
 magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions)
 {
