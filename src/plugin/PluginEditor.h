@@ -222,6 +222,7 @@ private:
     magdrum::ui::MenuIconButton languageButton;
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, contentTypeFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
+    int rememberedDrumCategory = 1;
     juce::TextButton scanButton{"Add sample folder"}, scanDefaultsButton{"Scan installed libraries"}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, searchButton{"Search"}, previewButton{"Preview"}, stopPreviewButton{"Stop"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;

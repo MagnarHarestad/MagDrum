@@ -1199,6 +1199,26 @@ public:
                 return 6;
             }
         }
+        editor.categoryFilter.setSelectedId(2, juce::sendNotificationSync);
+        editor.contentTypeFilter.setSelectedId(4, juce::sendNotificationSync);
+        if (editor.categoryFilter.isEnabled() || editor.categoryFilter.getSelectedId() != 1)
+        {
+            std::cerr << "Switching to Bass one-shots must clear and disable the drum-category filter.\n";
+            return 281;
+        }
+        editor.contentTypeFilter.setSelectedId(6, juce::sendNotificationSync);
+        if (editor.categoryFilter.isEnabled() || editor.categoryFilter.getSelectedId() != 1)
+        {
+            std::cerr << "Switching between non-drum families must keep the drum-category filter cleared.\n";
+            return 282;
+        }
+        editor.contentTypeFilter.setSelectedId(2, juce::sendNotificationSync);
+        if (!editor.categoryFilter.isEnabled() || editor.categoryFilter.getSelectedId() != 2)
+        {
+            std::cerr << "Returning to Drum one-shots must restore the previously selected drum category.\n";
+            return 283;
+        }
+        editor.categoryFilter.setSelectedId(1, juce::sendNotificationSync);
         magdrum::ui::setLanguage(Language::english, false);
         return 0;
     }
