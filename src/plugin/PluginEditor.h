@@ -155,6 +155,13 @@ private:
     void pollPluginInventoryProgress();
     void finishPluginInventoryScan(int exitCode, bool cancelled, int skippedProblemModules);
     void choosePluginPreset();
+    void findStandardPluginPresets();
+    void choosePluginPresetFolder();
+    void startPluginPresetSearch(const juce::Array<juce::File>& roots, bool standardLocations);
+    void finishPluginPresetSearch(const juce::String& pluginIdentifier,
+                                  juce::Array<juce::File> files, bool cancelled,
+                                  bool foundSearchRoot, bool standardLocations);
+    void selectPluginPreset(const juce::File& file);
     void updatePluginActionButtons();
     void startPluginPresetImport();
     void startPluginProgramDiscovery();
@@ -322,11 +329,16 @@ private:
     std::shared_ptr<std::atomic<bool>> pluginPresetImportCancellation;
     bool pluginPresetImportRunning = false;
     bool pluginProgramScanRunning = false;
+    bool pluginPresetSearchRunning = false;
     bool pluginPresetImportFromProgram = false;
     juce::String pluginProgramScanIdentifier;
     juce::ThreadPool pluginPresetImportWorkers{1};
     std::shared_ptr<std::atomic<bool>> pluginProgramScanCancellation;
     juce::ThreadPool pluginProgramScanWorkers{1};
+    std::shared_ptr<std::atomic<bool>> pluginPresetSearchCancellation;
+    juce::ThreadPool pluginPresetSearchWorkers{1};
+
+    friend class PluginPresetSearchJob;
 
     friend class VstPluginNoteScanJob;
     friend class PluginInventoryScanJob;

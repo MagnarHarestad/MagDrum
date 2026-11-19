@@ -1155,9 +1155,11 @@ public:
             return 11;
         }
         const auto sourceMenu = editor.createPluginSourceMenu();
-        if (sourceMenu.getNumItems() != 2
+        if (sourceMenu.getNumItems() != 4
             || editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"..."
             || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Choose VST3 preset"))
+            || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Find standard presets"))
+            || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Choose preset folder"))
             || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Scan programs"))
             || !editor.choosePluginPresetButton.isVisible() || editor.scanPluginProgramsButton.isVisible())
         {
@@ -1188,6 +1190,11 @@ public:
         {
             magdrum::ui::setLanguage(language, false);
             const auto timeoutMessage = magdrum::ui::localisedText("Instrument operation timed out.");
+            const auto presetSearchMessage = magdrum::ui::localisedText("Searching for VST3 presets…");
+            const auto noStandardPresetFolder = magdrum::ui::localisedText(
+                "No standard preset folder found. Choose a preset folder to search.");
+            const auto noVst3Presets = magdrum::ui::localisedText("No VST3 presets found.");
+            const auto presetCount = magdrum::ui::localisedText("VST3 presets found: %1");
             const auto discoverySkipMessage = magdrum::ui::localisedText(
                 "Skipping an instrument that crashed or timed out…");
             const auto discoveryCompleteMessage = magdrum::ui::localisedText(
@@ -1195,6 +1202,13 @@ public:
             if (timeoutMessage.isEmpty()
                 || (language != magdrum::ui::Language::english
                     && timeoutMessage == "Instrument operation timed out.")
+                || presetSearchMessage.isEmpty() || noStandardPresetFolder.isEmpty()
+                || noVst3Presets.isEmpty() || presetCount.isEmpty()
+                || (language != magdrum::ui::Language::english
+                    && (presetSearchMessage == "Searching for VST3 presets…"
+                        || noStandardPresetFolder == "No standard preset folder found. Choose a preset folder to search."
+                        || noVst3Presets == "No VST3 presets found."
+                        || presetCount == "VST3 presets found: %1"))
                 || discoverySkipMessage.isEmpty()
                 || discoveryCompleteMessage.isEmpty()
                 || (language != magdrum::ui::Language::english
@@ -1227,6 +1241,24 @@ public:
             }
         }
         editor.pluginProgramScanRunning = false;
+        magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+        editor.applyLanguage();
+        for (const auto language : sourceMenuLanguages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            editor.pluginPresetSearchRunning = true;
+            editor.applyLanguage();
+            if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Cancel"))
+            {
+                std::cerr << "The kit-source button did not become a localized preset-search cancel action.\n";
+                editor.pluginPresetSearchRunning = false;
+                magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+                editor.applyLanguage();
+                return 19;
+            }
+            editor.pluginPresetSearchRunning = false;
+            editor.applyLanguage();
+        }
         magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
         editor.applyLanguage();
         editor.pluginProgramScanRunning = true;
