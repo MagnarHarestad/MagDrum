@@ -1359,6 +1359,109 @@ public:
         return 0;
     }
 
+#if JUCE_WINDOWS
+    static __declspec(noinline) int checksPluginPresetSearchAsync()
+    {
+        const auto fixtureRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("MagDrum-PresetSearchUi-" + juce::Uuid().toString());
+        if (! fixtureRoot.createDirectory().wasOk())
+        {
+            std::cerr << "Could not create the isolated preset-search UI fixture.\n";
+            return 1;
+        }
+        struct FixtureCleanup final
+        {
+            explicit FixtureCleanup(juce::File directoryToRemove) : directory(std::move(directoryToRemove)) {}
+            ~FixtureCleanup() { directory.deleteRecursively(); }
+            juce::File directory;
+        } cleanup(fixtureRoot);
+
+        const auto unrelatedPresetFile = fixtureRoot.getChildFile("not-a-vst-preset.fxp");
+        const auto selectedPresetFixture = fixtureRoot.getChildFile("Selected Fixture.vstpreset");
+        if (! unrelatedPresetFile.replaceWithText("fixture"))
+        {
+            std::cerr << "Could not write the isolated preset-search UI fixture.\n";
+            return 2;
+        }
+
+        auto processor = std::make_unique<MagDrumAudioProcessor>();
+        auto editor = std::make_unique<MagDrumAudioProcessorEditor>(*processor,
+            fixtureRoot.getChildFile("samples.sqlite3"));
+        juce::PluginDescription instrument;
+        instrument.name = "Preset Search Fixture";
+        instrument.manufacturerName = "MagDrum Tests";
+        instrument.pluginFormatName = "VST3";
+        instrument.fileOrIdentifier = "PresetSearchFixture.vst3";
+        instrument.isInstrument = true;
+        editor->discoveredPluginInstruments.add(instrument);
+        editor->pluginInstrumentSelect.addItem(instrument.name, 1);
+        editor->pluginInstrumentSelect.setSelectedId(1, juce::dontSendNotification);
+        juce::Array<juce::File> roots;
+        roots.add(fixtureRoot);
+        editor->startPluginPresetSearch(roots, false);
+        if (! editor->pluginPresetSearchRunning
+            || editor->choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Cancel"))
+        {
+            std::cerr << "Preset search did not activate the shared cancellation control.\n";
+            return 3;
+        }
+
+        struct SearchCompletionWait final : juce::Timer
+        {
+            explicit SearchCompletionWait(MagDrumAudioProcessorEditor& target) : editor(target) {}
+            void timerCallback() override
+            {
+                ++ticks;
+                if (ticks == 500 && editor.pluginPresetSearchCancellation)
+                {
+                    timedOut = true;
+                    editor.pluginPresetSearchCancellation->store(true);
+                }
+                if (! editor.pluginPresetSearchRunning || ticks >= 1000)
+                {
+                    stopTimer();
+                    juce::MessageManager::getInstance()->stopDispatchLoop();
+                }
+            }
+            MagDrumAudioProcessorEditor& editor;
+            int ticks = 0;
+            bool timedOut = false;
+        } completionWait(*editor);
+        completionWait.startTimer(10);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        if (completionWait.timedOut || editor->pluginPresetSearchRunning
+            || editor->status.getText() != magdrum::ui::localisedText("No VST3 presets found.")
+            || editor->choosePluginPresetButton.getButtonText()
+                != magdrum::ui::localisedText("Choose kit source") + "...")
+        {
+            if (editor->pluginPresetSearchCancellation)
+                editor->pluginPresetSearchCancellation->store(true);
+            std::cerr << "Background preset search did not return to its empty-result state: timeout="
+                      << completionWait.timedOut << ", running=" << editor->pluginPresetSearchRunning
+                      << ", status=" << editor->status.getText().toStdString()
+                      << ", button=" << editor->choosePluginPresetButton.getButtonText().toStdString() << ".\n";
+            return 4;
+        }
+
+        if (! selectedPresetFixture.replaceWithText("preset fixture"))
+        {
+            std::cerr << "Could not write the selected VST3 preset fixture.\n";
+            return 5;
+        }
+        editor->selectPluginPreset(selectedPresetFixture);
+        const bool selectionPassed = editor->selectedPluginPresetFile == selectedPresetFixture
+            && editor->pluginPresetKitName.getText() == "Selected Fixture"
+            && editor->importPluginKitButton.isEnabled()
+            && editor->importPluginKitButton.getButtonText() == magdrum::ui::localisedText("Import preset as kit");
+        if (! selectionPassed)
+        {
+            std::cerr << "Selecting a VST3 preset did not configure the shared kit-import action.\n";
+            return 6;
+        }
+        return 0;
+    }
+#endif
+
     static int checksMidiMapActionMenus(MagDrumAudioProcessorEditor& editor)
     {
         editor.setPage(3);
@@ -2010,6 +2113,11 @@ int main(int argc, char** argv)
         const auto editorDatabase = outputDirectory.getChildFile("snapshot-index.sqlite3");
         auto editor = std::make_unique<MagDrumAudioProcessorEditor>(*processor, editorDatabase);
         return MagDrumAudioProcessorEditorTestAccess::renderPagesOffscreen(*editor, outputDirectory);
+    }
+    if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-preset-search-ui") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        return MagDrumAudioProcessorEditorTestAccess::checksPluginPresetSearchAsync();
     }
 #endif
 
