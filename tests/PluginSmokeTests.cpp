@@ -1491,6 +1491,14 @@ public:
         editor.barSelect.setSelectedId(2);
         editor.setPage(2);
         if (editor.visibleStepIndex(0) != 16 || !editor.steps[0][0].isVisible()) return 3;
+        if (!editor.sequenceActionsButton.isVisible() || editor.sequenceActionsButton.getButtonText() != "MIDI"
+            || editor.clearSequenceButton.isVisible() || editor.importMidiButton.isVisible()
+            || editor.browseMidiButton.isVisible() || editor.exportSequenceButton.isVisible()
+            || editor.editMidiEventsButton.isVisible() || editor.reviewMidiButton.isVisible())
+        {
+            std::cerr << "Sequencer MIDI actions should be grouped behind one visible control.\n";
+            return 14;
+        }
 
         editor.steps[0][0].setToggleState(true, juce::dontSendNotification);
         editor.buttonClicked(&editor.steps[0][0]);

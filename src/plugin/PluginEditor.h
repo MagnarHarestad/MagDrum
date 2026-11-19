@@ -263,7 +263,7 @@ private:
     bool updatingPadControls = false;
     juce::TextEditor velocityRange;
     juce::TextButton clearPadButton{"Clear pad"}, loadButton{"Load sample"};
-    juce::TextButton playSequenceButton{"Play"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
+    juce::TextButton playSequenceButton{"Play"}, sequenceActionsButton{"MIDI"}, clearSequenceButton{"Clear pattern"}, exportSequenceButton{"Export MIDI"};
     juce::ComboBox midiFallbackPolicy;
     juce::TextEditor tempoEditor, metadataBeat, metadataValue;
     juce::ComboBox metadataType;
