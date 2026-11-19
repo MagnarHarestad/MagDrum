@@ -28,9 +28,32 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
+#if JUCE_WINDOWS && JUCE_DEBUG
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <crtdbg.h>
+#endif
 
 namespace
 {
+#if JUCE_WINDOWS && JUCE_DEBUG
+int terminateDebugWorkerOnAssertion(int reportType, char* message, int* returnValue)
+{
+ if(reportType!=_CRT_ASSERT)return 0;
+ if(message!=nullptr)OutputDebugStringA(message);
+ OutputDebugStringA("\nMagDrum isolated VST3 worker stopped after a Debug assertion.\n");
+ if(returnValue!=nullptr)*returnValue=0;
+ ExitProcess(0xC0000420u); // STATUS_ASSERTION_FAILURE; the parent skips this module and resumes.
+}
+
+void makeDebugWorkerAssertionsNonInteractive()
+{
+ _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL,terminateDebugWorkerOnAssertion);
+}
+#endif
+
 juce::String describeMidiMapping(const MidiNoteMapping& mapping)
 {
  static constexpr const char* instruments[]{"Kick","Snare","Hi-hat","Tom","Ride","Crash","Clap","Rimshot","Percussion"};
@@ -983,9 +1006,25 @@ public:
         juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         juce::StringArray arguments;
         arguments.addTokens(commandLine, true);
+#if JUCE_WINDOWS && JUCE_DEBUG
+        if (arguments.size() == 1 && arguments[0] == "--magdrum-debug-assertion-worker")
+        {
+            makeDebugWorkerAssertionsNonInteractive();
+            _CrtDbgReport(_CRT_ASSERT, __FILE__, __LINE__, nullptr,
+                          "Intentional MagDrum isolated-worker assertion test");
+            setApplicationReturnValue(9);
+            quit();
+            return;
+        }
+#endif
         if ((arguments.size() == 2 || arguments.size() == 3)
             && arguments[0] == "--magdrum-vst3-discovery-worker")
         {
+#if JUCE_WINDOWS && JUCE_DEBUG
+            // Third-party VST3 assertions must fail only this child process; a
+            // modal CRT dialog would otherwise pause the whole discovery flow.
+            makeDebugWorkerAssertionsNonInteractive();
+#endif
             const auto progressFile = juce::File(arguments[1].unquoted());
             const auto additionalFolder = arguments.size() == 3 ? juce::File(arguments[2].unquoted()) : juce::File();
             if (! juce::Thread::launch([this, progressFile, additionalFolder]

@@ -1399,6 +1399,30 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+#if JUCE_WINDOWS && JUCE_DEBUG
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-debug-assertion-worker-check") == 0)
+    {
+        juce::ChildProcess assertionWorker;
+        const juce::StringArray command{juce::File(argv[2]).getFullPathName(),
+                                        "--magdrum-debug-assertion-worker"};
+        if (!assertionWorker.start(command, 0)) return 270;
+        if (!assertionWorker.waitForProcessToFinish(10000))
+        {
+            assertionWorker.kill();
+            assertionWorker.waitForProcessToFinish(3000);
+            std::cerr << "A Debug assertion opened a modal dialog or failed to stop its isolated worker.\n";
+            return 271;
+        }
+        if (static_cast<unsigned int>(assertionWorker.getExitCode()) != 0xC0000420u)
+        {
+            std::cerr << "The isolated Debug worker did not exit with STATUS_ASSERTION_FAILURE.\n";
+            return 272;
+        }
+        std::cout << "Debug assertion terminated only the isolated worker without a dialog.\n";
+        return 0;
+    }
+#endif
+
     if (formatMidiNoteName(36) != "C1" || formatMidiNoteName(38) != "D1"
         || formatMidiNoteName(44) != "G#1" || formatMidiNoteName(56) != "G#2"
         || !formatMidiNoteName(-1).empty() || !formatMidiNoteName(128).empty())
