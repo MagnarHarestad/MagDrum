@@ -2727,13 +2727,16 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
     {
         return juce::String("instr(s.content_tokens, ' ") + term + " ' )>0";
     };
-    const auto drumCategory = juce::String("COALESCE(NULLIF(s.user_category,''),s.category) COLLATE NOCASE IN ('Kick','Snare','Closed hi-hat','Open hi-hat','Pedal hi-hat','Tom','Ride','Crash','Clap','Percussion')");
+    const auto drumCategory = juce::String("COALESCE(NULLIF(s.user_category,''),s.category) COLLATE NOCASE IN ('Kick','Snare','Closed hi-hat','Open hi-hat','Pedal hi-hat','Tom','Ride','Crash','Clap','Rimshot','Percussion')");
     const auto drumTerms = juce::String("(") + containsContentTerm("kick") + " OR " + containsContentTerm("kicks")
         + " OR " + containsContentTerm("snare") + " OR " + containsContentTerm("snares")
         + " OR " + containsContentTerm("hihat") + " OR " + containsContentTerm("hi hat")
         + " OR " + containsContentTerm("cymbal") + " OR " + containsContentTerm("cymbals")
         + " OR " + containsContentTerm("tom") + " OR " + containsContentTerm("toms")
-        + " OR " + containsContentTerm("rim") + " OR " + containsContentTerm("clap")
+        + " OR " + containsContentTerm("rim") + " OR " + containsContentTerm("rimshot")
+        + " OR " + containsContentTerm("rim shot") + " OR " + containsContentTerm("side stick")
+        + " OR " + containsContentTerm("sidestick") + " OR " + containsContentTerm("cross stick")
+        + " OR " + containsContentTerm("clap")
         + " OR " + containsContentTerm("cowbell") + " OR " + containsContentTerm("drum")
         + " OR " + containsContentTerm("drums") + " OR " + containsContentTerm("percussion")
         + " OR " + containsContentTerm("shaker") + " OR " + containsContentTerm("tambourine")

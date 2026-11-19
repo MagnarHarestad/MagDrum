@@ -605,6 +605,8 @@ int runSmokeTests(int argc,char** argv)
     };
     if(!addContentFilterFixture("single-kick.wav","Kick",0.2,1,{})
         ||!addContentFilterFixture("bass-drum-one-shot.wav","Kick",0.2,1,{})
+        ||!addContentFilterFixture("categorized-rimshot.wav","Rimshot",0.25,1,{})
+        ||!addContentFilterFixture("side-stick-one-shot.wav","Unknown",0.25,1,{})
         ||!addContentFilterFixture("drum-break-loop.wav","Unknown",8.0,16,"Loop")
         ||!addContentFilterFixture("bass-drum-loop.wav","Unknown",8.0,16,"Loop")
         ||!addContentFilterFixture("bass-note-one-shot.wav","Unknown",0.5,1,{})
@@ -627,8 +629,11 @@ int runSmokeTests(int argc,char** argv)
         if (actual != expected) std::cerr << "Content filter " << kind << " expected " << name << " present=" << expected << " actual=" << actual << '\n';
         return actual == expected;
     };
-    if(!expectContentFixture(1,"single-kick.wav",true)||!expectContentFixture(1,"bass-drum-one-shot.wav",true)||!expectContentFixture(1,"drum-break-loop.wav",false)
+    if(!expectContentFixture(1,"single-kick.wav",true)||!expectContentFixture(1,"bass-drum-one-shot.wav",true)
+        ||!expectContentFixture(1,"categorized-rimshot.wav",true)||!expectContentFixture(1,"side-stick-one-shot.wav",true)
+        ||!expectContentFixture(1,"drum-break-loop.wav",false)
         ||!expectContentFixture(1,"kick-agent-fixture.wav",true)||!expectContentFixture(2,"kick-agent-fixture.wav",false)
+        ||!expectContentFixture(2,"categorized-rimshot.wav",false)||!expectContentFixture(2,"side-stick-one-shot.wav",false)
         ||!expectContentFixture(2,"drum-break-loop.wav",true)||!expectContentFixture(2,"bass-drum-loop.wav",true)||!expectContentFixture(2,"single-kick.wav",false)
         ||!expectContentFixture(3,"bass-note-one-shot.wav",true)||!expectContentFixture(3,"bass-beat-loop.wav",false)
         ||!expectContentFixture(3,"bass-drum-one-shot.wav",false)||!expectContentFixture(3,"bass-drum-loop.wav",false)
