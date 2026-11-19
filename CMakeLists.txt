@@ -90,7 +90,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  add_test(NAME MagDrumTests COMMAND MagDrumTests "${MAGDRUM_VST3_TEST_BUNDLE}" "$<TARGET_FILE:MagDrumPluginTests>" "$<TARGET_FILE:MagDrum>")
  if(WIN32)
   add_test(NAME MagDrumDebugAssertionWorker COMMAND MagDrumTests --magdrum-debug-assertion-worker-check "$<TARGET_FILE:MagDrum>")
-  set_tests_properties(MagDrumDebugAssertionWorker PROPERTIES CONFIGURATIONS Debug)
+  set_tests_properties(MagDrumDebugAssertionWorker PROPERTIES CONFIGURATIONS Debug SKIP_RETURN_CODE 77)
  endif()
 endif()
 

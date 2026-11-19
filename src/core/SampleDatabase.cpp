@@ -2719,9 +2719,10 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
                            "OR instr(lower(p.name),lower(?1))>0 OR instr(lower(k.name),lower(?1))>0 "
                            "OR EXISTS(SELECT 1 FROM sample_tags st WHERE st.path=s.path AND instr(lower(st.tag),lower(?1))>0) "
                            "OR EXISTS(SELECT 1 FROM sample_classification_tags ct WHERE ct.path=s.path AND instr(lower(ct.tag),lower(?1))>0))");
-    const auto contentCorpus = juce::String("lower(' '||replace(replace(replace(replace(replace(replace(replace(sample.name||' '||sample.path||' '||COALESCE(NULLIF(sample.user_category,''),sample.category)||' '||COALESCE(tag_index.tags,''),'/', ' '),char(92),' '),'_',' '),'-',' '),'.',' '),'(',' '),')',' ')||' ')");
+    const auto contentCorpus = juce::String("lower(' '||replace(replace(replace(replace(replace(replace(replace(sample.name||' '||sample.path||' '||COALESCE(NULLIF(sample.user_category,''),sample.category)||' '||COALESCE(tag_index.tags,'')||' '||COALESCE(user_tag_index.tags,''),'/', ' '),char(92),' '),'_',' '),'-',' '),'.',' '),'(',' '),')',' ')||' ')");
     const auto contentSource = juce::String("content_samples AS MATERIALIZED (SELECT sample.*,sample.rowid AS rowid,") + contentCorpus
-        + " AS content_tokens FROM samples sample LEFT JOIN (SELECT path,group_concat(tag,' ') AS tags FROM sample_classification_tags GROUP BY path) tag_index ON tag_index.path=sample.path)";
+        + " AS content_tokens FROM samples sample LEFT JOIN (SELECT path,group_concat(tag,' ') AS tags FROM sample_classification_tags GROUP BY path) tag_index ON tag_index.path=sample.path"
+        + " LEFT JOIN (SELECT path,group_concat(tag,' ') AS tags FROM sample_tags GROUP BY path) user_tag_index ON user_tag_index.path=sample.path)";
     const auto contentTable = filter.contentKind == 0 ? juce::String("samples") : juce::String("content_samples");
     const auto containsContentTerm = [](const char* term)
     {

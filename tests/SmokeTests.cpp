@@ -628,6 +628,16 @@ int runSmokeTests(int argc,char** argv)
         ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("Beat Agent\\kick-agent-fixture.wav","Kick",0.2,1,{}))return 243;
+    const auto addUserTaggedContentFixture=[&](const juce::String& name,const juce::String& tag)
+    {
+        const auto file=contentFilterRoot.getChildFile(name);
+        if(!waveFile.copyFileTo(file))return false;
+        auto sample=classifiedSamples.getFirst();sample.file=file;sample.category="Unknown";
+        sample.durationSeconds=0.2;sample.transientCount=1;sample.classificationTags.clear();
+        return contentFilterDb.insertSample(sample)&&contentFilterDb.setUserTags(file,juce::StringArray{tag});
+    };
+    if(!addUserTaggedContentFixture("neutral-a.wav","Drum loop")
+        ||!addUserTaggedContentFixture("neutral-b.wav","Bass beat"))return 245;
     const auto hasContentFixture=[&](int contentKind,const juce::String& expected)
     {
         SampleBrowseFilter filter;filter.contentKind=contentKind;
@@ -642,14 +652,17 @@ int runSmokeTests(int argc,char** argv)
     };
     if(!expectContentFixture(1,"single-kick.wav",true)||!expectContentFixture(1,"bass-drum-one-shot.wav",true)
         ||!expectContentFixture(1,"categorized-rimshot.wav",true)||!expectContentFixture(1,"side-stick-one-shot.wav",true)
-        ||!expectContentFixture(1,"drum-break-loop.wav",false)
+        ||!expectContentFixture(1,"drum-break-loop.wav",false)||!expectContentFixture(1,"neutral-a.wav",false)
         ||!expectContentFixture(1,"kick-agent-fixture.wav",true)||!expectContentFixture(2,"kick-agent-fixture.wav",false)
+        ||!expectContentFixture(2,"neutral-a.wav",true)
         ||!expectContentFixture(2,"categorized-rimshot.wav",false)||!expectContentFixture(2,"side-stick-one-shot.wav",false)
         ||!expectContentFixture(2,"drum-break-loop.wav",true)||!expectContentFixture(2,"bass-drum-loop.wav",true)||!expectContentFixture(2,"single-kick.wav",false)
         ||!expectContentFixture(3,"bass-note-one-shot.wav",true)||!expectContentFixture(3,"bass-beat-loop.wav",false)
         ||!expectContentFixture(3,"bass-drum-one-shot.wav",false)||!expectContentFixture(3,"bass-drum-loop.wav",false)
+        ||!expectContentFixture(3,"neutral-b.wav",false)
         ||!expectContentFixture(4,"bass-beat-loop.wav",true)||!expectContentFixture(4,"synth-bass-loop.wav",true)
         ||!expectContentFixture(4,"bass-note-one-shot.wav",false)||!expectContentFixture(4,"drum-break-loop.wav",false)
+        ||!expectContentFixture(4,"neutral-b.wav",true)
         ||!expectContentFixture(5,"synth-pad-one-shot.wav",true)||!expectContentFixture(5,"synth-pad-loop.wav",false)
         ||!expectContentFixture(6,"synth-pad-loop.wav",true)||!expectContentFixture(7,"orchestral-phrase-loop.wav",true)
         ||!expectContentFixture(7,"multi-sampled-loop.wav",true))
@@ -1399,9 +1412,10 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
-#if JUCE_WINDOWS && JUCE_DEBUG
+#if JUCE_WINDOWS
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-debug-assertion-worker-check") == 0)
     {
+#if JUCE_DEBUG
         juce::ChildProcess assertionWorker;
         const juce::StringArray command{juce::File(argv[2]).getFullPathName(),
                                         "--magdrum-debug-assertion-worker"};
@@ -1420,6 +1434,10 @@ int main(int argc, char** argv)
         }
         std::cout << "Debug assertion terminated only the isolated worker without a dialog.\n";
         return 0;
+#else
+        std::cout << "Skipped: the CRT assertion-worker check is Debug-only.\n";
+        return 77;
+#endif
     }
 #endif
 
