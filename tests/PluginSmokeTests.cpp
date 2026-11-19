@@ -366,8 +366,8 @@ public:
             }
         }
 
-        editor.sampleSearch.setText("Map Fixture", juce::dontSendNotification);
-        editor.refreshSamples();
+        editor.setPage(0);
+        editor.sampleSearch.setText("Map Fixture", juce::sendNotification);
         const auto deadline = juce::Time::getMillisecondCounter() + 10000;
         auto pollForMap = std::make_shared<std::function<void()>>();
         *pollForMap = [&editor, deadline, pollForMap]
@@ -390,6 +390,12 @@ public:
         {
             std::cerr << "The sample map did not load the complete filtered library independently of list paging.\n";
             return 2;
+        }
+        if (!editor.previewButton.isVisible()
+            || editor.previewButton.getButtonText() != magdrum::ui::localisedText("Preview"))
+        {
+            std::cerr << "The Sample Library should expose one contextual preview control.\n";
+            return 15;
         }
 
         const auto mapSelectedFile = editor.sampleMapSamples.getReference(offPageMapIndex).file;
@@ -428,6 +434,18 @@ public:
         {
             std::cerr << "Leaving the acoustic map did not stop the active sample preview.\n";
             return 9;
+        }
+        editor.buttonClicked(&editor.previewButton);
+        if (editor.previewButton.getButtonText() != magdrum::ui::localisedText("Stop"))
+        {
+            std::cerr << "The preview control did not switch to Stop while a sample was playing.\n";
+            return 16;
+        }
+        editor.buttonClicked(&editor.previewButton);
+        if (editor.previewButton.getButtonText() != magdrum::ui::localisedText("Preview"))
+        {
+            std::cerr << "The preview control did not return to Preview after stopping playback.\n";
+            return 17;
         }
 
         const auto initialViewport = editor.sampleMapViewportForTest();
@@ -530,7 +548,7 @@ public:
         }
 
         editor.selectedNote = 36;
-        editor.buttonClicked(&editor.assignButton);
+        editor.loadSampleAsync(expectedFile, editor.selectedNote, 1, 127, true);
         const auto assignmentDeadline = juce::Time::getMillisecondCounter() + 10000;
         while (editor.sampleLoadWorkers.getNumJobs() != 0
                && juce::Time::getMillisecondCounter() < assignmentDeadline)
@@ -1411,13 +1429,14 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 45> checks{{
+            const std::array<LabelCheck, 46> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
                 {"MIDI-maps tab", editor.mapsTab.getButtonText(), magdrum::ui::localisedText("MIDI MAPS")},
                 {"plugin-scanner tab", editor.pluginScannerTab.getButtonText(), magdrum::ui::localisedText("PLUGIN SCANNER")},
                 {"sample search placeholder", editor.sampleSearch.getTextToShowWhenEmpty(), magdrum::ui::localisedText("Search indexed samples")},
+                {"sample action gesture tooltip", editor.indexedList.getTooltip(), magdrum::ui::localisedText("Double-click to preview; right-click for sample actions")},
                 {"sample scan button", editor.scanButton.getButtonText(), magdrum::ui::localisedText("Scan samples...")},
                 {"sample load button", editor.loadButton.getButtonText(), magdrum::ui::localisedText("Load sample")},
                 {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},

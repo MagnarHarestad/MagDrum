@@ -82,6 +82,7 @@ private:
     void handleSampleLayerMenuAction(int note, const MagDrumAudioProcessor::SampleLayerInfo&, int action);
     void editSampleLayerVelocityRange(const MagDrumAudioProcessor::SampleLayerInfo&);
     void refreshSamples();
+    void updateSamplePreviewButton();
     void selectSampleMapSample(int index);
     void refreshSampleAssignmentLabels();
     void previewSampleAsync(const juce::File&);
@@ -245,7 +246,7 @@ private:
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, contentTypeFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
     int rememberedDrumCategory = 1;
-    juce::TextButton scanButton{"Scan samples..."}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, searchButton{"Search"}, previewButton{"Preview"}, stopPreviewButton{"Stop"}, assignButton{"Assign to pad"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
+    juce::TextButton scanButton{"Scan samples..."}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, previewButton{"Preview"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
     juce::ProgressBar sampleScanProgress{sampleScanProgressValue};
