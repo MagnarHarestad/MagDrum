@@ -112,7 +112,7 @@ class PluginScanProcess
 {
 public:
     using ShouldCancel = std::function<bool()>;
-    using Progress = std::function<void(int completed, int total, int midiNote, int velocity)>;
+    using Progress = std::function<void(const juce::String& phase, int completed, int total, int midiNote, int velocity)>;
     using TextProgress = std::function<void(const juce::String& phase)>;
 
     static bool readManifest(const juce::File& file, PluginScanProcessManifest& result);

@@ -1277,10 +1277,10 @@ public:
         const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
         const auto execution = PluginScanProcess::monitorWorker(command, progressFile, resultFile, cancelFile,
             [this] { return shouldExit() || cancellation.load(); },
-            [safe](int done, int total, int note, int velocity)
+            [safe](const juce::String& phase, int done, int total, int note, int velocity)
             {
-                juce::MessageManager::callAsync([safe, done, total, note, velocity]
-                { if (safe != nullptr) safe->updatePluginScanProgress(done, total, note, velocity); });
+                juce::MessageManager::callAsync([safe, phase, done, total, note, velocity]
+                { if (safe != nullptr) safe->updatePluginScanProgress(phase, done, total, note, velocity); });
             }, 10000, captureLog);
         if (! execution.started || ! execution.manifestRead)
         {
@@ -3820,11 +3820,17 @@ void MagDrumAudioProcessorEditor::cancelPluginNoteScan()
     status.setText(magdrum::ui::localisedText("Cancellation requested. The scanner will stop at its next safe point."), juce::dontSendNotification);
 }
 
-void MagDrumAudioProcessorEditor::updatePluginScanProgress(int completed, int total, int note, int velocity)
+void MagDrumAudioProcessorEditor::updatePluginScanProgress(const juce::String& phase, int completed, int total,
+    int note, int velocity)
 {
-    pluginScanProgress.setText(magdrum::ui::localisedText("Scanned {done} of {total} captures · MIDI {note} · velocity {velocity}")
+    juce::String message;
+    if (phase == "loading") message = magdrum::ui::localisedText("Loading VST3 instrument…");
+    else if (phase == "restoring") message = magdrum::ui::localisedText("Restoring saved instrument kit…");
+    else if (phase == "preparing") message = magdrum::ui::localisedText("Preparing isolated MIDI scan…");
+    else message = magdrum::ui::localisedText("Scanned {done} of {total} captures · MIDI {note} · velocity {velocity}")
         .replace("{done}", juce::String(completed)).replace("{total}", juce::String(total))
-        .replace("{note}", juce::String(note)).replace("{velocity}", juce::String(velocity)), juce::dontSendNotification);
+        .replace("{note}", juce::String(note)).replace("{velocity}", juce::String(velocity));
+    pluginScanProgress.setText(message, juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::finishPluginNoteScan(int saved, int sounding, int silent, int failures,

@@ -577,6 +577,35 @@ int runSmokeTests(int argc,char** argv)
     juce::StringArray partialCrashCommand;partialCrashCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());partialCrashCommand.add("--magdrum-test-partial-crash-fixture");const auto partialCaptureLog=root.getChildFile("partial-captures.jsonl");partialCrashCommand.add(partialCaptureLog.getFullPathName());
     const auto partialCrashExecution=PluginScanProcess::monitorWorker(partialCrashCommand,root.getChildFile("partial-progress.json"),root.getChildFile("partial-result.json"),root.getChildFile("partial-cancel"),{}, {},10000,partialCaptureLog);
     if(!partialCrashExecution.started||!partialCrashExecution.manifestRead||!partialCrashExecution.manifest.partial||partialCrashExecution.manifest.succeeded||partialCrashExecution.manifest.captures.size()!=1||partialCrashExecution.exitCode==0)return 180;
+    const auto phaseProgressFile = root.getChildFile("phase-progress.json");
+    const auto phaseResultFile = root.getChildFile("phase-result.json");
+    juce::StringArray phaseCommand;
+    phaseCommand.add(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName());
+    phaseCommand.add("--magdrum-test-plugin-scan-progress-worker");
+    phaseCommand.add(phaseProgressFile.getFullPathName());
+    phaseCommand.add(phaseResultFile.getFullPathName());
+    juce::StringArray reportedPhases;
+    juce::Array<int> reportedCaptureCounts;
+    const auto phaseExecution = PluginScanProcess::monitorWorker(phaseCommand, phaseProgressFile,
+        phaseResultFile, root.getChildFile("phase-cancel"), {},
+        [&reportedPhases, &reportedCaptureCounts](const juce::String& phase, int completed, int, int, int)
+        {
+            if (reportedPhases.isEmpty() || reportedPhases[reportedPhases.size() - 1] != phase)
+                reportedPhases.add(phase);
+            reportedCaptureCounts.add(completed);
+        }, 10000);
+    if (!phaseExecution.started || !phaseExecution.manifestRead || !phaseExecution.manifest.succeeded
+        || reportedPhases.size() != 4 || reportedPhases[0] != "loading" || reportedPhases[1] != "restoring"
+        || reportedPhases[2] != "preparing" || reportedPhases[3] != "scanning"
+        || !reportedCaptureCounts.contains(24) || !reportedCaptureCounts.contains(128))
+    {
+        std::cerr << "Plugin scan phases reported:";
+        for (const auto& phase : reportedPhases) std::cerr << " " << phase;
+        std::cerr << " counts:";
+        for (const auto count : reportedCaptureCounts) std::cerr << " " << count;
+        std::cerr << "\n";
+        return 290;
+    }
     const auto workerManifestFile=root.getChildFile("worker-result.json");
     if(!workerManifestFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[{"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"},{"midiNote":60,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.0,"rms":0.0,"silent":true,"fileName":""}]})"))return 131;
     PluginScanProcessManifest workerManifest;
@@ -1526,6 +1555,35 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (argc == 4 && std::strcmp(argv[1], "--magdrum-test-plugin-scan-progress-worker") == 0)
+    {
+        const juce::File progressFile(argv[2]);
+        const juce::File resultFile(argv[3]);
+        const auto writeProgress = [&progressFile](const juce::String& phase, int completed, int total)
+        {
+            auto* progress = new juce::DynamicObject();
+            progress->setProperty("phase", phase);
+            progress->setProperty("completed", completed);
+            progress->setProperty("total", total);
+            progress->setProperty("midiNote", completed > 0 ? 36 + completed % 48 : 0);
+            progress->setProperty("velocity", 100);
+            return progressFile.replaceWithText(juce::JSON::toString(juce::var(progress), true));
+        };
+        if (!writeProgress("loading", 0, 0)) return 291;
+        juce::Thread::sleep(300);
+        if (!writeProgress("restoring", 0, 0)) return 292;
+        juce::Thread::sleep(300);
+        if (!writeProgress("preparing", 0, 128)) return 293;
+        juce::Thread::sleep(300);
+        if (!writeProgress("scanning", 1, 128)) return 294;
+        juce::Thread::sleep(300);
+        if (!writeProgress("scanning", 24, 128)) return 295;
+        juce::Thread::sleep(300);
+        if (!writeProgress("scanning", 128, 128)) return 296;
+        juce::Thread::sleep(300);
+        return resultFile.replaceWithText(R"({"ok":true,"error":"","cancelled":false,"captures":[]})") ? 0 : 297;
+    }
+
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-unresponsive-helper") == 0)
     {
         const juce::File progressFile(argv[2]);

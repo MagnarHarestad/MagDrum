@@ -167,7 +167,7 @@ private:
                                   const juce::String& kitName);
     void startPluginNoteScan();
     void cancelPluginNoteScan();
-    void updatePluginScanProgress(int completed, int total, int note, int velocity);
+    void updatePluginScanProgress(const juce::String& phase, int completed, int total, int note, int velocity);
     void finishPluginNoteScan(int saved, int sounding, int silent, int failures, bool cancelled, const juce::String& error, const juce::String& summary);
     void showLibraryTools();
     void handleLibraryTool(int);

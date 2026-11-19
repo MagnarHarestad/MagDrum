@@ -503,6 +503,7 @@ PluginScanProcessExecution PluginScanProcess::monitorWorker(const juce::StringAr
     bool cancellationObserved = false;
     juce::uint32 cancellationStartedAt = 0;
     int lastReportedProgress = -1;
+    juce::String lastReportedPhase;
     while (child.isRunning())
     {
         if (shouldCancel && shouldCancel())
@@ -526,12 +527,21 @@ PluginScanProcessExecution PluginScanProcess::monitorWorker(const juce::StringAr
         if (progress && progressValue.isObject())
         {
             const auto* progressObject = progressValue.getDynamicObject();
+            const auto phase = progressObject->getProperty("phase").toString();
             const int completed = static_cast<int>(progressObject->getProperty("completed"));
             const int total = static_cast<int>(progressObject->getProperty("total"));
-            if (completed > lastReportedProgress && (completed % 24 == 0 || completed == total))
+            const bool phaseChanged = phase.isNotEmpty() && phase != lastReportedPhase;
+            if (phaseChanged)
+            {
+                lastReportedPhase = phase;
+                lastReportedProgress = completed;
+                progress(phase, completed, total, static_cast<int>(progressObject->getProperty("midiNote")),
+                         static_cast<int>(progressObject->getProperty("velocity")));
+            }
+            else if (completed > lastReportedProgress && (completed % 24 == 0 || completed == total))
             {
                 lastReportedProgress = completed;
-                progress(completed, total, static_cast<int>(progressObject->getProperty("midiNote")),
+                progress(phase, completed, total, static_cast<int>(progressObject->getProperty("midiNote")),
                          static_cast<int>(progressObject->getProperty("velocity")));
             }
         }
@@ -651,9 +661,20 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     juce::AudioPluginFormatManager formats;
     juce::addHeadlessDefaultFormatsToManager(formats);
     juce::String loadError;
-    const auto writePhase = [&progressFile](const juce::String& phase)
+    const auto writeProgress = [&progressFile](const juce::String& phase, int completed, int total,
+                                                int midiNote, int velocity)
     {
-        progressFile.replaceWithText(phase);
+        auto* progress = new juce::DynamicObject();
+        progress->setProperty("phase", phase);
+        progress->setProperty("completed", completed);
+        progress->setProperty("total", total);
+        progress->setProperty("midiNote", midiNote);
+        progress->setProperty("velocity", velocity);
+        writeJson(progressFile, juce::var(progress));
+    };
+    const auto writePhase = [&writeProgress](const juce::String& phase)
+    {
+        writeProgress(phase, 0, 0, 0, 0);
     };
     writePhase("loading");
     auto createdPlugin = juce::MessageManager::callSync([&formats, &description, sampleRate, blockSize, &loadError]
@@ -701,7 +722,9 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     for (const auto& velocity : *velocities)
         settings.velocityLevels.push_back(static_cast<int>(velocity));
 
-    writePhase("preparing");
+    const auto totalScans = 128 * static_cast<int>(settings.velocityLevels.size()) * settings.repeatCount;
+    writeProgress("preparing", 0, totalScans, 0,
+                  settings.velocityLevels.empty() ? 0 : settings.velocityLevels.front());
     std::unique_ptr<juce::FileOutputStream> captureLog(captureLogFile.createOutputStream());
     if (captureLog == nullptr || !captureLog->openedOk())
     {
@@ -712,14 +735,9 @@ int PluginScanProcess::runWorker(const juce::File& requestFile)
     juce::Array<juce::var> captures;
     auto scan = scanner.scan(*plugin, settings,
         [&cancellationFile] { return cancellationFile.existsAsFile(); },
-        [&progressFile](int completed, int total, int midiNote, int velocity)
+        [&writeProgress](int completed, int total, int midiNote, int velocity)
         {
-            auto* progress = new juce::DynamicObject();
-            progress->setProperty("completed", completed);
-            progress->setProperty("total", total);
-            progress->setProperty("midiNote", midiNote);
-            progress->setProperty("velocity", velocity);
-            writeJson(progressFile, juce::var(progress));
+            writeProgress("scanning", completed, total, midiNote, velocity);
         },
         [&](const PluginNoteCapture& capture)
         {
