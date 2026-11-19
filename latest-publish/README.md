@@ -1,6 +1,6 @@
 # MagDrum Windows x64 test package
 
-Windows test package: v0.1.2-test.265 (VST3 version 0.1.2.265); publish is pending.
+Public prerelease: [v0.1.2-test.265](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.265) (VST3 version 0.1.2.265).
 
 - ZIP SHA-256: `ad9426150f12fe3a194ff194a7cb136e36fe247199679d7b8168160f397c379a`
 - VST3 module SHA-256: `85C47DFBE6AA8D95F20C6060D3555B1E2DAF67491D7C1DBF4D3979199211929F`
@@ -15,5 +15,5 @@ Windows test package: v0.1.2-test.265 (VST3 version 0.1.2.265); publish is pendi
 - This package has not been installed; .252 remains installed per-user until Windows feature work is complete.
 - Cubase Pro 15 interaction, device audio and project save/reopen remain unverified.
 
-When published, find the package at [release v0.1.2-test.265](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.265); see the [Cubase test guide](../docs/cubase-testing.md).
+See the [release](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.265) and [Cubase test guide](../docs/cubase-testing.md).
 Linux and macOS remain paused until explicitly requested.
