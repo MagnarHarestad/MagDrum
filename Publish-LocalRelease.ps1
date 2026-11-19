@@ -146,6 +146,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'MIDI export defaults to exact articulation mappings. The VST, desktop and mobile controls offer no fallback, default-articulation-only fallback, or any same-instrument articulation. Each substitution and omitted event is reported after export.',
         'MIDI import processes events across all tracks in musical time order, preserving overlapping same-pitch note durations split between tracks.',
         'MIDI imports also accept valid SMPTE absolute-time divisions at 24, 25, 29.97 drop-frame, and 30 fps, converting through tempo changes and exporting in PPQ format.',
+        'Imported drum events preserve their original MIDI pitch through export and Cubase project state, including pitches that share the same semantic drum mapping. Editing the drum or articulation clears that preserved pitch; older project states remain compatible.',
         'Round-robin counters are independent per MIDI note and velocity group, so hits in another velocity range do not advance that group.',
         'The VST reports the duration of its longest loaded sample as the DAW tail length, including assigned samples and the active preview.',
         'The installed-library scan includes Native Instruments shared Public Documents content, Steinberg shared and per-user Roaming AppData content, Cubase 15 Media and VST Sound locations, and detected Spectrasonics locations.',

@@ -1076,6 +1076,7 @@ public:
         editor.loadMidiPatternFile(file);
         if (! editor.sequenceEventsInitialised || editor.sequenceEvents.size() != 1
             || editor.sequenceEvents.front().instrument != DrumInstrument::Kick
+            || editor.sequenceEvents.front().midiNote != 36
             || std::abs(editor.sequenceEvents.front().positionBeats - 2.0) > 0.001
             || std::abs(editor.sequenceEvents.front().durationBeats - 0.5) > 0.001
             || editor.sequenceMetadata.size() != 2
@@ -1086,8 +1087,33 @@ public:
             return 2;
         }
         const auto state = processor.getPluginEditorState();
-        if (state == nullptr || state->getNumChildElements() == 0)
+        if (state == nullptr || state->getNumChildElements() == 0
+            || state->getChildByName("EVENT") == nullptr
+            || state->getChildByName("EVENT")->getIntAttribute("midiNote", -1) != 36)
             return 3;
+
+        editor.sequenceEvents.clear();
+        editor.sequenceEventsInitialised = false;
+        editor.restorePluginEditorState();
+        if (editor.sequenceEvents.size() != 1 || editor.sequenceEvents.front().midiNote != 36)
+        {
+            std::cerr << "The VST editor did not restore an imported source MIDI pitch.\n";
+            return 4;
+        }
+
+        auto legacyState = std::make_unique<juce::XmlElement>(*state);
+        auto* legacyEvent = legacyState->getChildByName("EVENT");
+        if (legacyEvent == nullptr) return 5;
+        legacyEvent->removeAttribute("midiNote");
+        processor.setPluginEditorState(*legacyState);
+        editor.sequenceEvents.clear();
+        editor.sequenceEventsInitialised = false;
+        editor.restorePluginEditorState();
+        if (editor.sequenceEvents.size() != 1 || editor.sequenceEvents.front().midiNote != -1)
+        {
+            std::cerr << "A legacy VST project without a source MIDI pitch did not restore safely.\n";
+            return 6;
+        }
         return 0;
     }
 
@@ -1912,6 +1938,7 @@ int main(int argc, char** argv)
     sequencerEvent->setAttribute("velocity",100);
     sequencerEvent->setAttribute("beat",0.0);
     sequencerEvent->setAttribute("duration",0.1);
+    sequencerEvent->setAttribute("midiNote",35);
     auto* laterKickEvent=sequencerState.createNewChildElement("EVENT");
     laterKickEvent->setAttribute("instrument",static_cast<int>(DrumInstrument::Kick));
     laterKickEvent->setAttribute("articulation",static_cast<int>(DrumArticulation::Default));
@@ -1974,6 +2001,19 @@ int main(int argc, char** argv)
         std::cerr << "Sequencer state restore mismatch: bars=" << restoredEditorState->getIntAttribute("bars",0)
                   << ", events=" << restoredEventCount << ", metadata=" << restoredMetadataCount << ".\n";
         return 40;
+    }
+    bool restoredRawPitch=false,olderEventStillHasDefaultPitch=false;
+    for(auto* child=restoredEditorState->getFirstChildElement();child!=nullptr;child=child->getNextElement())
+        if(child->hasTagName("EVENT"))
+        {
+            const int beat=juce::roundToInt(child->getDoubleAttribute("beat",-1.0)*2.0);
+            if(beat==0)restoredRawPitch=child->getIntAttribute("midiNote",-1)==35;
+            if(beat==9)olderEventStillHasDefaultPitch=child->getIntAttribute("midiNote",-1)==-1;
+        }
+    if(!restoredRawPitch||!olderEventStillHasDefaultPitch)
+    {
+        std::cerr << "Sequencer state did not preserve a raw MIDI pitch or legacy default.\n";
+        return 289;
     }
     restored.prepareToPlay(44100.0, 128);
     const double fullVelocityPeak = renderPeak(restored, 36, 127);

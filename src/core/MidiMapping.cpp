@@ -155,5 +155,6 @@ std::optional<DrumEvent> MidiMappingProfile::fromMidi(std::uint8_t note,std::uin
     if(note>127||velocity>127||position<0.0||duration<0.0)return std::nullopt;
     const auto found=std::find_if(mappings.begin(),mappings.end(),[&](const auto& m){return m.note==note;});
     if(found==mappings.end())return std::nullopt;
-    return DrumEvent{found->instrument,found->articulation,velocity,position,duration};
+    return DrumEvent{found->instrument, found->articulation, velocity, position, duration,
+                     static_cast<int>(note)};
 }

@@ -11,6 +11,7 @@ bool sameDrumEvent(const DrumEvent& left, const DrumEvent& right)
 {
     return left.instrument == right.instrument && left.articulation == right.articulation
         && left.velocity == right.velocity
+        && (left.midiNote == -1 || right.midiNote == -1 || left.midiNote == right.midiNote)
         && std::abs(left.positionBeats - right.positionBeats) <= patternComparisonTolerance
         && std::abs(left.durationBeats - right.durationBeats) <= patternComparisonTolerance;
 }

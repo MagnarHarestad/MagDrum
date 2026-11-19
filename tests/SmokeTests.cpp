@@ -1357,7 +1357,7 @@ int runSmokeTests(int argc,char** argv)
     MidiPattern fallbackRoundTrip;if(!midiIO.read(mappedFallbackFile,gm,fallbackRoundTrip).ok||fallbackRoundTrip.events.size()!=1||fallbackRoundTrip.events[0].articulation!=DrumArticulation::Closed)return 192;
     MidiPattern decodedPattern;auto midiReport=midiIO.read(midiFile,gm,decodedPattern);
     if(!midiReport.ok||!midiReport.ambiguousNotes.empty()||decodedPattern.events.size()!=1||decodedPattern.tempoAndSignature.size()!=2||std::abs(decodedPattern.lengthBeats-8.0)>0.001)return 24;
-    if(decodedPattern.events[0].velocity!=96||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
+    if(decodedPattern.events[0].velocity!=96||decodedPattern.events[0].midiNote!=42||std::abs(decodedPattern.events[0].positionBeats-1.5)>0.001||std::abs(decodedPattern.events[0].durationBeats-.125)>0.002)return 25;
     juce::MidiFile smpteMidi;
     smpteMidi.setSmpteTimeFormat(25, 40);
     juce::MidiMessageSequence smpteTempoTrack, smpteDrumTrack;
@@ -1427,11 +1427,13 @@ int runSmokeTests(int argc,char** argv)
     juce::MidiFile overlappingTrackMidi;overlappingTrackMidi.setTicksPerQuarterNote(960);juce::MidiMessageSequence firstTrack,secondTrack;firstTrack.addEvent(juce::MidiMessage::noteOn(10,42,static_cast<juce::uint8>(90)),0);firstTrack.addEvent(juce::MidiMessage::noteOff(10,42),2880);secondTrack.addEvent(juce::MidiMessage::noteOn(10,42,static_cast<juce::uint8>(100)),960);secondTrack.addEvent(juce::MidiMessage::noteOff(10,42),1920);firstTrack.sort();secondTrack.sort();overlappingTrackMidi.addTrack(firstTrack);overlappingTrackMidi.addTrack(secondTrack);const auto overlappingTrackFile=root.getChildFile("overlapping-notes-across-tracks.mid");auto overlappingTrackStream=overlappingTrackFile.createOutputStream();if(!overlappingTrackStream||!overlappingTrackMidi.writeTo(*overlappingTrackStream))return 280;overlappingTrackStream->flush();MidiPattern overlappingTrackPattern;const auto overlappingTrackReport=midiIO.read(overlappingTrackFile,gm,overlappingTrackPattern);if(!overlappingTrackReport.ok||overlappingTrackPattern.events.size()!=2||std::abs(overlappingTrackPattern.events[0].positionBeats)>0.001||std::abs(overlappingTrackPattern.events[0].durationBeats-2.0)>0.002||std::abs(overlappingTrackPattern.events[1].positionBeats-1.0)>0.001||std::abs(overlappingTrackPattern.events[1].durationBeats-2.0)>0.002)return 281;
     const auto exactPatternDiff=compareMidiPatterns(pattern,decodedPattern);
     if(!exactPatternDiff.removedEvents.empty()||!exactPatternDiff.addedEvents.empty()||!exactPatternDiff.removedMetadata.empty()||!exactPatternDiff.addedMetadata.empty()||exactPatternDiff.lengthChanged){std::cerr<<"Exact MIDI round-trip diff: removed="<<exactPatternDiff.removedEvents.size()<<", added="<<exactPatternDiff.addedEvents.size()<<", removed metadata="<<exactPatternDiff.removedMetadata.size()<<", added metadata="<<exactPatternDiff.addedMetadata.size()<<", length changed="<<exactPatternDiff.lengthChanged<<"\n";return 135;}
+    auto differentRawPitch=decodedPattern;differentRawPitch.events[0].midiNote=43;const auto rawPitchDiff=compareMidiPatterns(decodedPattern,differentRawPitch);
+    if(rawPitchDiff.removedEvents.size()!=1||rawPitchDiff.addedEvents.size()!=1){std::cerr<<"MIDI pattern comparison ignored a changed explicit source pitch.\n";return 288;}
     auto editedPattern=decodedPattern;editedPattern.events[0].velocity=80;editedPattern.events.push_back({DrumInstrument::Snare,DrumArticulation::Center,90,2.0,0.25});editedPattern.lengthBeats=10.0;if(!setPatternTempo(editedPattern,120))return 136;const auto editedPatternDiff=compareMidiPatterns(decodedPattern,editedPattern);
     if(editedPatternDiff.removedEvents.size()!=1||editedPatternDiff.addedEvents.size()!=2||editedPatternDiff.removedMetadata.size()!=1||editedPatternDiff.addedMetadata.size()!=1||!editedPatternDiff.lengthChanged){std::cerr<<"Edited MIDI diff: removed="<<editedPatternDiff.removedEvents.size()<<", added="<<editedPatternDiff.addedEvents.size()<<", removed metadata="<<editedPatternDiff.removedMetadata.size()<<", added metadata="<<editedPatternDiff.addedMetadata.size()<<", length changed="<<editedPatternDiff.lengthChanged<<"\n";return 137;}
     MidiMappingProfile ambiguousProfile({{DrumInstrument::HiHat,DrumArticulation::Closed,42},{DrumInstrument::Snare,DrumArticulation::Center,42},{DrumInstrument::HiHat,DrumArticulation::Closed,42}});
     MidiPattern ambiguousPattern;const auto ambiguousReport=midiIO.read(midiFile,ambiguousProfile,ambiguousPattern);
-    if(!ambiguousReport.ok||ambiguousReport.ambiguousNotes.size()!=1||ambiguousReport.ambiguousNotes[0].note!=42||ambiguousReport.ambiguousNotes[0].eventCount!=1||ambiguousReport.ambiguousNotes[0].candidates.size()!=2||ambiguousPattern.events.size()!=1||ambiguousPattern.events[0].instrument!=DrumInstrument::HiHat)return 134;
+    if(!ambiguousReport.ok||ambiguousReport.ambiguousNotes.size()!=1||ambiguousReport.ambiguousNotes[0].note!=42||ambiguousReport.ambiguousNotes[0].eventCount!=1||ambiguousReport.ambiguousNotes[0].candidates.size()!=2||ambiguousPattern.events.size()!=1||ambiguousPattern.events[0].instrument!=DrumInstrument::HiHat||ambiguousPattern.events[0].midiNote!=42)return 134;
     MidiPattern emptyBars;emptyBars.lengthBeats=12.0;const auto emptyBarsFile=root.getChildFile("empty-bars.mid");if(!midiIO.write(emptyBarsFile,emptyBars,gm,false))return 72;MidiPattern decodedEmptyBars;if(!midiIO.read(emptyBarsFile,gm,decodedEmptyBars).ok||!decodedEmptyBars.events.empty()||std::abs(decodedEmptyBars.lengthBeats-12.0)>0.001)return 73;
     MidiPattern metadataEdit;metadataEdit.tempoAndSignature={{0.0,juce::MidiMessage::tempoMetaEvent(500000)},{0.0,juce::MidiMessage::timeSignatureMetaEvent(4,4)},{8.0,juce::MidiMessage::tempoMetaEvent(750000)},{8.0,juce::MidiMessage::timeSignatureMetaEvent(3,4)}};
     if(!setPatternTempo(metadataEdit,100)||!setPatternTimeSignature(metadataEdit,5,8)||setPatternTempo(metadataEdit,10)||setPatternTimeSignature(metadataEdit,3,3)||metadataEdit.tempoAndSignature.size()!=4)return 64;
@@ -1464,6 +1466,91 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-audit-midi-folder") == 0)
+    {
+        const juce::File root(argv[2]);
+        if (!root.isDirectory())
+        {
+            std::cerr << "MIDI audit root is not a directory.\n";
+            return 273;
+        }
+
+        constexpr size_t maximumMidiFiles = 200;
+        const auto files = magdrum::library::findDrumMidiPatternFiles({root}, maximumMidiFiles, 500000);
+        const auto profile = MidiMappingProfile::generalMidi();
+        MidiPatternIO midiIO;
+        size_t parseFailures = 0;
+        size_t emptyPatterns = 0;
+        size_t drumEvents = 0;
+        size_t unmappedNoteEvents = 0;
+        size_t ambiguousNoteEvents = 0;
+        std::array<size_t, 128> unmappedByNote{};
+        std::array<size_t, 128> ambiguousByNote{};
+        for (const auto& file : files)
+        {
+            MidiPattern pattern;
+            const auto report = midiIO.read(file, profile, pattern);
+            bool valid = report.ok && std::isfinite(pattern.lengthBeats) && pattern.lengthBeats >= 0.0;
+            for (const auto& event : pattern.events)
+                valid = valid && std::isfinite(event.positionBeats) && event.positionBeats >= 0.0
+                    && std::isfinite(event.durationBeats) && event.durationBeats >= 0.0
+                    && event.velocity >= 1 && event.velocity <= 127;
+            for (const auto& event : pattern.tempoAndSignature)
+                valid = valid && std::isfinite(event.positionBeats) && event.positionBeats >= 0.0;
+            if (!valid)
+            {
+                ++parseFailures;
+                std::cerr << "Could not import " << file.getFileName() << ": "
+                          << report.error << '\n';
+                continue;
+            }
+            if (pattern.events.empty()) ++emptyPatterns;
+            drumEvents += pattern.events.size();
+            unmappedNoteEvents += report.unmappedNotes.size();
+            for (const auto note : report.unmappedNotes)
+                if (juce::isPositiveAndBelow(note, static_cast<int>(unmappedByNote.size())))
+                    ++unmappedByNote[static_cast<size_t>(note)];
+            for (const auto& ambiguous : report.ambiguousNotes)
+            {
+                ambiguousNoteEvents += static_cast<size_t>(juce::jmax(0, ambiguous.eventCount));
+                if (juce::isPositiveAndBelow(ambiguous.note, static_cast<int>(ambiguousByNote.size())))
+                    ambiguousByNote[static_cast<size_t>(ambiguous.note)] += static_cast<size_t>(juce::jmax(0, ambiguous.eventCount));
+            }
+        }
+        std::cout << "MagDrum MIDI corpus audit\n"
+                  << "Root: " << root.getFullPathName() << '\n'
+                  << "Files discovered: " << files.size() << " (limit " << maximumMidiFiles << ")\n"
+                  << "Parse/validation failures: " << parseFailures << '\n'
+                  << "Imported drum events: " << drumEvents << '\n'
+                  << "Unmapped note events: " << unmappedNoteEvents << '\n'
+                  << "Ambiguous note events: " << ambiguousNoteEvents << '\n'
+                  << "Files with no mapped drum events: " << emptyPatterns << '\n';
+        const auto printTopNotes = [](const char* label, const std::array<size_t, 128>& counts)
+        {
+            std::vector<std::pair<int, size_t>> ordered;
+            for (int note = 0; note < static_cast<int>(counts.size()); ++note)
+                if (counts[static_cast<size_t>(note)] > 0)
+                    ordered.emplace_back(note, counts[static_cast<size_t>(note)]);
+            std::sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right)
+            {
+                return left.second == right.second ? left.first < right.first : left.second > right.second;
+            });
+            if (ordered.empty()) return;
+            std::cout << label;
+            const auto count = juce::jmin(12, static_cast<int>(ordered.size()));
+            for (int index = 0; index < count; ++index)
+            {
+                const auto [note, events] = ordered[static_cast<size_t>(index)];
+                std::cout << (index == 0 ? " " : ", ") << note << " ("
+                          << formatMidiNoteName(note) << "): " << events;
+            }
+            std::cout << '\n';
+        };
+        printTopNotes("Top unmapped MIDI notes:", unmappedByNote);
+        printTopNotes("Top ambiguous MIDI notes:", ambiguousByNote);
+        return parseFailures == 0 ? 0 : 1;
+    }
+
 #if JUCE_WINDOWS
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-debug-assertion-worker-check") == 0)
     {
