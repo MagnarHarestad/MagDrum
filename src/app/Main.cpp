@@ -828,7 +828,11 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             || candidatePath.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (!candidateHasSidecarManifest)
         {
-            const auto moduleHasInstrument = std::any_of(knownPlugins.getTypes().begin(), knownPlugins.getTypes().end(),
+            // KnownPluginList::getTypes() returns its array by value. Keep one
+            // snapshot alive for both iterators; calling it twice creates a
+            // range whose begin and end belong to different temporary arrays.
+            const auto discoveredTypes = knownPlugins.getTypes();
+            const auto moduleHasInstrument = std::any_of(discoveredTypes.begin(), discoveredTypes.end(),
                 [&candidatePath](const auto& description)
                 {
                     const juce::File descriptionPath(description.fileOrIdentifier);
