@@ -1261,6 +1261,20 @@ public:
         }
         magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
         editor.applyLanguage();
+        editor.pluginPresetSearchCancellation = std::make_shared<std::atomic<bool>>(false);
+        editor.pluginPresetSearchRunning = true;
+        editor.buttonClicked(&editor.choosePluginPresetButton);
+        if (editor.pluginPresetSearchCancellation == nullptr
+            || ! editor.pluginPresetSearchCancellation->load())
+        {
+            editor.pluginPresetSearchRunning = false;
+            editor.pluginPresetSearchCancellation.reset();
+            std::cerr << "The preset-search Cancel control did not signal its worker.\n";
+            return 20;
+        }
+        editor.pluginPresetSearchRunning = false;
+        editor.pluginPresetSearchCancellation.reset();
+        editor.applyLanguage();
         editor.pluginProgramScanRunning = true;
         editor.updatePluginActionButtons();
         if (editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Cancel program scan")
