@@ -268,6 +268,15 @@ bool magdrum::plugins::recordVst3DiscoveryModuleFailure(const juce::File& progre
 }
 
 bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
+    const juce::KnownPluginList& knownPlugins, const juce::File& module)
+{
+    // getTypes() returns an Array by value. Keep its storage alive while the
+    // iterator pair is consumed, especially in the MSVC Debug STL.
+    const auto descriptions = knownPlugins.getTypes();
+    return vst3ModuleHasInstrumentDescription(descriptions, module);
+}
+
+bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
     const juce::Array<juce::PluginDescription>& descriptions, const juce::File& module)
 {
     return std::any_of(descriptions.begin(), descriptions.end(), [&module](const auto& description)

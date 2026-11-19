@@ -60,6 +60,8 @@ bool readVst3DiscoveryProgress(const juce::File& progressFile, Vst3DiscoveryProg
 bool writeVst3DiscoveryProgress(const juce::File& progressFile, const Vst3DiscoveryProgress& progress);
 bool recordVst3DiscoveryModuleFailure(const juce::File& progressFile, const juce::String& modulePath);
 bool vst3ModuleHasInstrumentDescription(
+    const juce::KnownPluginList& knownPlugins, const juce::File& module);
+bool vst3ModuleHasInstrumentDescription(
     const juce::Array<juce::PluginDescription>& descriptions, const juce::File& module);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);

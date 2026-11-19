@@ -853,11 +853,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             || candidatePath.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (!candidateHasSidecarManifest)
         {
-            // KnownPluginList::getTypes() returns its array by value. Keep one
-            // snapshot alive through the range check so its iterators share storage.
-            const auto discoveredTypes = knownPlugins.getTypes();
             const auto moduleHasInstrument = magdrum::plugins::vst3ModuleHasInstrumentDescription(
-                discoveredTypes, candidatePath);
+                knownPlugins, candidatePath);
             magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, candidatePath,
                 moduleHasInstrument);
             magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);

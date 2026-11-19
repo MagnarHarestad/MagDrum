@@ -402,6 +402,25 @@ int runSmokeTests(int argc,char** argv)
     if(!magdrum::plugins::vst3ModuleHasInstrumentDescription(discoveryDescriptions,instrumentBundle))return 253;
     discoveryDescriptions.remove(discoveryDescriptions.size()-1);
     if(magdrum::plugins::vst3ModuleHasInstrumentDescription(discoveryDescriptions,instrumentBundle))return 254;
+    juce::KnownPluginList knownPluginList;
+    for(int index=0;index<4096;++index)
+    {
+        juce::PluginDescription unrelated;
+        unrelated.name="unrelated-plugin-"+juce::String(index);
+        unrelated.fileOrIdentifier="unrelated-module-"+juce::String(index);
+        unrelated.pluginFormatName="VST3";
+        unrelated.isInstrument=(index%2)==0;
+        knownPluginList.addType(unrelated);
+    }
+    juce::PluginDescription knownInstrument;
+    knownInstrument.name="discovered-drum-instrument";
+    knownInstrument.fileOrIdentifier=instrumentBundle.getChildFile("Contents/x86_64-win/DrumInstrument.vst3").getFullPathName();
+    knownInstrument.pluginFormatName="VST3";
+    knownInstrument.isInstrument=true;
+    knownPluginList.addType(knownInstrument);
+    if(!magdrum::plugins::vst3ModuleHasInstrumentDescription(knownPluginList,instrumentBundle))return 255;
+    knownPluginList.removeType(knownInstrument);
+    if(magdrum::plugins::vst3ModuleHasInstrumentDescription(knownPluginList,instrumentBundle))return 256;
     for(int index=0;index<4096;++index)
     {
         juce::PluginDescription bulk;bulk.fileOrIdentifier="bulk-module-"+juce::String(index);bulk.pluginFormatName="VST3";bulk.isInstrument=(index%2)==0;cachedPluginDescriptions.add(bulk);
