@@ -1530,7 +1530,9 @@ std::unique_ptr<juce::XmlElement> MagDrumAudioProcessor::getPluginEditorState() 
 
 juce::AudioProcessorEditor* MagDrumAudioProcessor::createEditor()
 {
-    return new MagDrumAudioProcessorEditor(*this);
+    const auto testDatabasePath = juce::SystemStats::getEnvironmentVariable("MAGDRUM_TEST_DATABASE_PATH", {});
+    return new MagDrumAudioProcessorEditor(*this,
+        testDatabasePath.isNotEmpty() ? juce::File(testDatabasePath) : juce::File());
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

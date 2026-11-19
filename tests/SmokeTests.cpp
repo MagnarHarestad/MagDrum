@@ -153,6 +153,23 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
         return false;
     }
 
+#if JUCE_WINDOWS
+    juce::StringArray hostSequencerCommand;
+    hostSequencerCommand.add(scannerExecutable.getFullPathName());
+    hostSequencerCommand.add("--magdrum-test-host-sequencer");
+    hostSequencerCommand.add(vst3Module.getFullPathName());
+    hostSequencerCommand.add(stateFile.getFullPathName());
+    juce::ChildProcess hostSequencerProcess;
+    if (!hostSequencerProcess.start(hostSequencerCommand)
+        || !hostSequencerProcess.waitForProcessToFinish(30000)
+        || hostSequencerProcess.getExitCode() != 0)
+    {
+        std::cerr << "The exact built VST3 failed its isolated host-transport sequencer fixture (exit code "
+                  << hostSequencerProcess.getExitCode() << ").\n";
+        return false;
+    }
+#endif
+
     auto* request = new juce::DynamicObject();
     request->setProperty("descriptionFile", descriptionFile.getFullPathName());
     request->setProperty("stateFile", stateFile.getFullPathName());

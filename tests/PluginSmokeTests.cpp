@@ -1321,6 +1321,17 @@ int main(int argc, char** argv)
     {
         auto fixture = std::make_unique<MagDrumAudioProcessor>();
         if (!fixture->loadSampleForNote(36, juce::File(argv[2]))) return 201;
+        juce::XmlElement editorState("PLUGIN_EDITOR_STATE");
+        editorState.setAttribute("eventModel", 1);
+        editorState.setAttribute("meter", "4/4");
+        editorState.setAttribute("bars", 1);
+        auto* event = editorState.createNewChildElement("EVENT");
+        event->setAttribute("instrument", static_cast<int>(DrumInstrument::Kick));
+        event->setAttribute("articulation", static_cast<int>(DrumArticulation::Default));
+        event->setAttribute("velocity", 100);
+        event->setAttribute("beat", 0.001);
+        event->setAttribute("duration", 0.1);
+        fixture->setPluginEditorState(editorState);
         juce::MemoryBlock processorState;
         fixture->getStateInformation(processorState);
         if (processorState.isEmpty()) return 202;

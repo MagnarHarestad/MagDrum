@@ -28,12 +28,14 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
-#if JUCE_WINDOWS && JUCE_DEBUG
+#if JUCE_WINDOWS
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#if JUCE_DEBUG
 #include <crtdbg.h>
+#endif
 #endif
 
 namespace
@@ -993,6 +995,129 @@ int runIsolatedVst3PresetWorker(const juce::File& requestFile)
     return writeResult(true, {}) ? 0 : 9;
 }
 
+#if JUCE_WINDOWS
+class HostTransportFixturePlayHead final : public juce::AudioPlayHead
+{
+public:
+    juce::Optional<PositionInfo> getPosition() const override { return position; }
+    PositionInfo position;
+};
+
+int runHostTransportSequencerFixture(const juce::File& module, const juce::File& stateFile)
+{
+    juce::AudioPluginFormatManager formats;
+    juce::addDefaultFormatsToManager(formats);
+    juce::AudioPluginFormat* vst3Format = nullptr;
+    for (int index = 0; index < formats.getNumFormats(); ++index)
+        if (formats.getFormat(index)->getName() == "VST3")
+            vst3Format = formats.getFormat(index);
+    if (vst3Format == nullptr) return 40;
+
+    juce::OwnedArray<juce::PluginDescription> descriptions;
+    vst3Format->findAllTypesForFile(descriptions, module.getFullPathName());
+    if (descriptions.isEmpty()) return 41;
+
+    juce::String loadError;
+    auto plugin = formats.createPluginInstance(*descriptions[0], 48000.0, 128, loadError);
+    if (plugin == nullptr) return 42;
+
+    juce::MemoryBlock state;
+    if (!stateFile.loadFileAsData(state) || state.isEmpty()) return 43;
+    plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    constexpr double expectedTail = 4096.0 / 44100.0;
+    const auto tailDeadline = juce::Time::getMillisecondCounter() + 5000u;
+    while (std::abs(plugin->getTailLengthSeconds() - expectedTail) > 0.0001
+        && juce::Time::getMillisecondCounter() < tailDeadline)
+        juce::Thread::sleep(1);
+    if (std::abs(plugin->getTailLengthSeconds() - expectedTail) > 0.0001) return 44;
+
+    HostTransportFixturePlayHead playHead;
+    playHead.position.setIsPlaying(true);
+    playHead.position.setPpqPosition(0.0);
+    playHead.position.setBpm(120.0);
+    plugin->setPlayHead(&playHead);
+    plugin->prepareToPlay(48000.0, 128);
+
+    const auto isolatedEditorDatabase = stateFile.getSiblingFile("host-sequencer-samples.sqlite3");
+    SetEnvironmentVariableW(L"MAGDRUM_TEST_DATABASE_PATH", isolatedEditorDatabase.getFullPathName().toWideCharPointer());
+    std::unique_ptr<juce::AudioProcessorEditor> editor(plugin->createEditorIfNeeded());
+    if (editor == nullptr) return 45;
+    editor->setSize(1200, 820);
+    editor->setVisible(false);
+    editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
+    auto* peer = editor->getPeer();
+    if (peer == nullptr) return 46;
+    const auto hwnd = static_cast<HWND>(peer->getNativeHandle());
+    if (hwnd == nullptr) return 47;
+    const int offscreenX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 1400;
+    const int offscreenY = GetSystemMetrics(SM_YVIRTUALSCREEN) - 1000;
+    SetWindowPos(hwnd, nullptr, offscreenX, offscreenY, 1200, 820,
+                 SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW);
+    const auto click = [hwnd](int x, int y)
+    {
+        POINT screenPoint{x, y};
+        ClientToScreen(hwnd, &screenPoint);
+        const auto sendToWindow = [](HWND target, POINT screen)
+        {
+            POINT point = screen;
+            ScreenToClient(target, &point);
+            RECT bounds{};
+            if (!GetClientRect(target, &bounds) || point.x < 0 || point.y < 0
+                || point.x >= bounds.right || point.y >= bounds.bottom)
+                return;
+            const auto position = MAKELPARAM(point.x, point.y);
+            SendMessageW(target, WM_MOUSEMOVE, 0, position);
+            SendMessageW(target, WM_LBUTTONDOWN, MK_LBUTTON, position);
+            SendMessageW(target, WM_LBUTTONUP, 0, position);
+        };
+        sendToWindow(hwnd, screenPoint);
+        EnumChildWindows(hwnd, [](HWND child, LPARAM data) -> BOOL
+        {
+            auto* screen = reinterpret_cast<POINT*>(data);
+            POINT point = *screen;
+            ScreenToClient(child, &point);
+            RECT bounds{};
+            if (GetClientRect(child, &bounds) && point.x >= 0 && point.y >= 0
+                && point.x < bounds.right && point.y < bounds.bottom)
+            {
+                const auto position = MAKELPARAM(point.x, point.y);
+                SendMessageW(child, WM_MOUSEMOVE, 0, position);
+                SendMessageW(child, WM_LBUTTONDOWN, MK_LBUTTON, position);
+                SendMessageW(child, WM_LBUTTONUP, 0, position);
+            }
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&screenPoint));
+    };
+    click(411, 110); // Sequencer tab in the standard editor layout.
+    click(65, 159);  // Play button in the sequencer toolbar.
+
+    juce::AudioBuffer<float> audio(2, 128);
+    juce::MidiBuffer midi;
+    plugin->processBlock(audio, midi);
+    double beforeHitPeak = 0.0;
+    double afterHitPeak = 0.0;
+    for (int channel = 0; channel < audio.getNumChannels(); ++channel)
+        for (int sample = 0; sample < audio.getNumSamples(); ++sample)
+        {
+            const double magnitude = std::abs(static_cast<double>(audio.getSample(channel, sample)));
+            if (sample < 24)
+                beforeHitPeak = juce::jmax(beforeHitPeak, magnitude);
+            else
+                afterHitPeak = juce::jmax(afterHitPeak, magnitude);
+        }
+    if (!midi.isEmpty() || beforeHitPeak > 1.0e-7 || afterHitPeak <= 0.05)
+    {
+        RECT client{};
+        GetClientRect(hwnd, &client);
+        stateFile.getSiblingFile("host-sequencer-render.txt").replaceWithText(
+            "client=" + juce::String(client.right) + "x" + juce::String(client.bottom)
+            + ", before=" + juce::String(beforeHitPeak, 8) + ", after=" + juce::String(afterHitPeak, 8));
+        return 49;
+    }
+    return 0;
+}
+#endif
+
 class MagDrumApplication final : public juce::JUCEApplication
 {
 public:
@@ -1013,6 +1138,16 @@ public:
             _CrtDbgReport(_CRT_ASSERT, __FILE__, __LINE__, nullptr,
                           "Intentional MagDrum isolated-worker assertion test");
             setApplicationReturnValue(9);
+            quit();
+            return;
+        }
+#endif
+#if JUCE_WINDOWS
+        if (arguments.size() == 3 && arguments[0] == "--magdrum-test-host-sequencer")
+        {
+            const int result = runHostTransportSequencerFixture(juce::File(arguments[1].unquoted()),
+                                                                 juce::File(arguments[2].unquoted()));
+            setApplicationReturnValue(result);
             quit();
             return;
         }
