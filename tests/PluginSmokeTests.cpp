@@ -628,6 +628,68 @@ public:
             std::cerr << "Offscreen minimum-size effects-panel rendering failed.\n";
             return 4;
         }
+        editor.setSize(1280,800);editor.setPage(2);editor.sequenceEvents.clear();
+        DrumEvent renderedEvent;renderedEvent.instrument=DrumInstrument::Kick;renderedEvent.articulation=DrumArticulation::Default;
+        renderedEvent.velocity=100;renderedEvent.positionBeats=0.0;renderedEvent.durationBeats=0.25;renderedEvent.midiNote=36;
+        editor.sequenceEvents.push_back(renderedEvent);editor.sequenceEventsInitialised=true;editor.openMidiEventEditor();
+        const auto subviewImage=editor.createComponentSnapshot(editor.getLocalBounds(),true,1.0f);
+        const auto subviewFile=outputDirectory.getChildFile("sequencer-midi-events-in-app.png");
+        if(!subviewImage.isValid()||(subviewFile.existsAsFile()&&!subviewFile.deleteFile()))return 5;
+        std::unique_ptr<juce::FileOutputStream> subviewStream(subviewFile.createOutputStream());
+        if(subviewStream==nullptr||!subviewStream->openedOk()||!png.writeImageToStream(subviewImage,*subviewStream))return 5;
+        subviewStream->flush();editor.closeInAppSubview();
+        editor.chooseFileInApp(magdrum::ui::localisedText("Choose a drum sample folder"),
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),juce::String(),
+            juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectDirectories,{});
+        auto* picker=editor.inAppSubviewContentForTest();
+        if(picker==nullptr||picker->getNumChildComponents()!=2)
+        {
+            std::cerr<<"The in-app file picker did not render as one embedded browser and one select action.\n";
+            return 6;
+        }
+        bool hasSelectAction=false;
+        for(int child=0;child<picker->getNumChildComponents();++child)
+            if(const auto* button=dynamic_cast<const juce::TextButton*>(picker->getChildComponent(child)))
+                hasSelectAction=button->getButtonText()==magdrum::ui::localisedText("Select");
+        if(!hasSelectAction)return 7;
+        const std::function<bool(juce::Component*,const juce::String&)> hasLabel =
+            [&](juce::Component* component,const juce::String& expected)
+            {
+                if(const auto* label=dynamic_cast<juce::Label*>(component))
+                    if(label->getText().contains(expected))return true;
+                for(int child=0;child<component->getNumChildComponents();++child)
+                    if(hasLabel(component->getChildComponent(child),expected))return true;
+                return false;
+            };
+        for(const auto language:{magdrum::ui::Language::english,magdrum::ui::Language::german,
+            magdrum::ui::Language::french,magdrum::ui::Language::spanish,magdrum::ui::Language::swedish,
+            magdrum::ui::Language::norwegian,magdrum::ui::Language::danish,magdrum::ui::Language::finnish})
+        {
+            magdrum::ui::setLanguage(language,false);
+            if(!hasLabel(picker,magdrum::ui::localisedText("Folder")))
+            {
+                std::cerr<<"The embedded folder picker label did not follow the selected language.\n";
+                magdrum::ui::setLanguage(magdrum::ui::Language::english,false);
+                return 9;
+            }
+            bool translatedSelect=false;
+            for(int child=0;child<picker->getNumChildComponents();++child)
+                if(const auto* button=dynamic_cast<const juce::TextButton*>(picker->getChildComponent(child)))
+                    translatedSelect=button->getButtonText()==magdrum::ui::localisedText("Select");
+            if(!translatedSelect)
+            {
+                std::cerr<<"The embedded picker action did not follow the selected language.\n";
+                magdrum::ui::setLanguage(magdrum::ui::Language::english,false);
+                return 10;
+            }
+        }
+        magdrum::ui::setLanguage(magdrum::ui::Language::english,false);
+        const auto pickerImage=editor.createComponentSnapshot(editor.getLocalBounds(),true,1.0f);
+        const auto pickerFile=outputDirectory.getChildFile("in-app-file-picker.png");
+        if(!pickerImage.isValid()||(pickerFile.existsAsFile()&&!pickerFile.deleteFile()))return 8;
+        std::unique_ptr<juce::FileOutputStream> pickerStream(pickerFile.createOutputStream());
+        if(pickerStream==nullptr||!pickerStream->openedOk()||!png.writeImageToStream(pickerImage,*pickerStream))return 8;
+        pickerStream->flush();editor.closeInAppSubview();
         return 0;
     }
 
@@ -1126,6 +1188,7 @@ public:
             std::cerr << "The MIDI event list showed a source pitch that legacy state did not contain.\n";
             return 8;
         }
+
         return 0;
     }
 
@@ -1174,29 +1237,9 @@ public:
         editor.setPage(originalPage);
         editor.setSize(originalSize.x, originalSize.y);
         editor.openSampleComparisonWindow(firstSample, secondSample);
-        if (editor.comparisonWindow == nullptr || editor.comparisonWindow->getContentComponent() == nullptr)
+        if (editor.inAppSubviewContentForTest() == nullptr)
             return 2;
-        auto* comparisonContent = editor.comparisonWindow->getContentComponent();
-        editor.openMidiEventEditor();
-        if (editor.midiEventWindow == nullptr || editor.midiEventWindow->getContentComponent() == nullptr)
-            return 5;
-        auto* midiEventContent = editor.midiEventWindow->getContentComponent();
-        int midiEventTextFields = 0;
-        for (int childIndex = 0; childIndex < midiEventContent->getNumChildComponents(); ++childIndex)
-            if (const auto* field = dynamic_cast<const juce::TextEditor*>(midiEventContent->getChildComponent(childIndex)))
-            {
-                ++midiEventTextFields;
-                if (!field->getJustificationType().testFlags(juce::Justification::verticallyCentred))
-                {
-                    std::cerr << "A MIDI-event editor text field is not vertically centred.\n";
-                    return 9;
-                }
-            }
-        if (midiEventTextFields != 3)
-        {
-            std::cerr << "Expected three MIDI-event editor text fields, found " << midiEventTextFields << ".\n";
-            return 10;
-        }
+        auto* comparisonContent = editor.inAppSubviewContentForTest();
         const std::array<Language, 8> languages{
             Language::english, Language::german, Language::french, Language::spanish,
             Language::swedish, Language::norwegian, Language::danish, Language::finnish};
@@ -1282,7 +1325,7 @@ public:
                 }
             }
             if (previewButtons != 2 || stopButtons != 2
-                || editor.comparisonWindow->getName() != magdrum::ui::localisedText("Compare drum samples"))
+                || editor.inAppSubviewTitleForTest() != magdrum::ui::localisedText("Compare drum samples"))
             {
                 std::cerr << "Live localization failed in the open sample-comparison window for "
                           << magdrum::ui::languageName(language) << ".\n";
@@ -1290,25 +1333,45 @@ public:
                 return 4;
             }
 
-            const juce::StringArray expectedEventButtons{
-                magdrum::ui::localisedText("Apply edit"),
-                magdrum::ui::localisedText("Add hit"),
-                magdrum::ui::localisedText("Delete hit")};
-            juce::StringArray actualEventButtons;
-            for (int childIndex = 0; childIndex < midiEventContent->getNumChildComponents(); ++childIndex)
-                if (auto* button = dynamic_cast<juce::TextButton*>(midiEventContent->getChildComponent(childIndex)))
-                    actualEventButtons.add(button->getButtonText());
-            actualEventButtons.sort(false);
-            auto sortedExpectedEventButtons = expectedEventButtons;
-            sortedExpectedEventButtons.sort(false);
-            if (actualEventButtons != sortedExpectedEventButtons
-                || editor.midiEventWindow->getName() != magdrum::ui::localisedText("Edit MIDI events"))
+        }
+        editor.closeInAppSubview();
+        editor.openMidiEventEditor();
+        if (editor.inAppSubviewContentForTest() == nullptr)
+            return 5;
+        auto* midiEventContent = editor.inAppSubviewContentForTest();
+        int midiEventTextFields = 0;
+        for (int childIndex = 0; childIndex < midiEventContent->getNumChildComponents(); ++childIndex)
+            if (const auto* field = dynamic_cast<const juce::TextEditor*>(midiEventContent->getChildComponent(childIndex)))
             {
-                std::cerr << "Live localization failed in the open MIDI-event window for "
-                          << magdrum::ui::languageName(language) << ".\n";
-                magdrum::ui::setLanguage(Language::english, false);
-                return 6;
+                ++midiEventTextFields;
+                if (!field->getJustificationType().testFlags(juce::Justification::verticallyCentred))
+                {
+                    std::cerr << "A MIDI-event editor text field is not vertically centred.\n";
+                    return 9;
+                }
             }
+        if (midiEventTextFields != 3)
+        {
+            std::cerr << "Expected three MIDI-event editor text fields, found " << midiEventTextFields << ".\n";
+            return 10;
+        }
+        for (const auto language : languages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            if (editor.inAppSubviewTitleForTest() != magdrum::ui::localisedText("Edit MIDI events"))
+            {
+                std::cerr << "The in-app MIDI event view title did not follow the selected language.\n";
+                magdrum::ui::setLanguage(Language::english, false);
+                return 11;
+            }
+        }
+        magdrum::ui::setLanguage(Language::english, false);
+        const int pageBeforeSubviewClose = editor.page;
+        editor.closeInAppSubview();
+        if (editor.inAppSubviewContentForTest() != nullptr || editor.page != pageBeforeSubviewClose)
+        {
+            std::cerr << "Closing the MIDI editor view should return to the same plugin page.\n";
+            return 12;
         }
         editor.categoryFilter.setSelectedId(2, juce::sendNotificationSync);
         editor.contentTypeFilter.setSelectedId(4, juce::sendNotificationSync);

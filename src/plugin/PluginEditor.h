@@ -15,6 +15,7 @@
 class MagDrumSampleMap;
 class MagDrumWaveform;
 class MagDrumSampleComparison;
+class MagDrumInAppSubview;
 
 namespace magdrum::plugin
 {
@@ -102,6 +103,13 @@ private:
     void syncSequencerGridFromEvents();
     void openMidiEventEditor();
     void openSampleComparisonWindow(const juce::File&, const juce::File&);
+    void showInAppSubview(const juce::String&, std::unique_ptr<juce::Component>);
+    void showInAppNotice(const juce::String&, const juce::String&);
+    void chooseFileInApp(const juce::String&, const juce::File&, const juce::String&, int browserFlags,
+                         std::function<void(const juce::File&)>);
+    void closeInAppSubview();
+    juce::Component* inAppSubviewContentForTest() const;
+    juce::String inAppSubviewTitleForTest() const;
     int timeSignatureNumerator() const;
     int timeSignatureDenominator() const;
     int gridResolutionSubdivisions() const;
@@ -188,6 +196,7 @@ private:
     bool sampleMapQueryPending = false;
     juce::ThreadPool sampleMapWorkers{1};
     std::atomic<std::uint64_t> samplePreviewGeneration{0};
+    bool samplePreviewActive = false;
     juce::ThreadPool samplePreviewWorkers{1};
     std::atomic<bool> sampleLoadCancellation{false};
     juce::ThreadPool sampleLoadWorkers{1};
@@ -290,11 +299,7 @@ private:
     juce::TextButton refreshPluginInventoryButton{"Refresh instruments"}, scanPluginInventoryButton{"Scan plugin folders"}, choosePluginFolderButton{"Choose VST3 folder"}, openPluginManagerButton{"Plugin manager"}, scanPluginNotesButton{"Scan kit notes"}, cancelPluginNotesButton{"Cancel scan"}, choosePluginPresetButton{"Choose VST3 preset"}, importPluginPresetButton{"Import preset as kit"}, scanPluginProgramsButton{"Scan programs"}, importPluginProgramButton{"Import program as kit"};
     juce::Label pluginVelocityLabel, pluginNoteDurationLabel, pluginReleaseLabel, pluginCaptureLabel, pluginRepeatLabel;
     juce::Label pluginScanProgress, pluginScanInfo;
-    std::unique_ptr<juce::FileChooser> chooser;
-    std::unique_ptr<juce::DocumentWindow> comparisonWindow;
-    std::unique_ptr<juce::DocumentWindow> midiEventWindow;
-    std::unique_ptr<juce::FileChooser> pluginPresetChooser;
-    std::unique_ptr<juce::FileChooser> pluginFolderChooser;
+    std::unique_ptr<MagDrumInAppSubview> inAppSubview;
     juce::File selectedPluginPresetFile;
     std::shared_ptr<std::atomic<bool>> pluginPresetImportCancellation;
     bool pluginPresetImportRunning = false;
