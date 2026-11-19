@@ -1091,9 +1091,51 @@ public:
 
     static int checksSampleScanProgress(MagDrumAudioProcessorEditor& editor)
     {
+        const auto hasMenuItem = [](const juce::PopupMenu& menu, int id, const juce::String& text)
+        {
+            juce::PopupMenu::MenuItemIterator iterator(menu);
+            while(iterator.next())
+            {
+                const auto& item = iterator.getItem();
+                if(item.itemID == id && item.text == text)
+                    return true;
+            }
+            return false;
+        };
         editor.setPage(0);
+        if (!editor.scanButton.isVisible()
+            || editor.scanButton.getTooltip() != magdrum::ui::localisedText("Scan installed libraries, add a folder, or resume a scan."))
+        {
+            std::cerr << "Sample scanning should use one visible, self-describing action button.\n";
+            return 8;
+        }
+        if (editor.scanButton.getButtonText() != magdrum::ui::localisedText("Scan samples..."))
+        {
+            std::cerr << "The idle sample scan action should present the combined Scan samples entry point.\n";
+            return 9;
+        }
+        editor.lastSampleScanFolder = {};
+        editor.defaultLibraryScanCanResume = false;
+        editor.defaultLibraryFolders.clear();
+        const auto defaultScanMenu = editor.createSampleScanMenu();
+        if (defaultScanMenu.getNumItems() != 2
+            || !hasMenuItem(defaultScanMenu, 1, magdrum::ui::localisedText("Scan installed libraries"))
+            || !hasMenuItem(defaultScanMenu, 2, magdrum::ui::localisedText("Add sample folder")))
+        {
+            std::cerr << "The combined scan menu should offer installed-library and custom-folder scans.\n";
+            return 10;
+        }
         editor.scanning = true;
+        editor.updateSampleScanActionButton();
         editor.resized();
+        if (!editor.scanButton.isEnabled()
+            || editor.scanButton.getButtonText() != magdrum::ui::localisedText("Cancel scan"))
+        {
+            std::cerr << "The shared sample scan action should become Cancel scan while work is active.\n";
+            editor.scanning = false;
+            editor.updateSampleScanActionButton();
+            return 11;
+        }
         if (!editor.sampleScanProgress.isVisible() || !editor.sampleScanProgressLabel.isVisible()
             || !editor.getLocalBounds().contains(editor.sampleScanProgress.getBounds())
             || !editor.getLocalBounds().contains(editor.sampleScanProgressLabel.getBounds()))
@@ -1152,16 +1194,28 @@ public:
         cancelled.cancelled = true;
         editor.finishSampleScan(cancelled, 0, {});
         const bool canResume = editor.scanButton.isEnabled()
-            && editor.scanButton.getButtonText() == magdrum::ui::localisedText("Resume scan");
+            && editor.scanButton.getButtonText() == magdrum::ui::localisedText("Scan samples...")
+            && editor.lastSampleScanFolder == resumeFolder;
+        const auto folderResumeMenu = editor.createSampleScanMenu();
+        const bool offersFolderResume = folderResumeMenu.getNumItems() == 3
+            && hasMenuItem(folderResumeMenu, 3, magdrum::ui::localisedText("Resume folder scan"));
+        editor.defaultLibraryScanCanResume = true;
+        editor.defaultLibraryFolders.push_back(resumeFolder);
+        const auto installedResumeMenu = editor.createSampleScanMenu();
+        const bool offersInstalledResume = installedResumeMenu.getNumItems() == 2
+            && hasMenuItem(installedResumeMenu, 1, magdrum::ui::localisedText("Resume installed-library scan"))
+            && !hasMenuItem(installedResumeMenu, 3, magdrum::ui::localisedText("Resume folder scan"));
+        editor.defaultLibraryScanCanResume = false;
+        editor.defaultLibraryFolders.clear();
         editor.lastSampleScanFolder = {};
-        editor.scanButton.setButtonText(magdrum::ui::localisedText("Add sample folder"));
+        editor.updateSampleScanActionButton();
         editor.sampleScanProgressValue = 0.0;
         editor.sampleScanProgressLabel.setText(juce::String{}, juce::dontSendNotification);
         editor.status.setText(juce::String{}, juce::dontSendNotification);
         resumeFolder.deleteRecursively();
-        if (!canResume)
+        if (!canResume || !offersFolderResume || !offersInstalledResume)
         {
-            std::cerr << "A cancelled sample-folder scan did not offer Resume scan.\n";
+            std::cerr << "The combined scan menu did not expose the correct resume choice after cancellation.\n";
             return 7;
         }
         return 0;
@@ -1183,7 +1237,7 @@ public:
         editor.defaultMidiSearchCancellation.reset();
         editor.scanningDefaultLibraries = false;
         editor.scanButton.setEnabled(true);
-        editor.scanButton.setButtonText(magdrum::ui::localisedText("Add sample folder"));
+        editor.updateSampleScanActionButton();
         editor.status.setText(juce::String(), juce::dontSendNotification);
         return cancelled ? 0 : 1;
     }
@@ -1332,7 +1386,7 @@ public:
                 {"MIDI-maps tab", editor.mapsTab.getButtonText(), magdrum::ui::localisedText("MIDI MAPS")},
                 {"plugin-scanner tab", editor.pluginScannerTab.getButtonText(), magdrum::ui::localisedText("PLUGIN SCANNER")},
                 {"sample search placeholder", editor.sampleSearch.getTextToShowWhenEmpty(), magdrum::ui::localisedText("Search indexed samples")},
-                {"sample scan button", editor.scanButton.getButtonText(), magdrum::ui::localisedText("Add sample folder")},
+                {"sample scan button", editor.scanButton.getButtonText(), magdrum::ui::localisedText("Scan samples...")},
                 {"sample load button", editor.loadButton.getButtonText(), magdrum::ui::localisedText("Load sample")},
                 {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},
                 {"MIDI import button", editor.importMidiButton.getButtonText(), magdrum::ui::localisedText("Import MIDI")},
