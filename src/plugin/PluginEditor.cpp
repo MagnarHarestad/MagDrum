@@ -2918,7 +2918,9 @@ void MagDrumAudioProcessorEditor::chooseFileInApp(const juce::String& title, con
                                                    std::function<void(const juce::File&)> selection)
 {
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-    auto picker=std::make_unique<MagDrumInAppFilePicker>(browserFlags,initial,patterns,
+    const auto browserInitial = initial == juce::File()
+        ? juce::File::getSpecialLocation(juce::File::userDocumentsDirectory) : initial;
+    auto picker=std::make_unique<MagDrumInAppFilePicker>(browserFlags,browserInitial,patterns,
         [safe,selection=std::move(selection)](const juce::File& file)
         {
             if(safe==nullptr||file==juce::File())return;

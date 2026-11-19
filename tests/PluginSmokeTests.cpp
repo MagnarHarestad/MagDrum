@@ -639,13 +639,19 @@ public:
         if(subviewStream==nullptr||!subviewStream->openedOk()||!png.writeImageToStream(subviewImage,*subviewStream))return 5;
         subviewStream->flush();editor.closeInAppSubview();
         editor.chooseFileInApp(magdrum::ui::localisedText("Choose a drum sample folder"),
-            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),juce::String(),
+            juce::File(),juce::String(),
             juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectDirectories,{});
         auto* picker=editor.inAppSubviewContentForTest();
         if(picker==nullptr||picker->getNumChildComponents()!=2)
         {
             std::cerr<<"The in-app file picker did not render as one embedded browser and one select action.\n";
             return 6;
+        }
+        const auto* embeddedBrowser=dynamic_cast<const juce::FileBrowserComponent*>(picker->getChildComponent(0));
+        if(embeddedBrowser==nullptr||embeddedBrowser->getRoot()!=juce::File::getSpecialLocation(juce::File::userDocumentsDirectory))
+        {
+            std::cerr<<"The embedded file picker did not default to the user's Documents folder.\n";
+            return 13;
         }
         bool hasSelectAction=false;
         for(int child=0;child<picker->getNumChildComponents();++child)
