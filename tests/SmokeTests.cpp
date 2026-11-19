@@ -307,6 +307,38 @@ int runSmokeTests(int argc,char** argv)
     const auto root=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MagDrumScannerTest");
     root.deleteRecursively();
     if(!root.createDirectory().wasOk())return 1;
+    const auto helperProgressFile = root.getChildFile("unresponsive-helper-progress.txt");
+    const juce::StringArray unresponsiveHelperCommand{
+        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
+        "--magdrum-test-unresponsive-helper", helperProgressFile.getFullPathName()};
+    juce::String observedHelperPhase;
+    const auto timedOutHelper = PluginScanProcess::monitorHelper(unresponsiveHelperCommand,
+        helperProgressFile, 300, {}, [&observedHelperPhase](const juce::String& phase)
+        {
+            observedHelperPhase = phase;
+        });
+    if (!timedOutHelper.started || !timedOutHelper.timedOut || timedOutHelper.cancelled
+        || observedHelperPhase != "loading")
+    {
+        std::cerr << "An unresponsive instrument helper was not stopped at its timeout.\n";
+        return 290;
+    }
+
+    const auto cancelledHelperProgressFile = root.getChildFile("cancelled-helper-progress.txt");
+    std::atomic<bool> cancelUnresponsiveHelper{false};
+    const juce::StringArray cancelledHelperCommand{
+        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
+        "--magdrum-test-unresponsive-helper", cancelledHelperProgressFile.getFullPathName()};
+    const auto cancelledHelper = PluginScanProcess::monitorHelper(cancelledHelperCommand,
+        cancelledHelperProgressFile, 5000,
+        [&cancelUnresponsiveHelper] { return cancelUnresponsiveHelper.load(); },
+        [&cancelUnresponsiveHelper](const juce::String&) { cancelUnresponsiveHelper.store(true); });
+    if (!cancelledHelper.started || cancelledHelper.timedOut || !cancelledHelper.cancelled)
+    {
+        std::cerr << "An unresponsive instrument helper did not stop on cancellation.\n";
+        return 291;
+    }
+
     const auto defaultPluginRootA=root.getChildFile("default-vst3-a");
     const auto defaultPluginRootB=root.getChildFile("default-vst3-b");
     const auto customPluginRoot=root.getChildFile("custom-vst3-root");
@@ -1466,6 +1498,15 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-unresponsive-helper") == 0)
+    {
+        const juce::File progressFile(argv[2]);
+        if (!progressFile.replaceWithText("loading"))
+            return 289;
+        for (;;)
+            juce::Thread::sleep(25);
+    }
+
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-audit-midi-folder") == 0)
     {
         const juce::File root(argv[2]);

@@ -100,11 +100,20 @@ struct PluginScanProcessExecution
     int exitCode = -1;
 };
 
+struct PluginHelperExecution
+{
+    bool started = false;
+    bool cancelled = false;
+    bool timedOut = false;
+    int exitCode = -1;
+};
+
 class PluginScanProcess
 {
 public:
     using ShouldCancel = std::function<bool()>;
     using Progress = std::function<void(int completed, int total, int midiNote, int velocity)>;
+    using TextProgress = std::function<void(const juce::String& phase)>;
 
     static bool readManifest(const juce::File& file, PluginScanProcessManifest& result);
     static bool readCaptureLog(const juce::File& file, PluginScanProcessManifest& result);
@@ -112,5 +121,8 @@ public:
         const juce::File& progressFile, const juce::File& resultFile, const juce::File& cancellationFile,
         ShouldCancel shouldCancel = {}, Progress progress = {}, int cancellationGraceMilliseconds = 10000,
         const juce::File& captureLogFile = {});
+    static PluginHelperExecution monitorHelper(const juce::StringArray& command,
+        const juce::File& progressFile, int timeoutMilliseconds, ShouldCancel shouldCancel = {},
+        TextProgress progress = {}, int cancellationGraceMilliseconds = 3000);
     static int runWorker(const juce::File& requestFile);
 };

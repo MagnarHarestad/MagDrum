@@ -566,6 +566,59 @@ PluginScanProcessExecution PluginScanProcess::monitorWorker(const juce::StringAr
     return result;
 }
 
+PluginHelperExecution PluginScanProcess::monitorHelper(const juce::StringArray& command,
+    const juce::File& progressFile, int timeoutMilliseconds, ShouldCancel shouldCancel,
+    TextProgress progress, int cancellationGraceMilliseconds)
+{
+    PluginHelperExecution result;
+    if (command.isEmpty() || timeoutMilliseconds < 0 || cancellationGraceMilliseconds < 0)
+        return result;
+
+    juce::ChildProcess child;
+    result.started = child.start(command, 0);
+    if (!result.started)
+        return result;
+
+    const auto startedAt = juce::Time::getMillisecondCounter();
+    juce::String lastProgress;
+    while (child.isRunning())
+    {
+        if (shouldCancel && shouldCancel())
+        {
+            result.cancelled = true;
+            child.kill();
+            child.waitForProcessToFinish(cancellationGraceMilliseconds);
+            break;
+        }
+
+        if (timeoutMilliseconds > 0
+            && static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - startedAt)
+                >= static_cast<juce::uint32>(timeoutMilliseconds))
+        {
+            result.timedOut = true;
+            child.kill();
+            child.waitForProcessToFinish(cancellationGraceMilliseconds);
+            break;
+        }
+
+        if (progress && progressFile.existsAsFile())
+        {
+            const auto phase = progressFile.loadFileAsString().trim();
+            if (phase.isNotEmpty() && phase != lastProgress)
+            {
+                lastProgress = phase;
+                progress(phase);
+            }
+        }
+
+        child.waitForProcessToFinish(50);
+    }
+
+    if (!result.cancelled && !result.timedOut)
+        result.exitCode = child.getExitCode();
+    return result;
+}
+
 int PluginScanProcess::runWorker(const juce::File& requestFile)
 {
     const auto requestValue = readJson(requestFile);

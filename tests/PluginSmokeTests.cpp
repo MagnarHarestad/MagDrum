@@ -1150,6 +1150,16 @@ public:
         for (const auto language : sourceMenuLanguages)
         {
             magdrum::ui::setLanguage(language, false);
+            const auto timeoutMessage = magdrum::ui::localisedText("Instrument operation timed out.");
+            if (timeoutMessage.isEmpty()
+                || (language != magdrum::ui::Language::english
+                    && timeoutMessage == "Instrument operation timed out."))
+            {
+                std::cerr << "The isolated instrument timeout is not translated in every supported language.\n";
+                magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
+                editor.applyLanguage();
+                return 18;
+            }
             editor.pluginProgramScanRunning = true;
             editor.updatePluginProgramDiscoveryStatus(magdrum::ui::localisedText("Loading VST3 instrument…"));
             if (editor.status.getText() != magdrum::ui::localisedText("Loading VST3 instrument…"))

@@ -1502,26 +1502,22 @@ public:
         command.add(helper.getFullPathName());
         command.add("--magdrum-vst3-preset-worker");
         command.add(requestFile.getFullPathName());
-        juce::ChildProcess child;
-        if (! child.start(command, 0))
+        constexpr int instrumentOperationTimeoutMilliseconds = 90000;
+        const auto execution = PluginScanProcess::monitorHelper(command, {},
+            instrumentOperationTimeoutMilliseconds,
+            [this] { return shouldExit() || cancellation->load(); });
+        if (! execution.started)
         {
             work.deleteRecursively();
             finish(-1, false, {}, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
             return jobHasFinished;
         }
 
-        while (child.isRunning() && ! shouldExit() && ! cancellation->load())
-            child.waitForProcessToFinish(100);
-        const bool cancelled = shouldExit() || cancellation->load();
-        if (cancelled && child.isRunning())
-        {
-            child.kill();
-            child.waitForProcessToFinish(3000);
-        }
-
-        const int exitCode = cancelled ? -1 : static_cast<int>(child.getExitCode());
+        const bool cancelled = execution.cancelled;
+        const int exitCode = cancelled ? -1 : execution.exitCode;
         juce::MemoryBlock state;
-        juce::String message;
+        juce::String message = execution.timedOut
+            ? magdrum::ui::localisedText("Instrument operation timed out.") : juce::String();
         if (exitCode == 0)
         {
             const auto resultValue = juce::JSON::parse(resultFile.loadFileAsString());
@@ -1532,7 +1528,7 @@ public:
             if (message.isNotEmpty())
                 state.reset();
         }
-        else if (resultFile.existsAsFile())
+        else if (! execution.timedOut && resultFile.existsAsFile())
         {
             const auto resultValue = juce::JSON::parse(resultFile.loadFileAsString());
             if (resultValue.isObject())
@@ -1607,61 +1603,39 @@ public:
             return jobHasFinished;
         }
 
-        juce::ChildProcess child;
-        if (! child.start({helper.getFullPathName(), "--magdrum-vst3-preset-worker", requestFile.getFullPathName()}, 0))
+        constexpr juce::uint32 programDiscoveryTimeoutMilliseconds = 90000;
+        const auto execution = PluginScanProcess::monitorHelper(
+            {helper.getFullPathName(), "--magdrum-vst3-preset-worker", requestFile.getFullPathName()},
+            progressFile, static_cast<int>(programDiscoveryTimeoutMilliseconds),
+            [this] { return shouldExit() || cancellation->load(); },
+            [this](const juce::String& phase)
+            {
+                const auto phaseMessage = phase == "loading"
+                    ? magdrum::ui::localisedText("Loading VST3 instrument…")
+                    : phase == "enumerating"
+                        ? magdrum::ui::localisedText("Reading instrument programs…")
+                        : juce::String();
+                if (phaseMessage.isNotEmpty())
+                {
+                    const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
+                    juce::MessageManager::callAsync([safe, phaseMessage]
+                    {
+                        if (safe != nullptr)
+                            safe->updatePluginProgramDiscoveryStatus(phaseMessage);
+                    });
+                }
+            });
+        if (! execution.started)
         {
             work.deleteRecursively();
             finish(-1, false, {}, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
             return jobHasFinished;
         }
-        constexpr juce::uint32 programDiscoveryTimeoutMilliseconds = 90000;
-        const auto processStartedAt = juce::Time::getMillisecondCounter();
-        bool timedOut = false;
-        juce::String lastProgress;
-        while (child.isRunning() && ! shouldExit() && ! cancellation->load())
-        {
-            if (static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - processStartedAt)
-                >= programDiscoveryTimeoutMilliseconds)
-            {
-                timedOut = true;
-                child.kill();
-                child.waitForProcessToFinish(3000);
-                break;
-            }
-            if (progressFile.existsAsFile())
-            {
-                const auto phase = progressFile.loadFileAsString().trim();
-                if (phase != lastProgress)
-                {
-                    lastProgress = phase;
-                    const auto phaseMessage = phase == "loading"
-                        ? magdrum::ui::localisedText("Loading VST3 instrument…")
-                        : phase == "enumerating"
-                            ? magdrum::ui::localisedText("Reading instrument programs…")
-                            : juce::String();
-                    if (phaseMessage.isNotEmpty())
-                    {
-                        const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
-                        juce::MessageManager::callAsync([safe, phaseMessage]
-                        {
-                            if (safe != nullptr)
-                                safe->updatePluginProgramDiscoveryStatus(phaseMessage);
-                        });
-                    }
-                }
-            }
-            child.waitForProcessToFinish(100);
-        }
-        const bool cancelled = shouldExit() || cancellation->load();
-        if (cancelled && child.isRunning())
-        {
-            child.kill();
-            child.waitForProcessToFinish(3000);
-        }
+        const bool cancelled = execution.cancelled;
 
         juce::StringArray programNames;
         juce::String message;
-        const int exitCode = cancelled ? -1 : static_cast<int>(child.getExitCode());
+        const int exitCode = cancelled ? -1 : execution.exitCode;
         if (! cancelled && resultFile.existsAsFile())
         {
             const auto resultValue = juce::JSON::parse(resultFile.loadFileAsString());
@@ -1676,7 +1650,7 @@ public:
                             programNames.add(program.getDynamicObject()->getProperty("name").toString());
             }
         }
-        if (timedOut)
+        if (execution.timedOut)
             message = magdrum::ui::localisedText("Program scan timed out.");
         work.deleteRecursively();
         finish(exitCode, cancelled, std::move(programNames), message);
