@@ -4,9 +4,9 @@ Use the Windows x64 package for Cubase Pro 15 on a standard Intel/AMD Windows PC
 
 ## Install and load
 
-1. The latest published Windows x64 package is [v0.1.2-test.246](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.246). On the development PC, .245 is still installed at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; its Cubase checks do not verify .246. Install .246 only as part of the planned complete Windows acceptance build, then record the exact installed version before continuing.
+1. The latest published Windows x64 package is [v0.1.2-test.247](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.247). On the development PC, .245 is still installed at `%LOCALAPPDATA%\Programs\Common\VST3\MagDrum.vst3`; its Cubase checks do not verify .247. Install .247 only as part of the planned complete Windows acceptance build, then record the exact installed version before continuing.
 2. To install on another PC, download and extract `MagDrum-Windows-x64.zip`, close Cubase, and double-click `Install-MagDrum-User.cmd`. It installs under `%LOCALAPPDATA%` without UAC and includes the matching `MagDrum.exe` helper. It backs up an existing per-user bundle outside VST3 scan paths. A system-wide legacy copy may require one-time UAC cleanup. If the installer reports `Cubase15.exe` still running, check Task Manager's **Details** tab and wait until Cubase has exited.
-3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.246`, the VST3 version should read `0.1.2.246`. Confirm Cubase shows **Default Kit** as the program name. If Cubase exposes a rename control, rename it, save and reopen the project, then confirm the name persists.
+3. Start Cubase 15. Open **Studio > VST Plug-in Manager**, then choose **Rescan All**. Confirm that **MagDrum** appears in the instrument list. Select it and verify its version matches the release tag; for `v0.1.2-test.247`, the VST3 version should read `0.1.2.247`. Confirm Cubase shows **Default Kit** as the program name. If Cubase exposes a rename control, rename it, save and reopen the project, then confirm the name persists.
 4. Create an instrument track with MagDrum and open its editor.
 
 ## Use the plug-in views
