@@ -99,6 +99,7 @@ private:
     int sequenceTempoAtBeat(double beat) const;
     void refreshSequenceMetadata();
     bool editSequenceMetadata(bool remove);
+    juce::PopupMenu createMetadataActionsMenu() const;
     MidiPattern currentSequencePattern() const;
     void reviewMidiChanges();
     void syncSequenceEventsFromGrid();
@@ -276,7 +277,7 @@ private:
     juce::ComboBox midiFallbackPolicy;
     juce::TextEditor tempoEditor, metadataBeat, metadataValue;
     juce::ComboBox metadataType;
-    juce::TextButton setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};
+    juce::TextButton metadataActionsButton{"Event actions..."}, setMetadataButton{"Set event"}, removeMetadataButton{"Remove event"};
     juce::Label metadataSummary;
     juce::Label gridResolutionLabel;
     std::vector<MidiMetaEvent> sequenceMetadata;

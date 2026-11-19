@@ -1429,7 +1429,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 46> checks{{
+            const std::array<LabelCheck, 47> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -1437,6 +1437,7 @@ public:
                 {"plugin-scanner tab", editor.pluginScannerTab.getButtonText(), magdrum::ui::localisedText("PLUGIN SCANNER")},
                 {"sample search placeholder", editor.sampleSearch.getTextToShowWhenEmpty(), magdrum::ui::localisedText("Search indexed samples")},
                 {"sample action gesture tooltip", editor.indexedList.getTooltip(), magdrum::ui::localisedText("Double-click to preview; right-click for sample actions")},
+                {"sequencer event actions", editor.metadataActionsButton.getButtonText(), magdrum::ui::localisedText("Event actions...")},
                 {"sample scan button", editor.scanButton.getButtonText(), magdrum::ui::localisedText("Scan samples...")},
                 {"sample load button", editor.loadButton.getButtonText(), magdrum::ui::localisedText("Load sample")},
                 {"sequencer play button", editor.playSequenceButton.getButtonText(), magdrum::ui::localisedText("Play")},
@@ -1642,6 +1643,21 @@ public:
         editor.barSelect.setSelectedId(2);
         editor.setPage(2);
         if (editor.visibleStepIndex(0) != 16 || !editor.steps[0][0].isVisible()) return 3;
+        const auto metadataMenu = editor.createMetadataActionsMenu();
+        bool hasSet = false, hasRemove = false;
+        juce::PopupMenu::MenuItemIterator metadataItems(metadataMenu);
+        while (metadataItems.next())
+        {
+            const auto& item = metadataItems.getItem();
+            hasSet = hasSet || (item.itemID == 1 && item.text == magdrum::ui::localisedText("Set event"));
+            hasRemove = hasRemove || (item.itemID == 2 && item.text == magdrum::ui::localisedText("Remove event"));
+        }
+        if (!editor.metadataActionsButton.isVisible() || editor.setMetadataButton.isVisible()
+            || editor.removeMetadataButton.isVisible() || !hasSet || !hasRemove)
+        {
+            std::cerr << "Sequencer tempo and meter editing should use one visible action menu with both operations.\n";
+            return 15;
+        }
         if (!editor.sequenceActionsButton.isVisible() || editor.sequenceActionsButton.getButtonText() != "MIDI"
             || editor.clearSequenceButton.isVisible() || editor.importMidiButton.isVisible()
             || editor.browseMidiButton.isVisible() || editor.exportSequenceButton.isVisible()
