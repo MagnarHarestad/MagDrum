@@ -353,11 +353,11 @@ public:
             sample.file = index == offPageMapIndex ? expectedFile
                 : juce::File("C:/MagDrumTestFixtures/Map/Map Fixture "
                              + juce::String(index).paddedLeft('0', 3) + ".wav");
-            sample.durationSeconds = 0.18 + 0.001 * index;
+            sample.durationSeconds = index == offPageMapIndex ? 0.02 : 0.18 + 0.001 * index;
             sample.channels = 1;
             sample.sampleRate = 44100.0;
             sample.format = "WAV";
-            sample.spectralCentroidHz = 900.0 + index;
+            sample.spectralCentroidHz = index == offPageMapIndex ? 15000.0 : 900.0 + index;
             sample.category = index % 2 == 0 ? "Kick" : "Snare";
             if (!editor.database.insertSample(sample))
             {
@@ -399,6 +399,53 @@ public:
         {
             std::cerr << "Selecting a map point beyond the first list page did not select that sample.\n";
             return 3;
+        }
+
+        const auto previewPoint = editor.sampleMapPointForTest(offPageMapIndex);
+        const auto otherPoint = editor.sampleMapPointForTest(0);
+        if (previewPoint.getDistanceFrom(otherPoint) < 32.0f)
+        {
+            std::cerr << "The sample-map preview fixture points are not separated enough for an interaction test.\n";
+            return 6;
+        }
+        const auto initialPreviewGeneration = editor.samplePreviewGeneration.load(std::memory_order_acquire);
+        editor.dispatchSampleMapDoubleClickForTest(previewPoint);
+        if (editor.samplePreviewGeneration.load(std::memory_order_acquire) != initialPreviewGeneration + 1
+            || editor.selectedSample() != mapSelectedFile)
+        {
+            std::cerr << "Double-clicking an acoustic-map point did not select and preview its sample.\n";
+            return 7;
+        }
+        editor.dispatchSampleMapMoveForTest(otherPoint);
+        if (editor.samplePreviewGeneration.load(std::memory_order_acquire) != initialPreviewGeneration + 2)
+        {
+            std::cerr << "Moving off a previewed acoustic-map point did not stop its preview.\n";
+            return 8;
+        }
+        editor.dispatchSampleMapDoubleClickForTest(previewPoint);
+        editor.dispatchSampleMapExitForTest();
+        if (editor.samplePreviewGeneration.load(std::memory_order_acquire) != initialPreviewGeneration + 4)
+        {
+            std::cerr << "Leaving the acoustic map did not stop the active sample preview.\n";
+            return 9;
+        }
+
+        const auto initialViewport = editor.sampleMapViewportForTest();
+        editor.dispatchSampleMapWheelForTest(previewPoint, 0.8f);
+        const auto zoomedViewport = editor.sampleMapViewportForTest();
+        if (zoomedViewport[0] <= initialViewport[0] || zoomedViewport[0] > 12.0f)
+        {
+            std::cerr << "The acoustic map wheel event did not zoom within its supported bounds.\n";
+            return 10;
+        }
+        editor.dispatchSampleMapMiddleDragForTest(previewPoint,
+            previewPoint - juce::Point<float>(70.0f, 50.0f));
+        const auto pannedViewport = editor.sampleMapViewportForTest();
+        if (std::abs(pannedViewport[1] - zoomedViewport[1]) < 1.0e-5f
+            && std::abs(pannedViewport[2] - zoomedViewport[2]) < 1.0e-5f)
+        {
+            std::cerr << "Middle-button dragging did not pan the acoustic map.\n";
+            return 11;
         }
 
         editor.selectedNote = 36;

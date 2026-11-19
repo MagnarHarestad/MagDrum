@@ -58,6 +58,13 @@ public:
 
 private:
     friend class MagDrumAudioProcessorEditorTestAccess;
+    void dispatchSampleMapDoubleClickForTest(juce::Point<float> position);
+    void dispatchSampleMapMoveForTest(juce::Point<float> position);
+    void dispatchSampleMapExitForTest();
+    void dispatchSampleMapWheelForTest(juce::Point<float> position, float deltaY);
+    void dispatchSampleMapMiddleDragForTest(juce::Point<float> start, juce::Point<float> end);
+    juce::Point<float> sampleMapPointForTest(int sampleIndex) const;
+    std::array<float, 3> sampleMapViewportForTest() const;
     void buttonClicked(juce::Button*) override;
     void timerCallback() override;
     void updatePadActivity();

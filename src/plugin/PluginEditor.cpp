@@ -301,6 +301,13 @@ public:
         repaint();
     }
     void setSelected(int selected) { selectedIndex=selected;repaint(); }
+    juce::Point<float> pointForSampleForTest(int sampleIndex) const
+    {
+        const auto found = std::find_if(acousticPoints.begin(), acousticPoints.end(),
+            [sampleIndex](const auto& point) { return point.sampleIndex == sampleIndex; });
+        return found == acousticPoints.end() ? juce::Point<float>{} : samplePosition(*found, plotBounds());
+    }
+    std::array<float, 3> viewportForTest() const { return {viewport.zoom, viewport.panX, viewport.panY}; }
     void mouseMove(const juce::MouseEvent& event) override
     {
         const int index=sampleAt(event.position);
@@ -494,6 +501,69 @@ private:
     juce::Point<float> panStart;
     bool isPreviewing=false, isPanning=false;
 };
+
+void MagDrumAudioProcessorEditor::dispatchSampleMapDoubleClickForTest(juce::Point<float> position)
+{
+    const auto now = juce::Time::getCurrentTime();
+    const auto source = juce::Desktop::getInstance().getMainMouseSource();
+    const juce::MouseEvent event(source, position, juce::ModifierKeys::leftButtonModifier,
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, sampleMap.get(), sampleMap.get(), now, position, now, 2, false);
+    sampleMap->mouseDoubleClick(event);
+}
+
+void MagDrumAudioProcessorEditor::dispatchSampleMapMoveForTest(juce::Point<float> position)
+{
+    const auto now = juce::Time::getCurrentTime();
+    const auto source = juce::Desktop::getInstance().getMainMouseSource();
+    const juce::MouseEvent event(source, position, {}, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        sampleMap.get(), sampleMap.get(), now, position, now, 0, false);
+    sampleMap->mouseMove(event);
+}
+
+void MagDrumAudioProcessorEditor::dispatchSampleMapExitForTest()
+{
+    const auto now = juce::Time::getCurrentTime();
+    const auto source = juce::Desktop::getInstance().getMainMouseSource();
+    const juce::Point<float> position;
+    const juce::MouseEvent event(source, position, {}, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        sampleMap.get(), sampleMap.get(), now, position, now, 0, false);
+    sampleMap->mouseExit(event);
+}
+
+void MagDrumAudioProcessorEditor::dispatchSampleMapWheelForTest(juce::Point<float> position, float deltaY)
+{
+    const auto now = juce::Time::getCurrentTime();
+    const auto source = juce::Desktop::getInstance().getMainMouseSource();
+    const juce::MouseEvent event(source, position, {}, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        sampleMap.get(), sampleMap.get(), now, position, now, 0, false);
+    sampleMap->mouseWheelMove(event, {0.0f, deltaY, false, false, false});
+}
+
+void MagDrumAudioProcessorEditor::dispatchSampleMapMiddleDragForTest(
+    juce::Point<float> start, juce::Point<float> end)
+{
+    const auto now = juce::Time::getCurrentTime();
+    const auto source = juce::Desktop::getInstance().getMainMouseSource();
+    const juce::MouseEvent down(source, start, juce::ModifierKeys::middleButtonModifier,
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, sampleMap.get(), sampleMap.get(), now, start, now, 1, false);
+    const juce::MouseEvent drag(source, end, juce::ModifierKeys::middleButtonModifier,
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, sampleMap.get(), sampleMap.get(), now, start, now, 1, true);
+    const juce::MouseEvent up(source, end, {}, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        sampleMap.get(), sampleMap.get(), now, start, now, 1, true);
+    sampleMap->mouseDown(down);
+    sampleMap->mouseDrag(drag);
+    sampleMap->mouseUp(up);
+}
+
+juce::Point<float> MagDrumAudioProcessorEditor::sampleMapPointForTest(int sampleIndex) const
+{
+    return sampleMap->pointForSampleForTest(sampleIndex);
+}
+
+std::array<float, 3> MagDrumAudioProcessorEditor::sampleMapViewportForTest() const
+{
+    return sampleMap->viewportForTest();
+}
 
 class MagDrumWaveform final : public juce::Component, public juce::TooltipClient, private juce::ChangeListener
 {
