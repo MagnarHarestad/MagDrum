@@ -59,6 +59,7 @@ public:
     int getNumRows() override;
     void paintListBoxItem(int, juce::Graphics&, int, int, bool) override;
     void selectedRowsChanged(int) override;
+    void listWasScrolled() override;
     void listBoxItemDoubleClicked(int, const juce::MouseEvent&) override;
     void listBoxItemClicked(int, const juce::MouseEvent&) override;
 
@@ -248,7 +249,7 @@ private:
     juce::TextEditor sampleSearch;
     juce::ComboBox categoryFilter, contentTypeFilter, featureFilter, sortFilter, confidenceFilter, sourceFilter, kitFilter;
     int rememberedDrumCategory = 1;
-    juce::TextButton scanButton{"Scan samples..."}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, previewButton{"Preview"}, libraryToolsButton{"Sample tools"}, moreSamplesButton{"More samples"};
+    juce::TextButton scanButton{"Scan samples..."}, instrumentScannerButton{"Plugin instruments"}, openSourceKitButton{"Open source kit"}, previewButton{"Preview"}, libraryToolsButton{"Sample tools"};
     juce::ListBox indexedList;
     std::unique_ptr<MagDrumSampleMap> sampleMap;
     juce::ProgressBar sampleScanProgress{sampleScanProgressValue};

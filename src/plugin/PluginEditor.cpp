@@ -1754,8 +1754,8 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
         refreshSamples();
     };
     auto refreshOnChange=[this]{refreshSamples();};featureFilter.onChange=refreshOnChange;sortFilter.onChange=refreshOnChange;confidenceFilter.onChange=refreshOnChange;sourceFilter.onChange=refreshOnChange;kitFilter.onChange=refreshOnChange;
-    scanButton.setButtonText(magdrum::ui::localisedText("Scan samples..."));instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));openSourceKitButton.setTooltip(magdrum::ui::localisedText("Open the selected sample's source instrument and recall its saved kit in a separate MagDrum window."));openSourceKitButton.setEnabled(false);previewButton.setButtonText(magdrum::ui::localisedText("Preview"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));
-    scanButton.addListener(this);instrumentScannerButton.addListener(this);openSourceKitButton.addListener(this);previewButton.addListener(this);libraryToolsButton.addListener(this);moreSamplesButton.addListener(this);addAndMakeVisible(scanButton);addAndMakeVisible(instrumentScannerButton);addAndMakeVisible(openSourceKitButton);addAndMakeVisible(previewButton);addAndMakeVisible(libraryToolsButton);addAndMakeVisible(moreSamplesButton);
+    scanButton.setButtonText(magdrum::ui::localisedText("Scan samples..."));instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));openSourceKitButton.setTooltip(magdrum::ui::localisedText("Open the selected sample's source instrument and recall its saved kit in a separate MagDrum window."));openSourceKitButton.setEnabled(false);previewButton.setButtonText(magdrum::ui::localisedText("Preview"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));
+    scanButton.addListener(this);instrumentScannerButton.addListener(this);openSourceKitButton.addListener(this);previewButton.addListener(this);libraryToolsButton.addListener(this);addAndMakeVisible(scanButton);addAndMakeVisible(instrumentScannerButton);addAndMakeVisible(openSourceKitButton);addAndMakeVisible(previewButton);addAndMakeVisible(libraryToolsButton);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText(pluginInventoryScanRunning ? "Cancel instrument scan" : "Scan plugin folders") + (pluginInventoryScanRunning ? juce::String() : juce::String("...")));
     openPluginManagerButton.setButtonText(magdrum::ui::localisedText("Open instrument manager"));
     scanPluginNotesButton.setButtonText(magdrum::ui::localisedText("Scan kit notes"));
@@ -2323,7 +2323,7 @@ void MagDrumAudioProcessorEditor::resized()
     auto footer=bounds.removeFromBottom(26);status.setBounds(footer);bounds.removeFromBottom(8);
     const auto pageContentBounds = bounds;
     libraryTab.setToggleState(page==0,juce::dontSendNotification);machineTab.setToggleState(page==1,juce::dontSendNotification);sequencerTab.setToggleState(page==2,juce::dontSendNotification);mapsTab.setToggleState(page==3,juce::dontSendNotification);pluginScannerTab.setToggleState(page==4,juce::dontSendNotification);
-    sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);contentTypeFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);instrumentScannerButton.setVisible(false);openSourceKitButton.setVisible(false);previewButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);moreSamplesButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
+    sampleSearch.setVisible(page==0);categoryFilter.setVisible(page==0);contentTypeFilter.setVisible(page==0);featureFilter.setVisible(page==0);sortFilter.setVisible(page==0);confidenceFilter.setVisible(page==0);sourceFilter.setVisible(page==0);kitFilter.setVisible(page==0);scanButton.setVisible(page==0);instrumentScannerButton.setVisible(false);openSourceKitButton.setVisible(false);previewButton.setVisible(page==0);libraryToolsButton.setVisible(page==0);indexedList.setVisible(page==0);sampleMap->setVisible(page==0);
     for(auto& pad:pads)pad.setVisible(page==1);selectedPadTitle.setVisible(page==1);chokeGroupLabel.setVisible(page==1);chokeGroupSelect.setVisible(page==1);manageLayersButton.setVisible(page==1);layerSummary.setVisible(page==1);sampleDetails.setVisible(page==1);waveform->setVisible(page==1);padMixHeading.setVisible(page==1);padShapeHeading.setVisible(page==1);padEqHeading.setVisible(page==1);padFxHeading.setVisible(page==1);gainLabel.setVisible(page==1);panLabel.setVisible(page==1);tuneLabel.setVisible(page==1);driveLabel.setVisible(page==1);attackLabel.setVisible(page==1);decayLabel.setVisible(page==1);sustainLabel.setVisible(page==1);releaseLabel.setVisible(page==1);filterCutoffLabel.setVisible(page==1);eqLowLabel.setVisible(page==1);eqMidLabel.setVisible(page==1);eqHighLabel.setVisible(page==1);gainSlider.setVisible(page==1);panSlider.setVisible(page==1);tuneSlider.setVisible(page==1);driveSlider.setVisible(page==1);attackSlider.setVisible(page==1);decaySlider.setVisible(page==1);sustainSlider.setVisible(page==1);releaseSlider.setVisible(page==1);filterCutoffSlider.setVisible(page==1);eqLowSlider.setVisible(page==1);eqMidSlider.setVisible(page==1);eqHighSlider.setVisible(page==1);velocityRange.setVisible(page==1);loadButton.setVisible(page==1);
     filterResonanceLabel.setVisible(page==1);
     filterResonanceSlider.setVisible(page==1);
@@ -2364,7 +2364,7 @@ void MagDrumAudioProcessorEditor::resized()
     {
         auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(270));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);featureFilter.setBounds(controls.removeFromLeft(155));controls.removeFromLeft(6);sortFilter.setBounds(controls.removeFromLeft(130));controls.removeFromLeft(6);confidenceFilter.setBounds(controls.removeFromLeft(145));controls.removeFromLeft(6);previewButton.setBounds(controls.removeFromRight(82));
         bounds.removeFromTop(6);controls=bounds.removeFromTop(34);sourceFilter.setBounds(controls.removeFromLeft(180));controls.removeFromLeft(6);contentTypeFilter.setBounds(controls.removeFromLeft(220));controls.removeFromLeft(6);kitFilter.setBounds(controls.removeFromLeft(190));
-        bounds.removeFromTop(6);controls=bounds.removeFromTop(34);scanButton.setBounds(controls.removeFromLeft(175));controls.removeFromLeft(8);libraryToolsButton.setBounds(controls.removeFromLeft(115));controls.removeFromLeft(6);moreSamplesButton.setBounds(controls.removeFromLeft(110));moreSamplesButton.setEnabled(hasMoreSamples);
+        bounds.removeFromTop(6);controls=bounds.removeFromTop(34);scanButton.setBounds(controls.removeFromLeft(175));controls.removeFromLeft(8);libraryToolsButton.setBounds(controls.removeFromLeft(115));
         bounds.removeFromTop(5);auto progressRow=bounds.removeFromTop(16);sampleScanProgress.setBounds(progressRow.removeFromLeft(180));progressRow.removeFromLeft(10);sampleScanProgressLabel.setBounds(progressRow);
         bounds.removeFromTop(5);auto content=bounds;const int left=juce::jlimit(320,440,content.getWidth()*2/5);indexedList.setBounds(content.removeFromLeft(left));content.removeFromLeft(12);sampleMap->setBounds(content);
     }
@@ -2618,7 +2618,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
         ? magdrum::ui::localisedText("No discovered VST3 instruments. Scan plugin folders above to find instruments.")
         : magdrum::ui::localisedText("Choose a program or preset, save it as a kit, then scan its MIDI notes."),juce::dontSendNotification);
     previewButton.setButtonText(magdrum::ui::localisedText(samplePreviewActive ? "Stop" : "Preview"));
-    libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));
+    libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));
     loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));
     chokeGroupLabel.setText(magdrum::ui::localisedText("CHOKE"), juce::dontSendNotification);
     chokeGroupSelect.setTooltip(magdrum::ui::localisedText(
@@ -2681,7 +2681,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     metadataValue.setTooltip(magdrum::ui::localisedText("Tempo in BPM, or a time signature such as 4/4."));
     metadataSummary.setTooltip(magdrum::ui::localisedText("Tempo and time-signature events stored with this sequencer pattern."));
     scanButton.setTooltip(magdrum::ui::localisedText("Add sample folder"));previewButton.setTooltip(magdrum::ui::localisedText("Preview selected sample"));
-    libraryToolsButton.setTooltip(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setTooltip(magdrum::ui::localisedText("More samples"));loadButton.setTooltip(magdrum::ui::localisedText("Load sample"));manageLayersButton.setTooltip(magdrum::ui::localisedText("Manage velocity layers for the selected pad."));
+    libraryToolsButton.setTooltip(magdrum::ui::localisedText("Sample tools"));loadButton.setTooltip(magdrum::ui::localisedText("Load sample"));manageLayersButton.setTooltip(magdrum::ui::localisedText("Manage velocity layers for the selected pad."));
     profileName.setTextToShowWhenEmpty(magdrum::ui::localisedText("Mapping profile name"),Palette::Muted);
     mappingNote.setTextToShowWhenEmpty(magdrum::ui::localisedText("MIDI 0-127"),Palette::Muted);
     const int selectedCategory=categoryFilter.getSelectedId(),selectedFeature=featureFilter.getSelectedId(),selectedSort=sortFilter.getSelectedId(),selectedConfidence=confidenceFilter.getSelectedId(),selectedLength=lengthSelect.getSelectedId();
@@ -2692,7 +2692,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     lengthSelect.clear(juce::dontSendNotification);for(int bars=1;bars<=magdrum::sequencer::maximumBars;++bars)lengthSelect.addItem(juce::String(bars)+" "+magdrum::ui::localisedText(bars==1?"bar":"bars"),bars);lengthSelect.setSelectedId(selectedLength,juce::dontSendNotification);
     scanButton.setButtonText(magdrum::ui::localisedText("Scan samples..."));
     scanButton.setTooltip(magdrum::ui::localisedText("Scan installed libraries, add a folder, or resume a scan."));
-    instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));previewButton.setButtonText(magdrum::ui::localisedText(samplePreviewActive?"Stop":"Preview"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));moreSamplesButton.setButtonText(magdrum::ui::localisedText("More samples"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying?"Stop":"Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(defaultMidiPatterns.empty()?magdrum::ui::localisedText("Find drum MIDI"):magdrum::ui::localisedText("Drum MIDI (")+juce::String(static_cast<int>(defaultMidiPatterns.size()))+")");editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
+    instrumentScannerButton.setButtonText(magdrum::ui::localisedText("Plugin instruments"));openSourceKitButton.setButtonText(magdrum::ui::localisedText("Open source kit"));previewButton.setButtonText(magdrum::ui::localisedText(samplePreviewActive?"Stop":"Preview"));libraryToolsButton.setButtonText(magdrum::ui::localisedText("Sample tools"));loadButton.setButtonText(magdrum::ui::localisedText("Load sample"));playSequenceButton.setButtonText(magdrum::ui::localisedText(sequencerPlaying?"Stop":"Play"));clearSequenceButton.setButtonText(magdrum::ui::localisedText("Clear pattern"));exportSequenceButton.setButtonText(magdrum::ui::localisedText("Export MIDI"));importMidiButton.setButtonText(magdrum::ui::localisedText("Import MIDI"));browseMidiButton.setButtonText(defaultMidiPatterns.empty()?magdrum::ui::localisedText("Find drum MIDI"):magdrum::ui::localisedText("Drum MIDI (")+juce::String(static_cast<int>(defaultMidiPatterns.size()))+")");editMidiEventsButton.setButtonText(magdrum::ui::localisedText("Edit hits"));reviewMidiButton.setButtonText(magdrum::ui::localisedText("Review changes"));
     updateSampleScanActionButton();
     for(size_t i=0;i<pads.size();++i)pads[i].setButtonText(localizedPadName(i)+"\n"+noteName(mappedPadNotes[i]));
     for(size_t row=0;row<laneLabels.size();++row)laneLabels[row].setText(localizedSequencerLaneName(row),juce::dontSendNotification);
@@ -3193,7 +3193,6 @@ void MagDrumAudioProcessorEditor::refreshSamples()
     openSourceKitButton.setEnabled(false);
     previewButton.setEnabled(false);
     libraryToolsButton.setEnabled(false);
-    moreSamplesButton.setEnabled(false);
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     juce::Timer::callAfterDelay(120, [safe, requestGeneration]
     {
@@ -3887,7 +3886,6 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
     sampleMap->setEnabled(!sampleMapQueryPending);
     previewButton.setEnabled(false);
     libraryToolsButton.setEnabled(false);
-    moreSamplesButton.setEnabled(false);
 
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     if (requestMap)
@@ -3925,7 +3923,6 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             if (!opened)
             {
                 safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
-                safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
                 safe->status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
                                      juce::dontSendNotification);
                 return;
@@ -3945,12 +3942,21 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             safe->indexedList.updateContent();
             safe->refreshSampleAssignmentLabels();
             safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
-            safe->moreSamplesButton.setEnabled(safe->hasMoreSamples);
             safe->status.setText(juce::String(safe->samples.size()) + (safe->hasMoreSamples ? "+" : "") + " "
-                                     + magdrum::ui::localisedText("samples - select, preview or use Sample tools"),
+                                     + magdrum::ui::localisedText(safe->hasMoreSamples
+                                         ? "samples - select, preview or scroll to load more"
+                                         : "samples - select, preview or use Sample tools"),
                                  juce::dontSendNotification);
         }), true);
 }
+
+void MagDrumAudioProcessorEditor::listWasScrolled()
+{
+    if (page == 0 && hasMoreSamples && ! sampleBrowseQueryPending && indexedList.isEnabled()
+        && indexedList.getVerticalPosition() >= 0.82)
+        loadSamplePage(false);
+}
+
 juce::File MagDrumAudioProcessorEditor::selectedSample()const{if(sampleMapSelectedFile!=juce::File())return sampleMapSelectedFile;const int row=indexedList.getSelectedRow();return juce::isPositiveAndBelow(row,samples.size())?samples.getReference(row).file:juce::File();}
 
 void MagDrumAudioProcessorEditor::chooseSampleFolder(bool chooseDifferentFolder)
@@ -5176,7 +5182,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&instrumentScannerButton){setPage(4);refreshPluginInventory();if(discoveredPluginInstruments.isEmpty()&&!pluginInventoryScanRunning)startPluginInventoryScan();return;}
     if(button==&pluginScannerTab){setPage(4);refreshPluginInventory();if(discoveredPluginInstruments.isEmpty()&&!pluginInventoryScanRunning)startPluginInventoryScan();return;}
     if(button==&openSourceKitButton){openSourceKitForSelectedSample();return;}
-    if(button==&libraryToolsButton){showLibraryTools();return;}if(button==&moreSamplesButton){if(hasMoreSamples&&!sampleBrowseQueryPending)loadSamplePage(false);return;}
+    if(button==&libraryToolsButton){showLibraryTools();return;}
     if(button==&previewButton){if(samplePreviewActive){stopSamplePreview();return;}const auto file=selectedSample();if(file==juce::File()){status.setText(magdrum::ui::localisedText("Select a sample to preview."),juce::dontSendNotification);return;}previewSampleAsync(file);return;}
     for(size_t i=0;i<pads.size();++i)if(button==&pads[i]){pads[i].flash();setNote(mappedPadNotes[i]);processor.triggerNote(selectedNote);status.setText(processor.getSampleLayersForNote(selectedNote).empty()?magdrum::ui::localisedText("Pad selected · no sample assigned yet."):magdrum::ui::localisedText("Played ")+localizedPadName(i),juce::dontSendNotification);return;}
     if(button==&loadButton){juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);chooseFileInApp(magdrum::ui::localisedText("Choose a drum sample"),juce::File(),"*.wav;*.aif;*.aiff;*.flac",juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[safe](const juce::File& file){if(safe!=nullptr&&file.existsAsFile())safe->loadSampleAsync(file,safe->selectedNote,velocityMinimum(safe->velocityRange.getText()),velocityMaximum(safe->velocityRange.getText()),false);});return;}

@@ -369,26 +369,39 @@ public:
         editor.setPage(0);
         editor.sampleSearch.setText("Map Fixture", juce::sendNotification);
         const auto deadline = juce::Time::getMillisecondCounter() + 10000;
-        auto pollForMap = std::make_shared<std::function<void()>>();
-        *pollForMap = [&editor, deadline, pollForMap]
+        bool requestedNextPage = false;
+        bool showedScrollCue = false;
+        auto pollForMapAndNextPage = std::make_shared<std::function<void()>>();
+        *pollForMapAndNextPage = [&editor, deadline, &requestedNextPage, &showedScrollCue,
+                                  pollForMapAndNextPage]
         {
-            const bool ready = !editor.sampleBrowseQueryPending && !editor.sampleMapQueryPending
+            const bool firstPageReady = !editor.sampleBrowseQueryPending && !editor.sampleMapQueryPending
                 && editor.samples.size() == 250 && editor.sampleMapSamples.size() == fixtureCount;
-            if (ready || juce::Time::getMillisecondCounter() >= deadline)
+            if (firstPageReady && !requestedNextPage)
+            {
+                showedScrollCue = editor.status.getText().contains(magdrum::ui::localisedText(
+                    "samples - select, preview or scroll to load more"));
+                requestedNextPage = true;
+                editor.indexedList.setVerticalPosition(1.0);
+                editor.listWasScrolled();
+            }
+            const bool nextPageReady = requestedNextPage && !editor.sampleBrowseQueryPending
+                && editor.samples.size() == fixtureCount;
+            if (nextPageReady || juce::Time::getMillisecondCounter() >= deadline)
             {
                 juce::MessageManager::getInstance()->stopDispatchLoop();
                 return;
             }
-            juce::Timer::callAfterDelay(20, *pollForMap);
+            juce::Timer::callAfterDelay(20, *pollForMapAndNextPage);
         };
-        juce::Timer::callAfterDelay(20, *pollForMap);
+        juce::Timer::callAfterDelay(20, *pollForMapAndNextPage);
         juce::MessageManager::getInstance()->runDispatchLoop();
-        *pollForMap = {};
-        pollForMap.reset();
-        if (editor.samples.size() != 250 || !editor.hasMoreSamples
+        *pollForMapAndNextPage = {};
+        pollForMapAndNextPage.reset();
+        if (!requestedNextPage || editor.samples.size() != fixtureCount || editor.hasMoreSamples
             || editor.sampleMapSamples.size() != fixtureCount)
         {
-            std::cerr << "The sample map did not load the complete filtered library independently of list paging.\n";
+            std::cerr << "The sample map or scroll-loaded sample list did not reach the expected fixture count.\n";
             return 2;
         }
         if (!editor.previewButton.isVisible()
@@ -397,13 +410,37 @@ public:
             std::cerr << "The Sample Library should expose one contextual preview control.\n";
             return 15;
         }
+        if (!showedScrollCue)
+        {
+            std::cerr << "The sample list should explain that scrolling loads more results.\n";
+            return 17;
+        }
+        if (editor.sampleBrowseQueryPending || editor.samples.size() != fixtureCount
+            || editor.hasMoreSamples)
+        {
+            std::cerr << "Scrolling to the end of the sample list did not automatically load the next page."
+                      << " vertical=" << editor.indexedList.getVerticalPosition()
+                      << " loaded=" << editor.samples.size()
+                      << " pending=" << editor.sampleBrowseQueryPending
+                      << " more=" << editor.hasMoreSamples
+                      << " bounds=" << editor.indexedList.getBounds().toString() << "\n";
+            return 18;
+        }
 
         const auto mapSelectedFile = editor.sampleMapSamples.getReference(offPageMapIndex).file;
         editor.selectSampleMapSample(offPageMapIndex);
-        if (editor.selectedSample() != mapSelectedFile || editor.sampleMapSelectedFile != mapSelectedFile
-            || editor.indexedList.getSelectedRow() != -1)
+        const auto mapRecordInLoadedList = std::find_if(editor.samples.begin(), editor.samples.end(),
+            [&mapSelectedFile](const auto& sample) { return sample.file == mapSelectedFile; });
+        const bool listSelectionMatchesMap = mapRecordInLoadedList == editor.samples.end()
+            ? editor.indexedList.getSelectedRow() == -1
+            : juce::isPositiveAndBelow(editor.indexedList.getSelectedRow(), editor.samples.size())
+                && editor.samples.getReference(editor.indexedList.getSelectedRow()).file == mapSelectedFile;
+        if (editor.selectedSample() != mapSelectedFile
+            || (mapRecordInLoadedList == editor.samples.end()
+                && editor.sampleMapSelectedFile != mapSelectedFile)
+            || !listSelectionMatchesMap)
         {
-            std::cerr << "Selecting a map point beyond the first list page did not select that sample.\n";
+            std::cerr << "Selecting a map point did not synchronize with the sample-list selection.\n";
             return 3;
         }
 
