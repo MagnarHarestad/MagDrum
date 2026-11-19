@@ -1612,8 +1612,21 @@ public:
             finish(-1, false, {}, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
             return jobHasFinished;
         }
+        constexpr juce::uint32 programDiscoveryTimeoutMilliseconds = 90000;
+        const auto processStartedAt = juce::Time::getMillisecondCounter();
+        bool timedOut = false;
         while (child.isRunning() && ! shouldExit() && ! cancellation->load())
+        {
+            if (static_cast<juce::uint32>(juce::Time::getMillisecondCounter() - processStartedAt)
+                >= programDiscoveryTimeoutMilliseconds)
+            {
+                timedOut = true;
+                child.kill();
+                child.waitForProcessToFinish(3000);
+                break;
+            }
             child.waitForProcessToFinish(100);
+        }
         const bool cancelled = shouldExit() || cancellation->load();
         if (cancelled && child.isRunning())
         {
@@ -1638,6 +1651,8 @@ public:
                             programNames.add(program.getDynamicObject()->getProperty("name").toString());
             }
         }
+        if (timedOut)
+            message = magdrum::ui::localisedText("Program scan timed out.");
         work.deleteRecursively();
         finish(exitCode, cancelled, std::move(programNames), message);
         return jobHasFinished;

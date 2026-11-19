@@ -91,6 +91,8 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  if(WIN32)
   add_test(NAME MagDrumDebugAssertionWorker COMMAND MagDrumTests --magdrum-debug-assertion-worker-check "$<TARGET_FILE:MagDrum>")
   set_tests_properties(MagDrumDebugAssertionWorker PROPERTIES CONFIGURATIONS Debug SKIP_RETURN_CODE 77)
+  add_test(NAME MagDrumHeadlessWorkerWindowSuppression COMMAND MagDrum --magdrum-test-worker-window-suppression)
+  set_tests_properties(MagDrumHeadlessWorkerWindowSuppression PROPERTIES TIMEOUT 10)
  endif()
 endif()
 

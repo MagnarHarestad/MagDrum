@@ -33,9 +33,88 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+HWINEVENTHOOK pluginWorkerWindowHook = nullptr;
+
+void CALLBACK hidePluginWorkerWindow(HWINEVENTHOOK, DWORD event, HWND window,
+                                     LONG objectId, LONG childId, DWORD, DWORD)
+{
+    if ((event != EVENT_OBJECT_CREATE && event != EVENT_OBJECT_SHOW)
+        || objectId != OBJID_WINDOW || childId != CHILDID_SELF || window == nullptr)
+        return;
+
+    DWORD processId = 0;
+    GetWindowThreadProcessId(window, &processId);
+    if (processId == GetCurrentProcessId() && IsWindowVisible(window))
+        ShowWindowAsync(window, SW_HIDE);
+}
+
+bool suppressPluginWorkerWindows()
+{
+    if (pluginWorkerWindowHook != nullptr)
+        return true;
+    pluginWorkerWindowHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW,
+        nullptr, hidePluginWorkerWindow, GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT);
+    return pluginWorkerWindowHook != nullptr;
+}
+
+void releasePluginWorkerWindowHook()
+{
+    if (pluginWorkerWindowHook != nullptr)
+    {
+        UnhookWinEvent(pluginWorkerWindowHook);
+        pluginWorkerWindowHook = nullptr;
+    }
+}
+
+LRESULT CALLBACK pluginWindowSuppressionTestProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    return DefWindowProcW(window, message, wParam, lParam);
+}
+
+int runPluginWorkerWindowSuppressionTest()
+{
+    if (!suppressPluginWorkerWindows())
+        return 1;
+
+    constexpr wchar_t testWindowClass[] = L"MagDrumHeadlessWindowSuppressionTest";
+    WNDCLASSW windowClass{};
+    windowClass.lpfnWndProc = pluginWindowSuppressionTestProc;
+    windowClass.hInstance = GetModuleHandleW(nullptr);
+    windowClass.lpszClassName = testWindowClass;
+    if (RegisterClassW(&windowClass) == 0)
+        return 2;
+
+    const auto window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        testWindowClass, L"MagDrum worker window test", WS_POPUP | WS_VISIBLE,
+        -32000, -32000, 16, 16, nullptr, nullptr, windowClass.hInstance, nullptr);
+    if (window == nullptr)
+    {
+        UnregisterClassW(testWindowClass, windowClass.hInstance);
+        return 3;
+    }
+
+    const auto startedAt = GetTickCount64();
+    while (GetTickCount64() - startedAt < 250)
+    {
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+        Sleep(1);
+    }
+    const bool remainedVisible = IsWindowVisible(window) != FALSE;
+    DestroyWindow(window);
+    UnregisterClassW(testWindowClass, windowClass.hInstance);
+    return remainedVisible ? 4 : 0;
+}
 #if JUCE_DEBUG
 #include <crtdbg.h>
 #endif
+#else
+bool suppressPluginWorkerWindows() { return true; }
+void releasePluginWorkerWindowHook() {}
 #endif
 
 namespace
@@ -1181,6 +1260,12 @@ public:
         }
 #endif
 #if JUCE_WINDOWS
+        if (arguments.size() == 1 && arguments[0] == "--magdrum-test-worker-window-suppression")
+        {
+            setApplicationReturnValue(runPluginWorkerWindowSuppressionTest());
+            quit();
+            return;
+        }
         if (arguments.size() == 3 && arguments[0] == "--magdrum-test-host-sequencer")
         {
             const int result = runHostTransportSequencerFixture(juce::File(arguments[1].unquoted()),
@@ -1193,6 +1278,12 @@ public:
         if ((arguments.size() == 2 || arguments.size() == 3)
             && arguments[0] == "--magdrum-vst3-discovery-worker")
         {
+            if (!suppressPluginWorkerWindows())
+            {
+                setApplicationReturnValue(8);
+                quit();
+                return;
+            }
 #if JUCE_WINDOWS && JUCE_DEBUG
             // Third-party VST3 assertions must fail only this child process; a
             // modal CRT dialog would otherwise pause the whole discovery flow.
@@ -1218,6 +1309,12 @@ public:
 
         if (arguments.size() == 2 && arguments[0] == "--magdrum-vst3-preset-worker")
         {
+            if (!suppressPluginWorkerWindows())
+            {
+                setApplicationReturnValue(8);
+                quit();
+                return;
+            }
             const auto request = juce::File(arguments[1].unquoted());
             if (! juce::Thread::launch([this, request]
                 {
@@ -1237,6 +1334,12 @@ public:
 
         if (arguments.size() == 2 && arguments[0] == "--magdrum-plugin-scan-worker")
         {
+            if (!suppressPluginWorkerWindows())
+            {
+                setApplicationReturnValue(8);
+                quit();
+                return;
+            }
             const auto request = juce::File(arguments[1].unquoted());
             if (! juce::Thread::launch([request]
                 {
@@ -1266,6 +1369,9 @@ public:
     void shutdown() override
     {
         window.reset();
+#if JUCE_WINDOWS
+        releasePluginWorkerWindowHook();
+#endif
         juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
         StructuredLogger::log(StructuredLogger::Level::info, "application.stopped");
     }
