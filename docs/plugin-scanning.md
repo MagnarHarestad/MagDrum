@@ -2,6 +2,8 @@
 
 The desktop app can discover installed audio plugins using JUCE's plugin list. Use the list's options to scan default locations or add a custom folder. MagDrum keeps the discovered plugin inventory in its local SQLite database and caches JUCE's plugin descriptions in the user's application data folder. With a loaded VST3 instrument, choose **Find standard presets** to search the platform's standard `.vstpreset` folders for that vendor and instrument. Search follows the VST3 priority order: current-user presets, shared presets, then presets shipped with the running application. Choose **Choose preset folder** to search another folder recursively. Select a result to ask that instrument to load it. MagDrum does not copy preset files; the plugin validates whether a preset belongs to it. After a successful load, enter or keep a kit name and use **Save state** if you want to recall that kit from MagDrum later. Standard locations follow the [VST3 Developer Portal preset-location specification](https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical%2BDocumentation/Locations%2BFormat/Preset%2BLocations.html).
 
+From the Windows VST, **Choose kit source... > Open instrument manager** opens the selected instrument in this helper and shows its vendor editor, so you can load a native kit there and save its state for the VST.
+
 ## Capture a kit
 
 1. Select an instrument plugin and load it. MagDrum opens the plugin's own editor. In the sample browser, select a captured preview and use **Open source kit** to load the same instrument and recall its saved kit state. The instrument must still be installed and discoverable.
