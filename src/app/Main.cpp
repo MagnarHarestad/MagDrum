@@ -33,7 +33,24 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <werapi.h>
 HWINEVENTHOOK pluginWorkerWindowHook = nullptr;
+
+bool suppressPluginWorkerCrashDialogs()
+{
+    constexpr UINT errorModeFlags = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
+        | SEM_NOOPENFILEERRORBOX;
+    SetErrorMode(GetErrorMode() | errorModeFlags);
+
+    // SetErrorMode suppresses the legacy crash dialog. Windows Error Reporting
+    // has a separate UI switch; leave reporting enabled while disabling its UI.
+    constexpr DWORD werNoUi = 0x0020;
+    DWORD werFlags = 0;
+    return (GetErrorMode() & errorModeFlags) == errorModeFlags
+        && SUCCEEDED(WerSetFlags(werNoUi))
+        && SUCCEEDED(WerGetFlags(GetCurrentProcess(), &werFlags))
+        && (werFlags & werNoUi) != 0;
+}
 
 void CALLBACK hidePluginWorkerWindow(HWINEVENTHOOK, DWORD event, HWND window,
                                      LONG objectId, LONG childId, DWORD, DWORD)
@@ -52,6 +69,8 @@ bool suppressPluginWorkerWindows()
 {
     if (pluginWorkerWindowHook != nullptr)
         return true;
+    if (!suppressPluginWorkerCrashDialogs())
+        return false;
     pluginWorkerWindowHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW,
         nullptr, hidePluginWorkerWindow, GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT);
     return pluginWorkerWindowHook != nullptr;
