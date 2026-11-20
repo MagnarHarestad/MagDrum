@@ -1446,6 +1446,40 @@ public:
         return 0;
     }
 
+    static int checksPartialPluginInventoryRefresh(MagDrumAudioProcessorEditor& editor)
+    {
+        const auto inventoryFile = editor.databaseFile.getParentDirectory().getChildFile("vst3-plugins.xml");
+        const bool hadInventory = inventoryFile.existsAsFile();
+        const auto previousInventory = hadInventory ? inventoryFile.loadFileAsString() : juce::String();
+        juce::KnownPluginList partialResults;
+        juce::PluginDescription instrument;
+        instrument.name = "Partial scan fixture";
+        instrument.pluginFormatName = "VST3";
+        instrument.manufacturerName = "MagDrum test";
+        instrument.fileOrIdentifier = "partial-scan-fixture.vst3";
+        instrument.uniqueId = 827364;
+        instrument.isInstrument = true;
+        partialResults.addType(instrument);
+        const auto xml = partialResults.createXml();
+        if (xml == nullptr || !xml->writeTo(inventoryFile)) return 31;
+
+        editor.pluginInventoryScanRunning = false;
+        editor.pluginInventoryProgressFile = {};
+        editor.finishPluginInventoryScan(-1, true, 0);
+        const bool partialResultWasShown = editor.discoveredPluginInstruments.size() == 1
+            && editor.discoveredPluginInstruments.getReference(0).name == instrument.name;
+
+        if (hadInventory) inventoryFile.replaceWithText(previousInventory);
+        else inventoryFile.deleteFile();
+        editor.refreshPluginInventory();
+        if (!partialResultWasShown)
+        {
+            std::cerr << "Cancelling plugin discovery did not refresh the completed inventory checkpoint.\n";
+            return 32;
+        }
+        return 0;
+    }
+
 #if JUCE_WINDOWS
     static __declspec(noinline) int checksPluginPresetSearchAsync()
     {
@@ -2326,6 +2360,8 @@ int main(int argc, char** argv)
         MagDrumAudioProcessor editorProcessor;
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
+        const int partialInventoryCheck = MagDrumAudioProcessorEditorTestAccess::checksPartialPluginInventoryRefresh(editor);
+        if (partialInventoryCheck != 0) return 390 + partialInventoryCheck;
         const int pluginScanRangeCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginScanNoteRangePersists(editor);
         if (pluginScanRangeCheck != 0) return 400 + pluginScanRangeCheck;
         const int genericBatteryProgramsCheck = MagDrumAudioProcessorEditorTestAccess::checksGenericBatteryProgramHandling(editor);

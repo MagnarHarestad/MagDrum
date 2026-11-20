@@ -3355,7 +3355,9 @@ void MagDrumAudioProcessorEditor::refreshSampleAssignmentLabels()
 
 void MagDrumAudioProcessorEditor::refreshPluginInventory()
 {
-    const auto inventoryFile = getMagDrumDataDirectory().getChildFile("vst3-plugins.xml");
+    const auto dataDirectory = databaseFile != juce::File()
+        ? databaseFile.getParentDirectory() : getMagDrumDataDirectory();
+    const auto inventoryFile = dataDirectory.getChildFile("vst3-plugins.xml");
     discoveredPluginInstruments.clear();
     if (inventoryFile.existsAsFile())
     {
@@ -3503,9 +3505,12 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
     pluginInventoryProgressFile = {};
     scanPluginInventoryButton.setEnabled(true);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders") + "...");
+    // Discovery checkpoints completed instruments to the shared inventory as it goes.
+    // Reload that checkpoint even when the user cancels or a helper fails, so the
+    // visible list never lags behind durable scan results.
+    refreshPluginInventory();
     if (cancelled) { status.setText(magdrum::ui::localisedText("VST3 instrument scan cancelled."), juce::dontSendNotification); return; }
     if (exitCode != 0) { status.setText(magdrum::ui::localisedText("VST3 instrument scan failed. Check the MagDrum helper."), juce::dontSendNotification); return; }
-    refreshPluginInventory();
     status.setText(skippedProblemModules > 0
         ? magdrum::ui::localisedText("VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")
             .replace("%1", juce::String(skippedProblemModules))
