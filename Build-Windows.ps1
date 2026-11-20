@@ -3,6 +3,7 @@ param(
     [string] $Architecture = 'x64',
     [string] $BuildDirectory,
     [switch] $SkipTests,
+    [switch] $EnableBatteryKitProbeTests,
     [ValidateRange(1, 64)]
     [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8),
     [ValidateRange(0, 99999)]
@@ -106,6 +107,7 @@ try {
         '-A', $Architecture,
         "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
         "-DBUILD_TESTING=$buildTesting",
+        "-DMAGDRUM_ENABLE_BATTERY_KIT_PROBE_TESTS=$($EnableBatteryKitProbeTests.IsPresent -and -not $SkipTests)",
         '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'
@@ -165,11 +167,15 @@ try {
         @('MagDrum', 'MagDrumPlugin_VST3')
     } else {
         # MagDrumTests depends on the app, VST3, and plugin-test executable.
-        # BatteryKitProbe is a standalone test executable and must be listed
-        # explicitly so newly registered probe tests never run a stale binary.
+        # The Battery parser probe is opt-in because a user reported a Windows
+        # access-violation dialog from that test executable.
         # One MSBuild invocation excludes unrelated cached targets such as the
         # mobile preview while building every executable CTest invokes.
-        @('MagDrumTests', 'MagDrumBatteryKitProbe')
+        if ($EnableBatteryKitProbeTests) {
+            @('MagDrumTests', 'MagDrumBatteryKitProbe')
+        } else {
+            @('MagDrumTests')
+        }
     }
     $compileTimer = [System.Diagnostics.Stopwatch]::StartNew()
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel
