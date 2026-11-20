@@ -6,7 +6,10 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string[]] $Asset
+    [string[]] $Asset,
+
+    [ValidateNotNullOrEmpty()]
+    [string] $BuildDirectory = 'build\local-windows-release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -193,7 +196,8 @@ if ($PSCmdlet.ShouldProcess("GitHub release $Tag", "Upload $($includedNames.Coun
         $buildRevision = [int]$Matches[1]
         & (Join-Path $repoRoot 'tools/Test-WindowsReleasePackage.ps1') `
             -PackagePath (Join-Path $publishDirectory 'MagDrum-Windows-x64.zip') `
-            -BuildRevision $buildRevision
+            -BuildRevision $buildRevision `
+            -BuildDirectory $BuildDirectory
     }
 
     & gh release create $Tag @releaseAssets --title "MagDrum $Tag" --notes-file $notesPath --prerelease --target main
