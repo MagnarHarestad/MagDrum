@@ -4,6 +4,8 @@ Latest Windows x64 release: [v0.1.2-test.273](https://github.com/MagnarHarestad/
 
 **Windows working-tree scanner fix (not packaged):** cancelling or failing VST3 discovery now reloads the completed instrument checkpoint from the shared inventory, so discoveries made before cancellation or a helper error appear immediately in the VST list. Release build and the focused offscreen `MagDrumPluginTests` regression passed. This change is not published or installed.
 
+**Windows working-tree instrument-manager handoff (not packaged):** opening the manager from the VST now passes the selected instrument's stable ID. The manager opens with that instrument selected and loads its vendor editor, removing the need to search and load it again before saving a Battery kit state. Smoke coverage verifies the request can represent an instrument with no saved kit yet. The Windows Release app/VST/test targets built and Release CTest passed 4 tests; the Debug-only assertion worker was skipped. This change is not published or installed.
+
 Current Windows source adds a separate-process UI regression for asynchronous preset search, including the Cancel control's worker signal; the complete source-tree Release CTest suite passed 4/4, with the Debug-only assertion test skipped. This additional test does not change the published .272 package.
 
 The VST is intended to expose the MagDrum workflows from inside Cubase. This checklist tracks parity without claiming that the standalone app and an instrument plug-in have identical host responsibilities.

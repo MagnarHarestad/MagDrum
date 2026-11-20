@@ -4337,8 +4337,33 @@ void MagDrumAudioProcessorEditor::launchInstrumentScanner()
         status.setText(magdrum::ui::localisedText("The bundled MagDrum instrument scanner was not found beside this VST3. Reinstall the latest package."), juce::dontSendNotification);
         return;
     }
-    if (!helper.startAsProcess("--magdrum-plugin-browser"))
+    juce::String arguments = "--magdrum-plugin-browser";
+    juce::File requestFile;
+    const int selectedIndex = pluginInstrumentSelect.getSelectedId() - 1;
+    if (juce::isPositiveAndBelow(selectedIndex, discoveredPluginInstruments.size()))
     {
+        const auto& description = discoveredPluginInstruments.getReference(selectedIndex);
+        PluginSourceKitRequest request{description.createIdentifierString(), {}};
+        const auto requestDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                         .getChildFile("MagDrum");
+        if ((!requestDirectory.isDirectory() && !requestDirectory.createDirectory().wasOk())
+            || !request.isValid())
+        {
+            status.setText(magdrum::ui::localisedText("Could not open the saved source kit."), juce::dontSendNotification);
+            return;
+        }
+        requestFile = requestDirectory.getNonexistentChildFile("plugin-browser-", ".json", false);
+        if (!requestFile.replaceWithText(juce::JSON::toString(request.toVar(), true)))
+        {
+            status.setText(magdrum::ui::localisedText("Could not open the saved source kit."), juce::dontSendNotification);
+            return;
+        }
+        arguments << " \"" << requestFile.getFullPathName().replace("\"", "\\\"") << "\"";
+    }
+
+    if (!helper.startAsProcess(arguments))
+    {
+        requestFile.deleteFile();
         status.setText(magdrum::ui::localisedText("Could not start the MagDrum instrument scanner."), juce::dontSendNotification);
         return;
     }
