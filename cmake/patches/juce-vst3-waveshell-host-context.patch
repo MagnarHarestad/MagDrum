@@ -1,0 +1,41 @@
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+index 10af21d53a4..154cc7c4e3d 100644
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+@@ -1292,7 +1292,7 @@ struct RefCountedDllHandle final : public ReferenceCountedObject
+ struct VST3ModuleHandle final
+ {
+ public:
+-    static VST3ModuleHandle create (const File& pluginFile, const PluginDescription& desc)
++    static VST3ModuleHandle create (const File& pluginFile, const PluginDescription& desc, FUnknown* hostContext)
+     {
+         VST3ModuleHandle result;
+         result.handle = RefCountedDllHandle::getHandle (pluginFile.getFullPathName());
+@@ -1305,6 +1305,18 @@ struct VST3ModuleHandle final
+         if (factory == nullptr)
+             return {};
+ 
++        // Shell plugins (e.g. WaveShell) re-enumerate their factory classes when
++        // the host context is set, shifting every class index. Set it before
++        // searching so the index found here still refers to the same class when
++        // VST3ComponentHolder::initialise() sets the same context again and
++        // instantiates by this index.
++        {
++            VSTComSmartPtr<IPluginFactory3> pf3;
++
++            if (pf3.loadFrom (factory.get()))
++                pf3->setHostContext (hostContext);
++        }
++
+         const auto numClasses = factory->countClasses();
+         result.classIndex = findClassMatchingDescription (factory, desc);
+
+@@ -3614,7 +3626,7 @@ static std::unique_ptr<AudioPluginInstance> createVST3Instance (VST3PluginFormat
+     const ScopedWorkingDirectory scope;
+     file.getParentDirectory().setAsCurrentWorkingDirectory();
+ 
+-    const auto module = VST3ModuleHandle::create (file, description);
++    const auto module = VST3ModuleHandle::create (file, description, host->getFUnknown());
+ 
+     if (! module.isValid())
+         return nullptr;
