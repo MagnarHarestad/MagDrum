@@ -158,7 +158,8 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'The manual-example classifier selects an acoustic fingerprint weight using category-stratified validation with query filenames hidden. It remains a local, low-confidence review aid; the current folder-labeled collections do not demonstrate reliable audio-only or cross-kit classification.',
         'Conservative audio-only review suggestions cover low-centroid kicks, noisy cymbals and hi-hats, high pitched bell-like percussion and a narrow low-mid snare range. The 121-file CC0 single-kit corpus scored 70.2% accuracy / 0.737 macro F1; a separate 52-file three-kit corpus scored 48.1% / 0.420. All such suggestions remain below the 0.75 acceptance threshold. These limited corpus results do not establish general classifier accuracy.',
         'Generic HiHat/HH filename cues are searchable as Hi-hat but no longer imply Closed; contradictory open/closed cues remain Unknown.',
-        'Opt-in metadata folder sync is available from the standalone app and VST. It shares tags, manual categories, and MIDI maps only; it never copies samples, paths, or plug-in states. Merge is transactional, and cloud-provider upload completion still needs to be confirmed by the user.'
+        'Opt-in metadata folder sync is available from the standalone app and VST. It shares tags, manual categories, and MIDI maps only; it never copies samples, paths, or plug-in states. Merge is transactional, and cloud-provider upload completion still needs to be confirmed by the user.',
+        'Portable metadata sync conflicts are resolved in an in-app overlay, without opening a separate modal alert window.'
     )
 }
 

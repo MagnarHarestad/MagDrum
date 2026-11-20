@@ -5,6 +5,7 @@
 #include "core/ScopedFileAccess.h"
 #include "core/MagDrumPaths.h"
 #include "ui/MagDrumLocalization.h"
+#include "ui/PortableMetadataConflictDialog.h"
 #include "HeadlessProcessSafety.h"
 #include <cmath>
 #include <algorithm>
@@ -2501,6 +2502,75 @@ int main(int argc, char** argv)
 {
     magdrum::tests::suppressWindowsErrorDialogs();
 #if JUCE_WINDOWS
+    if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-metadata-conflict-overlay") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        juce::Component owner;
+        owner.setBounds(0, 0, 900, 600);
+        owner.setVisible(true);
+
+        PortableMetadataConflict conflict;
+        conflict.type = PortableMetadataConflictType::manualCategory;
+        conflict.sampleHash = "0123456789abcdef";
+        conflict.localValue = "Kick";
+        conflict.incomingValues.push_back({"device-incoming", "Snare"});
+        bool appliedChoice = false;
+        int applied = -1, failed = -1, skipped = -1;
+        magdrum::ui::showPortableMetadataConflictReview(&owner, {conflict, conflict},
+            [&appliedChoice](const PortableMetadataConflict&, const PortableMetadataConflictCandidate& candidate)
+            {
+                appliedChoice = candidate.value == "Snare";
+                return appliedChoice;
+            },
+            [&applied, &failed, &skipped](int appliedCount, int failedCount, int skippedCount)
+            {
+                applied = appliedCount;
+                failed = failedCount;
+                skipped = skippedCount;
+            });
+
+        if (owner.getNumChildComponents() != 1
+            || juce::ModalComponentManager::getInstance()->getNumModalComponents() != 0)
+            return 230;
+        auto* overlay = owner.getChildComponent(0);
+        auto* choice = dynamic_cast<juce::ComboBox*>(overlay->getChildComponent(2));
+        auto* applyButton = dynamic_cast<juce::TextButton*>(overlay->getChildComponent(3));
+        if (choice == nullptr || applyButton == nullptr || choice->getNumItems() != 2
+            || applyButton->getButtonText() != magdrum::ui::localisedText("Apply selection")) return 231;
+        const auto dispatchPendingUiCallbacks = []
+        {
+            juce::MessageManager::callAsync([]
+            {
+                juce::MessageManager::getInstance()->stopDispatchLoop();
+            });
+            juce::MessageManager::getInstance()->runDispatchLoop();
+        };
+        choice->setSelectedId(2, juce::dontSendNotification);
+        applyButton->onClick();
+        if (!appliedChoice || owner.getNumChildComponents() != 1
+            || juce::ModalComponentManager::getInstance()->getNumModalComponents() != 0)
+        {
+            return 232;
+        }
+
+        auto* keepLocal = dynamic_cast<juce::TextButton*>(owner.getChildComponent(0)->getChildComponent(5));
+        if (keepLocal == nullptr || keepLocal->getButtonText() != magdrum::ui::localisedText("Keep remaining local"))
+            return 233;
+        keepLocal->onClick();
+        dispatchPendingUiCallbacks();
+        if (applied != 1 || failed != 0 || skipped != 1 || owner.getNumChildComponents() != 0
+            || juce::ModalComponentManager::getInstance()->getNumModalComponents() != 0)
+        {
+            std::cerr << "Metadata conflict overlay completion regression: applied=" << applied
+                      << ", failed=" << failed << ", skipped=" << skipped
+                      << ", child components=" << owner.getNumChildComponents()
+                      << ", modal components=" << juce::ModalComponentManager::getInstance()->getNumModalComponents()
+                      << ".\n";
+            return 234;
+        }
+        return 0;
+    }
+
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-plugin-scanner-ui") == 0)
     {
         juce::ScopedJuceInitialiser_GUI guiInitialiser;
