@@ -2746,6 +2746,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         + ") AND NOT " + containsContentTerm("beat agent") + ")";
     const auto loopTerms = juce::String("(") + containsContentTerm("loop") + " OR " + containsContentTerm("loops")
         + " OR " + beatTerms
+        + " OR " + containsContentTerm("breakbeat") + " OR " + containsContentTerm("breakbeats")
         + " OR " + containsContentTerm("groove") + " OR " + containsContentTerm("grooves")
         + " OR " + containsContentTerm("break") + " OR " + containsContentTerm("phrase")
         + " OR " + containsContentTerm("phrases") + " OR " + containsContentTerm("pattern")

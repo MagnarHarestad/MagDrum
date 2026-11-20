@@ -4502,6 +4502,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
     previewButton.setEnabled(false);
     libraryToolsButton.setEnabled(false);
 
+    const auto statusAtRequest = status.getText();
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
     if (requestMap)
     {
@@ -4524,7 +4525,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             }), true);
     }
     sampleBrowseWorkers.addJob(new PluginSampleBrowseJob(databaseFile, std::move(options), 250, offset,
-        [safe, requestGeneration, reset](bool opened, SampleBrowsePage result)
+        [safe, requestGeneration, reset, statusAtRequest](bool opened, SampleBrowsePage result)
         {
             if (safe == nullptr || requestGeneration != safe->sampleBrowseGeneration)
                 return;
@@ -4538,8 +4539,9 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             if (!opened)
             {
                 safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
-                safe->status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
-                                     juce::dontSendNotification);
+                if (safe->status.getText() == statusAtRequest)
+                    safe->status.setText(magdrum::ui::localisedText("The shared MagDrum sample database is unavailable."),
+                                         juce::dontSendNotification);
                 return;
             }
 
@@ -4557,11 +4559,12 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
             safe->indexedList.updateContent();
             safe->refreshSampleAssignmentLabels();
             safe->selectedRowsChanged(safe->indexedList.getSelectedRow());
-            safe->status.setText(juce::String(safe->samples.size()) + (safe->hasMoreSamples ? "+" : "") + " "
-                                     + magdrum::ui::localisedText(safe->hasMoreSamples
-                                         ? "samples - select, preview or scroll to load more"
-                                         : "samples - select, preview or use Sample tools"),
-                                 juce::dontSendNotification);
+            if (safe->status.getText() == statusAtRequest)
+                safe->status.setText(juce::String(safe->samples.size()) + (safe->hasMoreSamples ? "+" : "") + " "
+                                         + magdrum::ui::localisedText(safe->hasMoreSamples
+                                             ? "samples - select, preview or scroll to load more"
+                                             : "samples - select, preview or use Sample tools"),
+                                     juce::dontSendNotification);
         }), true);
 }
 

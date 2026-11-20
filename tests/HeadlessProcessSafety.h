@@ -8,6 +8,7 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#include <werapi.h>
 
 namespace magdrum::tests
 {
@@ -25,12 +26,20 @@ inline LONG WINAPI terminateHeadlessProcessOnUnhandledException(EXCEPTION_POINTE
 inline void suppressWindowsErrorDialogs() noexcept
 {
     SetErrorMode(GetErrorMode() | windowsHeadlessErrorModeFlags);
+    // SEM_NOGPFAULTERRORBOX prevents the standard unhandled-exception dialog,
+    // but Windows Error Reporting has a separate per-process UI flag. Keep
+    // WER reports available to Windows while explicitly disabling its UI.
+    constexpr DWORD windowsWerNoUi = 0x0020;
+    (void) WerSetFlags(windowsWerNoUi);
     SetUnhandledExceptionFilter(terminateHeadlessProcessOnUnhandledException);
 }
 
 inline bool windowsErrorDialogsAreSuppressed() noexcept
 {
-    return (GetErrorMode() & windowsHeadlessErrorModeFlags) == windowsHeadlessErrorModeFlags;
+    DWORD werFlags = 0;
+    return (GetErrorMode() & windowsHeadlessErrorModeFlags) == windowsHeadlessErrorModeFlags
+        && SUCCEEDED(WerGetFlags(GetCurrentProcess(), &werFlags))
+        && (werFlags & 0x0020) != 0;
 }
 }
 #else
