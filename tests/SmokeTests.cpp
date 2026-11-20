@@ -20,6 +20,7 @@
 #include "core/SampleSimilarityProjection.h"
 #include "core/SampleClassificationReview.h"
 #include "core/StructuredLogger.h"
+#include "HeadlessProcessSafety.h"
 #include <iostream>
 #include <array>
 #include <algorithm>
@@ -1608,6 +1609,7 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    magdrum::tests::suppressWindowsErrorDialogs();
     if (argc == 4 && std::strcmp(argv[1], "--magdrum-audit-sample-folder") == 0)
     {
         const juce::File root(argv[2]);

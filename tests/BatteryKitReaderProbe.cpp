@@ -1,10 +1,16 @@
 #include "core/BatteryKitReader.h"
+#include "HeadlessProcessSafety.h"
 
 #include <algorithm>
 #include <iostream>
+#include <string_view>
 
 int main(int argc, char** argv)
 {
+    magdrum::tests::suppressWindowsErrorDialogs();
+    if (argc == 2 && std::string_view(argv[1]) == "--verify-headless-error-mode")
+        return magdrum::tests::windowsErrorDialogsAreSuppressed() ? 0 : 4;
+
     if (argc != 2)
     {
         std::cerr << "Usage: MagDrumBatteryKitProbe <kit.nbkt>\n";

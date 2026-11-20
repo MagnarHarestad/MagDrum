@@ -2,6 +2,7 @@
 #include "core/SampleClassificationReview.h"
 #include "core/SampleDatabase.h"
 #include "core/WavScanner.h"
+#include "../tests/HeadlessProcessSafety.h"
 
 #include <algorithm>
 #include <cmath>
@@ -395,6 +396,7 @@ void evaluateManualExampleModel(const std::vector<LabeledSample>& samples, bool 
 
 int main(int argc, char** argv)
 {
+    magdrum::tests::suppressWindowsErrorDialogs();
     if (argc < 2)
     {
         printUsage();

@@ -81,6 +81,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  target_include_directories(MagDrumBatteryKitProbe PRIVATE src)
  target_compile_definitions(MagDrumBatteryKitProbe PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
  target_link_libraries(MagDrumBatteryKitProbe PRIVATE juce::juce_core juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+ add_test(NAME MagDrumBatteryKitProbeHeadlessErrorMode COMMAND MagDrumBatteryKitProbe --verify-headless-error-mode)
 
  juce_add_console_app(MagDrumPluginTests PRODUCT_NAME "MagDrum Plugin Tests")
  juce_generate_juce_header(MagDrumPluginTests)

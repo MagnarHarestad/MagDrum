@@ -5,6 +5,7 @@
 #include "core/ScopedFileAccess.h"
 #include "core/MagDrumPaths.h"
 #include "ui/MagDrumLocalization.h"
+#include "HeadlessProcessSafety.h"
 #include <cmath>
 #include <algorithm>
 #include <chrono>
@@ -2492,6 +2493,7 @@ public:
 
 int main(int argc, char** argv)
 {
+    magdrum::tests::suppressWindowsErrorDialogs();
 #if JUCE_WINDOWS
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-plugin-scanner-ui") == 0)
     {
