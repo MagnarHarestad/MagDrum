@@ -20,7 +20,9 @@ bool hasPercussionInstrumentCue(juce::String name)
         "tambourines", "agogo", "agogo bell", "agogo bells", "woodblock", "woodblocks",
         "wood block", "wood blocks", "triangle", "triangles", "clave", "claves", "guiro",
         "guiros", "güiro", "güiros", "timbale", "timbales", "cabasa", "djembe", "djembes",
-        "cajon", "cajón", "castanet", "castanets", "maraca", "maracas", "vibraslap", "gong", "gongs"
+        "cajon", "cajón", "castanet", "castanets", "maraca", "maracas", "vibraslap", "gong", "gongs",
+        "perc", "bell", "balafon", "kora", "ngoni", "penyacah", "calung", "metal", "hand drum",
+        "hitimbale", "hi timbale"
     };
     for (const auto* cue : cues)
         if (name.containsWholeWordIgnoreCase(cue))
@@ -188,9 +190,11 @@ DrumClassification classify(const ScannedSample& sample) const override
         const auto folderName = folder.getFileName().trim().toLowerCase();
         cymbalFolder = cymbalFolder || folderName == "cymbal" || folderName == "cymbals";
         const auto folderCategory = drumCategoryForFolder(folder.getFileName());
-        if (folderCategory.isNotEmpty())
+        const bool generalPercussionFolder = folderName == "mallet drum" || folderName == "metallic" || folderName == "wooden";
+        if (folderCategory.isNotEmpty() || generalPercussionFolder)
         {
-            if (!namedCategories.contains(folderCategory)) namedCategories.add(folderCategory);
+            const auto category = generalPercussionFolder ? juce::String("Percussion") : folderCategory;
+            if (!namedCategories.contains(category)) namedCategories.add(category);
             categoryFromFolder = true;
             break;
         }
@@ -204,9 +208,13 @@ DrumClassification classify(const ScannedSample& sample) const override
     // instead of allowing their short, pitched attacks to fall through as snares.
     if (cymbalFolder && has({"china"}) && !has({"gong", "gongs"}))
         namedCategories.add("Crash");
+    if (cymbalFolder && namedCategories.isEmpty())
+        namedCategories.add("Crash");
 
     if (namedCategories.contains("Rimshot") && namedCategories.contains("Snare"))
         namedCategories.removeString("Snare");
+    if (namedCategories.size() > 1 && namedCategories.contains("Percussion"))
+        namedCategories.removeString("Percussion");
 
     if (namedCategories.size() == 1)
     {

@@ -752,15 +752,28 @@ int runSmokeTests(int argc,char** argv)
     const auto classifiedFile=classificationTagRoot.getChildFile("808_Open_HiHat_deep.wav");if(!waveFile.copyFileTo(classifiedFile))return 150;
     const auto classifiedSamples=scanner.scan(classificationTagRoot);if(classifiedSamples.size()!=1||classifiedSamples.getFirst().category!="Open hi-hat"||!classifiedSamples.getFirst().classificationTags.contains("808")||!classifiedSamples.getFirst().classificationTags.contains("Electronic")||!classifiedSamples.getFirst().classificationTags.contains("Deep"))return 151;
     const auto batteryClassificationRoot=root.getSiblingFile("MagDrumBatteryClassificationTest");batteryClassificationRoot.deleteRecursively();if(!batteryClassificationRoot.createDirectory().wasOk())return 310;
-    const auto batteryHatDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/HiHat"),batteryCymbalDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Cymbal");
-    if(!batteryHatDirectory.createDirectory().wasOk()||!batteryCymbalDirectory.createDirectory().wasOk())return 311;
+    const auto batteryHatDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/HiHat"),batteryCymbalDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Cymbal"),batteryMalletDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Mallet Drum"),batteryMetallicDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Metallic"),batterySnareDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Snare");
+    if(!batteryHatDirectory.createDirectory().wasOk()||!batteryCymbalDirectory.createDirectory().wasOk()||!batteryMalletDirectory.createDirectory().wasOk()||!batteryMetallicDirectory.createDirectory().wasOk()||!batterySnareDirectory.createDirectory().wasOk())return 311;
     if(!waveFile.copyFileTo(batteryHatDirectory.getChildFile("ClosedHH 606 1.wav"))
         ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("China Gong V1.wav"))
-        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("China Gothik.wav")))return 312;
+        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("China Gothik.wav"))
+        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("Cymbal 606.wav"))
+        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("Crash Gong 1 V1.wav"))
+        ||!waveFile.copyFileTo(batteryMalletDirectory.getChildFile("Perc Absynth 2.wav"))
+        ||!waveFile.copyFileTo(batteryMalletDirectory.getChildFile("Snare 1.wav"))
+        ||!waveFile.copyFileTo(batteryMalletDirectory.getChildFile("Balafon AfroShop 2.wav"))
+        ||!waveFile.copyFileTo(batteryMetallicDirectory.getChildFile("Bell Autopsy 1.wav"))
+        ||!waveFile.copyFileTo(batteryMetallicDirectory.getChildFile("Metal Alkaloid 2 V2.wav"))
+        ||!waveFile.copyFileTo(batterySnareDirectory.getChildFile("Rimshot Gong V1.wav")))return 312;
     const auto batteryClassifiedSamples=scanner.scan(batteryClassificationRoot);std::map<std::string,std::string> batteryCategories;
     for(const auto& sample:batteryClassifiedSamples)batteryCategories.emplace(sample.file.getFileName().toStdString(),sample.category.toStdString());
-    if(batteryCategories.size()!=3||batteryCategories["ClosedHH 606 1.wav"]!="Closed hi-hat"
-        ||batteryCategories["China Gong V1.wav"]!="Percussion"||batteryCategories["China Gothik.wav"]!="Crash")return 313;
+    if(batteryCategories.size()!=11||batteryCategories["ClosedHH 606 1.wav"]!="Closed hi-hat"
+        ||batteryCategories["China Gong V1.wav"]!="Percussion"||batteryCategories["China Gothik.wav"]!="Crash"
+        ||batteryCategories["Cymbal 606.wav"]!="Crash"||batteryCategories["Crash Gong 1 V1.wav"]!="Crash"
+        ||batteryCategories["Perc Absynth 2.wav"]!="Percussion"||batteryCategories["Snare 1.wav"]!="Snare"
+        ||batteryCategories["Balafon AfroShop 2.wav"]!="Percussion"
+        ||batteryCategories["Bell Autopsy 1.wav"]!="Percussion"||batteryCategories["Metal Alkaloid 2 V2.wav"]!="Percussion"
+        ||batteryCategories["Rimshot Gong V1.wav"]!="Rimshot")return 313;
     SampleDatabase classificationTagDb;if(!classificationTagDb.open(classificationTagRoot.getChildFile("classification-tags.sqlite3"))||!classificationTagDb.insertSample(classifiedSamples.getFirst()))return 152;
     const auto storedClassificationTags=classificationTagDb.getClassificationTags(classifiedFile);if(!storedClassificationTags.contains("808")||!storedClassificationTags.contains("Electronic")||!storedClassificationTags.contains("Deep"))return 153;
     SampleBrowseFilter classificationTagFilter;classificationTagFilter.query="Electronic";const auto classifierTagSearch=classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0);if(classifierTagSearch.records.size()!=1||!classifierTagSearch.records[0].classificationTags.contains("Electronic"))return 154;
@@ -1609,12 +1622,15 @@ int main(int argc, char** argv)
         int analyzed = 0;
         std::map<std::string, int> categories;
         juce::StringArray suspicious;
+        juce::StringArray unknown;
         WavScanner{}.scan(root,
             [&analyzed, limit] { return analyzed >= limit; }, {}, &stats,
-            [&analyzed, &categories, &suspicious, &root](const ScannedSample& sample)
+            [&analyzed, &categories, &suspicious, &unknown, &root](const ScannedSample& sample)
             {
                 ++analyzed;
                 ++categories[sample.category.toStdString()];
+                if (sample.category == "Unknown" && unknown.size() < 80)
+                    unknown.add(sample.file.getFileName() + " [" + sample.file.getParentDirectory().getFileName() + "]");
                 if (sample.category == "Snare"
                     && (root.getFileName().containsIgnoreCase("hat")
                         || root.getFileName().containsIgnoreCase("cymbal")))
@@ -1637,6 +1653,8 @@ int main(int argc, char** argv)
         std::cout << "\n";
         for (const auto& item : suspicious)
             std::cout << "Possible folder-label conflict: " << item << "\n";
+        for (const auto& item : unknown)
+            std::cout << "Unknown sample: " << item << "\n";
         return analyzed == limit && stats.errors == 0 ? 0 : 275;
     }
 
