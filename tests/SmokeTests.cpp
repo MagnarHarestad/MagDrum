@@ -570,6 +570,17 @@ int runSmokeTests(int argc,char** argv)
     juce::PluginDescription timestampedInstrument;timestampedInstrument.fileOrIdentifier=cachedVst3File.getFullPathName();timestampedInstrument.pluginFormatName="VST3";timestampedInstrument.isInstrument=true;timestampedInstrument.lastFileModTime=cachedVst3File.getLastModificationTime();timestampedDescriptions.add(timestampedInstrument);
     const auto timestampedIndex=magdrum::plugins::indexCachedVst3Modules(timestampedDescriptions);
     if(!magdrum::plugins::isCachedVst3ModuleUpToDate(timestampedIndex.at(cachedVst3FileKey),cachedVst3File))return 212;
+    juce::Array<juce::PluginDescription> repeatedModuleDescriptions;
+    for (int index = 0; index < 258; ++index)
+    {
+        auto repeatedDescription = timestampedInstrument;
+        repeatedDescription.isInstrument = index == 257;
+        repeatedModuleDescriptions.add(std::move(repeatedDescription));
+    }
+    const auto repeatedModuleIndex = magdrum::plugins::indexCachedVst3Modules(repeatedModuleDescriptions);
+    if (repeatedModuleIndex.size() != 1 || !repeatedModuleIndex.at(cachedVst3FileKey).hasInstrumentDescription
+        || !magdrum::plugins::isCachedVst3ModuleUpToDate(repeatedModuleIndex.at(cachedVst3FileKey),
+            cachedVst3File)) return 259;
 #if JUCE_WINDOWS
     auto differentlyCasedInstrument=timestampedInstrument;
     differentlyCasedInstrument.fileOrIdentifier=cachedVst3File.getFullPathName().toUpperCase();

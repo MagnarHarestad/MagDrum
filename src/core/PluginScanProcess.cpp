@@ -490,20 +490,37 @@ magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules
 {
     CachedVst3ModuleIndex decisions;
     decisions.reserve(static_cast<size_t>(cachedDescriptions.size()));
+    struct ModulePaths
+    {
+        juce::String pluginPath;
+        juce::String bundlePath;
+        bool exists = false;
+    };
+    std::unordered_map<std::string, ModulePaths> pathsByDescription;
+    pathsByDescription.reserve(static_cast<size_t>(cachedDescriptions.size()));
     for (const auto& description : cachedDescriptions)
     {
         if (description.pluginFormatName != "VST3")
             continue;
 
-        const juce::File pluginPath(description.fileOrIdentifier);
-        const auto cacheDescriptionFor = [&decisions, &description, &pluginPath](const std::string& key)
+        const auto descriptionPathKey = vst3ModuleCacheKey(description.fileOrIdentifier).toStdString();
+        auto [paths, inserted] = pathsByDescription.try_emplace(descriptionPathKey);
+        if (inserted)
+        {
+            const juce::File pluginPath(description.fileOrIdentifier);
+            paths->second.pluginPath = pluginPath.getFullPathName();
+            paths->second.exists = pluginPath.exists();
+            if (paths->second.exists)
+                paths->second.bundlePath = vst3BundleRootForPluginPath(pluginPath).getFullPathName();
+        }
+        const auto cacheDescriptionFor = [&decisions, &description, &paths](const std::string& key)
         {
             if (key.empty()) return;
             auto& module = decisions[key];
             if (!module.hasFileModTime)
             {
                 module.fileModTime = description.lastFileModTime;
-                module.filePath = pluginPath.getFullPathName();
+                module.filePath = paths->second.pluginPath;
                 module.hasFileModTime = true;
             }
             else
@@ -511,18 +528,17 @@ magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules
                 if (module.fileModTime != description.lastFileModTime)
                     module.cachedModTimesAgree = false;
                 if (vst3ModuleCacheKey(module.filePath)
-                    != vst3ModuleCacheKey(pluginPath.getFullPathName()))
+                    != vst3ModuleCacheKey(paths->second.pluginPath))
                     module.cachedFilePathsAgree = false;
             }
             module.hasPluginDescriptions = true;
             module.hasInstrumentDescription = module.hasInstrumentDescription || description.isInstrument;
         };
-        cacheDescriptionFor(vst3ModuleCacheKey(description.fileOrIdentifier).toStdString());
-        if (pluginPath.exists())
+        cacheDescriptionFor(descriptionPathKey);
+        if (paths->second.exists)
         {
-            cacheDescriptionFor(vst3ModuleCacheKey(pluginPath.getFullPathName()).toStdString());
-            cacheDescriptionFor(vst3ModuleCacheKey(
-                vst3BundleRootForPluginPath(pluginPath).getFullPathName()).toStdString());
+            cacheDescriptionFor(vst3ModuleCacheKey(paths->second.pluginPath).toStdString());
+            cacheDescriptionFor(vst3ModuleCacheKey(paths->second.bundlePath).toStdString());
         }
     }
     return decisions;
