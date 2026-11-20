@@ -1768,6 +1768,87 @@ public:
     }
 
 #if JUCE_WINDOWS
+    static int checksLivePluginInventoryScan(const juce::File& testDataDirectory)
+    {
+        if (!juce::File::isAbsolutePath(testDataDirectory.getFullPathName())
+            || getMagDrumDataDirectory() != testDataDirectory.getFullPathName())
+        {
+            std::cerr << "The live plugin inventory scan requires an isolated absolute data directory.\n";
+            return 1;
+        }
+        if (!testDataDirectory.createDirectory().wasOk())
+        {
+            std::cerr << "Could not create the isolated live-scan data directory.\n";
+            return 2;
+        }
+
+        MagDrumAudioProcessor processor;
+        auto editor = std::make_unique<MagDrumAudioProcessorEditor>(
+            processor, testDataDirectory.getChildFile("samples.sqlite3"));
+        editor->setPage(4);
+        editor->startPluginInventoryScan();
+        if (!editor->pluginInventoryScanRunning)
+        {
+            std::cerr << "The real Plugin Scanner UI job did not start: "
+                      << editor->status.getText() << '\n';
+            return 3;
+        }
+
+        struct ScanCompletionWait final : juce::Timer
+        {
+            explicit ScanCompletionWait(MagDrumAudioProcessorEditor& target) : editor(target) {}
+            void timerCallback() override
+            {
+                if (!editor.pluginInventoryScanRunning)
+                {
+                    completed = true;
+                    stopTimer();
+                    juce::MessageManager::getInstance()->stopDispatchLoop();
+                    return;
+                }
+                const auto now = juce::Time::getMillisecondCounter();
+                if (now >= deadline)
+                {
+                    if (!timedOut)
+                    {
+                        timedOut = true;
+                        editor.startPluginInventoryScan(); // use the real UI cancellation action
+                        deadline = now + 30000;
+                    }
+                    else
+                    {
+                        stopTimer();
+                        juce::MessageManager::getInstance()->stopDispatchLoop();
+                    }
+                }
+            }
+            MagDrumAudioProcessorEditor& editor;
+            juce::uint32 deadline = juce::Time::getMillisecondCounter() + 600000;
+            bool completed = false;
+            bool timedOut = false;
+        } wait(*editor);
+        wait.startTimer(100);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        wait.stopTimer();
+
+        if (wait.timedOut || !wait.completed)
+        {
+            std::cerr << "The real Plugin Scanner UI job did not finish before its deadline.\n";
+            return 4;
+        }
+        if (!editor->status.getText().contains("VST3 instrument scan complete")
+            || editor->discoveredPluginInstruments.isEmpty())
+        {
+            std::cerr << "Live VST3 scan did not complete with instrument descriptions. Status: "
+                      << editor->status.getText() << "; descriptions: "
+                      << editor->discoveredPluginInstruments.size() << '\n';
+            return 5;
+        }
+        std::cout << "Live VST3 scan complete: " << editor->discoveredPluginInstruments.size()
+                  << " instrument descriptions; " << editor->status.getText() << '\n';
+        return 0;
+    }
+
     static __declspec(noinline) int checksPluginPresetSearchAsync()
     {
         const auto fixtureRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
@@ -2596,6 +2677,13 @@ int main(int argc, char** argv)
 {
     magdrum::tests::suppressWindowsErrorDialogs();
 #if JUCE_WINDOWS
+    if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-live-plugin-inventory-scan") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        const auto dataDirectory = juce::SystemStats::getEnvironmentVariable("MAGDRUM_DATA_DIRECTORY", {});
+        if (dataDirectory.isEmpty()) return 209;
+        return MagDrumAudioProcessorEditorTestAccess::checksLivePluginInventoryScan(juce::File(dataDirectory));
+    }
     if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-metadata-conflict-overlay") == 0)
     {
         juce::ScopedJuceInitialiser_GUI guiInitialiser;
