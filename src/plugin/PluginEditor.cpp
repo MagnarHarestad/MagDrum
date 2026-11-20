@@ -3628,13 +3628,19 @@ void MagDrumAudioProcessorEditor::finishPluginPresetSearch(const juce::String& p
     }
     if (standardLocations && ! foundSearchRoot)
     {
-        status.setText(magdrum::ui::localisedText("No standard preset folder found. Choose a preset folder to search."),
-                       juce::dontSendNotification);
+        if (discoveredPluginInstruments.getReference(index).name.containsIgnoreCase("Battery"))
+            showBatteryNativeKitGuidance();
+        else
+            status.setText(magdrum::ui::localisedText("No standard preset folder found. Choose a preset folder to search."),
+                           juce::dontSendNotification);
         return;
     }
     if (files.isEmpty())
     {
-        status.setText(magdrum::ui::localisedText("No VST3 presets found."), juce::dontSendNotification);
+        if (discoveredPluginInstruments.getReference(index).name.containsIgnoreCase("Battery"))
+            showBatteryNativeKitGuidance();
+        else
+            status.setText(magdrum::ui::localisedText("No VST3 presets found."), juce::dontSendNotification);
         return;
     }
 
@@ -3662,6 +3668,20 @@ void MagDrumAudioProcessorEditor::finishPluginPresetSearch(const juce::String& p
         });
 }
 
+void MagDrumAudioProcessorEditor::showBatteryNativeKitGuidance()
+{
+    const auto guidance = magdrum::ui::localisedText(
+        "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
+    selectedPluginPresetFile = {};
+    pluginProgramSelect.setSelectedId(0, juce::dontSendNotification);
+    pluginPresetKitName.setText({}, juce::dontSendNotification);
+    importPluginPresetButton.setEnabled(false);
+    importPluginProgramButton.setEnabled(false);
+    updatePluginActionButtons();
+    status.setText(guidance, juce::dontSendNotification);
+    pluginScanInfo.setText(guidance, juce::dontSendNotification);
+}
+
 void MagDrumAudioProcessorEditor::selectPluginPreset(const juce::File& file)
 {
     if (file.existsAsFile() && file.getFileExtension().equalsIgnoreCase(".nbkt"))
@@ -3670,16 +3690,7 @@ void MagDrumAudioProcessorEditor::selectPluginPreset(const juce::File& file)
         if (juce::isPositiveAndBelow(index, discoveredPluginInstruments.size())
             && discoveredPluginInstruments.getReference(index).name.containsIgnoreCase("Battery"))
         {
-            const auto guidance = magdrum::ui::localisedText(
-                "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
-            selectedPluginPresetFile = {};
-            pluginProgramSelect.setSelectedId(0, juce::dontSendNotification);
-            pluginPresetKitName.setText({}, juce::dontSendNotification);
-            importPluginPresetButton.setEnabled(false);
-            importPluginProgramButton.setEnabled(false);
-            updatePluginActionButtons();
-            status.setText(guidance, juce::dontSendNotification);
-            pluginScanInfo.setText(guidance, juce::dontSendNotification);
+            showBatteryNativeKitGuidance();
         }
         return;
     }

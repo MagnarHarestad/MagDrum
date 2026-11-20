@@ -1781,10 +1781,29 @@ public:
             return 4;
         }
 
+        editor->discoveredPluginInstruments.getReference(0).name = "Battery 4";
+        const auto batteryIdentifier = editor->discoveredPluginInstruments.getReference(0).createIdentifierString();
+        const auto batteryKitGuidance = magdrum::ui::localisedText(
+            "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
+        editor->finishPluginPresetSearch(batteryIdentifier, {}, false, false, true);
+        if (editor->status.getText() != batteryKitGuidance
+            || editor->pluginScanInfo.getText() != batteryKitGuidance)
+        {
+            std::cerr << "Battery's missing standard preset folder did not provide the native-kit workflow.\n";
+            return 7;
+        }
+        editor->finishPluginPresetSearch(batteryIdentifier, {}, false, true, true);
+        if (editor->status.getText() != batteryKitGuidance
+            || editor->pluginScanInfo.getText() != batteryKitGuidance)
+        {
+            std::cerr << "Battery's empty standard preset search did not provide the native-kit workflow.\n";
+            return 8;
+        }
+
         if (! selectedPresetFixture.replaceWithText("preset fixture"))
         {
             std::cerr << "Could not write the selected VST3 preset fixture.\n";
-            return 5;
+            return 9;
         }
         editor->selectPluginPreset(selectedPresetFixture);
         const bool selectionPassed = editor->selectedPluginPresetFile == selectedPresetFixture
@@ -1794,17 +1813,14 @@ public:
         if (! selectionPassed)
         {
             std::cerr << "Selecting a VST3 preset did not configure the shared kit-import action.\n";
-            return 6;
+            return 10;
         }
         if (! batteryKitFixture.replaceWithText("native Battery kit fixture"))
         {
             std::cerr << "Could not write the isolated Battery kit fixture.\n";
-            return 7;
+            return 11;
         }
-        editor->discoveredPluginInstruments.getReference(0).name = "Battery 4";
         editor->selectPluginPreset(batteryKitFixture);
-        const auto batteryKitGuidance = magdrum::ui::localisedText(
-            "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
         if (editor->selectedPluginPresetFile.existsAsFile()
             || editor->pluginPresetKitName.getText().isNotEmpty()
             || editor->importPluginKitButton.isEnabled()
@@ -1812,7 +1828,7 @@ public:
             || editor->pluginScanInfo.getText() != batteryKitGuidance)
         {
             std::cerr << "Native Battery kit selection did not provide its in-app supported workflow.\n";
-            return 8;
+            return 12;
         }
         return 0;
     }

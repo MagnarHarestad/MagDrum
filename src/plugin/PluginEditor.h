@@ -174,6 +174,7 @@ private:
     void finishPluginPresetSearch(const juce::String& pluginIdentifier,
                                   juce::Array<juce::File> files, bool cancelled,
                                   bool foundSearchRoot, bool standardLocations);
+    void showBatteryNativeKitGuidance();
     void selectPluginPreset(const juce::File& file);
     void updatePluginActionButtons();
     void startPluginPresetImport();
