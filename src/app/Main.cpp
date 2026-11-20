@@ -620,11 +620,11 @@ private:
  void cancelPluginNoteScan(){if(pluginScanRunning.load())pluginScanCancellation.store(true);}
  void showPluginVelocityLayerCandidates(const juce::String& kitName)
  {
-  if(selectedPluginIdentifier.isEmpty()||kitName.trim().isEmpty()){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,magdrum::ui::localisedText("Velocity layer candidates"),magdrum::ui::localisedText("Load an instrument and enter the saved kit name first."));return;}
+  if(selectedPluginIdentifier.isEmpty()||kitName.trim().isEmpty()){status.setText(magdrum::ui::localisedText("Load an instrument and enter the saved kit name first."),juce::dontSendNotification);return;}
   const auto pluginIdentifier=selectedPluginIdentifier;
   const auto candidates=database.getPluginVelocityLayerCandidates(pluginIdentifier,kitName.trim());
   const auto confirmed=database.getConfirmedPluginVelocityLayers(pluginIdentifier,kitName.trim());
-  if(candidates.empty()&&confirmed.empty()){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,magdrum::ui::localisedText("Velocity layer candidates"),magdrum::ui::localisedText("No candidates or confirmed ranges are saved for this kit. Scan the same MIDI notes at two or more velocity levels first."));return;}
+  if(candidates.empty()&&confirmed.empty()){status.setText(magdrum::ui::localisedText("No candidates or confirmed ranges are saved for this kit. Scan the same MIDI notes at two or more velocity levels first."),juce::dontSendNotification);return;}
   juce::String report=magdrum::ui::localisedText("%1 heuristic boundary candidate(s). Listen to the captures before recording confirmed ranges. These ranges describe your review, not a claim about the plugin's internal sample zones.\n\nCandidates:\n").replace("%1",juce::String(candidates.size()));
   const int shown=juce::jmin(48,static_cast<int>(candidates.size()));
   for(int index=0;index<shown;++index){const auto&candidate=candidates[static_cast<size_t>(index)];report+=magdrum::ui::localisedText("MIDI note %1: velocity %2 to %3 (distance %4)\n").replace("%1",juce::String(candidate.midiNote)).replace("%2",juce::String(candidate.lowerVelocity)).replace("%3",juce::String(candidate.upperVelocity)).replace("%4",juce::String(candidate.spectralDistance,2));}
@@ -662,7 +662,7 @@ private:
  }
  void showPluginRoundRobinCandidates(const juce::String& kitName)
  {
-  if(selectedPluginIdentifier.isEmpty()||kitName.trim().isEmpty()){juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,magdrum::ui::localisedText("Round-robin candidates"),magdrum::ui::localisedText("Load an instrument and enter the saved kit name first."));return;}
+  if(selectedPluginIdentifier.isEmpty()||kitName.trim().isEmpty()){status.setText(magdrum::ui::localisedText("Load an instrument and enter the saved kit name first."),juce::dontSendNotification);return;}
   const auto pluginIdentifier=selectedPluginIdentifier;
   const auto candidates=database.getPluginRoundRobinCandidates(pluginIdentifier,kitName.trim());
   const auto confirmed=database.getConfirmedPluginRoundRobinGroups(pluginIdentifier,kitName.trim());
