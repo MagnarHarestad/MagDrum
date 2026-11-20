@@ -880,7 +880,8 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
     for (const auto& candidate : candidates)
     {
         const auto module = juce::File(candidate);
-        const auto cachedModule = cachedModuleIndex.find(module.getFullPathName().toStdString());
+        const auto cachedModule = cachedModuleIndex.find(
+            magdrum::plugins::vst3ModuleCacheKey(module.getFullPathName()).toStdString());
         const bool cachedBinaryIsUpToDate = cachedModule != cachedModuleIndex.end()
             && magdrum::plugins::isCachedVst3ModuleUpToDate(cachedModule->second, module);
         const bool hasSidecarManifest = module.getChildFile("Contents").getChildFile("Resources")

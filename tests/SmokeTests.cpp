@@ -483,6 +483,11 @@ int runSmokeTests(int argc,char** argv)
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, instrumentBundle) != std::optional<bool>(true)
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, legacyBundle) != std::optional<bool>(false))
         return 221;
+#if JUCE_WINDOWS
+    const juce::File differentlyCasedInstrumentBundle(instrumentBundle.getFullPathName().toUpperCase());
+    if (magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache,
+            differentlyCasedInstrumentBundle) != std::optional<bool>(true)) return 258;
+#endif
     if (!effectManifest.replaceWithText(R"({"Classes":[{"Category":"Audio Module Class","Sub Categories":["Fx","Dynamics","Updated"]}]})")
         || magdrum::plugins::cachedVst3ModuleMayBeInstrument(restoredModuleFilterCache, effectBundle).has_value()) return 222;
     auto timestampInvalidationCache = restoredModuleFilterCache;
@@ -560,14 +565,25 @@ int runSmokeTests(int argc,char** argv)
         ||!cachedModuleIndex.at("instrument-module").hasInstrumentDescription)return 210;
     const auto cachedVst3File = root.getChildFile("cached-module.vst3");
     if(!cachedVst3File.replaceWithText("test module"))return 211;
+    const auto cachedVst3FileKey=magdrum::plugins::vst3ModuleCacheKey(cachedVst3File.getFullPathName()).toStdString();
     juce::Array<juce::PluginDescription> timestampedDescriptions;
     juce::PluginDescription timestampedInstrument;timestampedInstrument.fileOrIdentifier=cachedVst3File.getFullPathName();timestampedInstrument.pluginFormatName="VST3";timestampedInstrument.isInstrument=true;timestampedInstrument.lastFileModTime=cachedVst3File.getLastModificationTime();timestampedDescriptions.add(timestampedInstrument);
     const auto timestampedIndex=magdrum::plugins::indexCachedVst3Modules(timestampedDescriptions);
-    if(!magdrum::plugins::isCachedVst3ModuleUpToDate(timestampedIndex.at(cachedVst3File.getFullPathName().toStdString()),cachedVst3File))return 212;
+    if(!magdrum::plugins::isCachedVst3ModuleUpToDate(timestampedIndex.at(cachedVst3FileKey),cachedVst3File))return 212;
+#if JUCE_WINDOWS
+    auto differentlyCasedInstrument=timestampedInstrument;
+    differentlyCasedInstrument.fileOrIdentifier=cachedVst3File.getFullPathName().toUpperCase();
+    auto caseVariantDescriptions=timestampedDescriptions;
+    caseVariantDescriptions.add(differentlyCasedInstrument);
+    const auto caseVariantIndex=magdrum::plugins::indexCachedVst3Modules(caseVariantDescriptions);
+    if(caseVariantIndex.count(cachedVst3FileKey)!=1
+        ||!caseVariantIndex.at(cachedVst3FileKey).cachedFilePathsAgree
+        ||!magdrum::plugins::isCachedVst3ModuleUpToDate(caseVariantIndex.at(cachedVst3FileKey),cachedVst3File))return 257;
+#endif
     timestampedInstrument.lastFileModTime=juce::Time();timestampedDescriptions.add(timestampedInstrument);
     const auto conflictingTimestampIndex=magdrum::plugins::indexCachedVst3Modules(timestampedDescriptions);
-    if(magdrum::plugins::isCachedVst3ModuleUpToDate(conflictingTimestampIndex.at(cachedVst3File.getFullPathName().toStdString()),cachedVst3File))return 213;
-    auto staleTimestamp=timestampedIndex.at(cachedVst3File.getFullPathName().toStdString());staleTimestamp.fileModTime=juce::Time();
+    if(magdrum::plugins::isCachedVst3ModuleUpToDate(conflictingTimestampIndex.at(cachedVst3FileKey),cachedVst3File))return 213;
+    auto staleTimestamp=timestampedIndex.at(cachedVst3FileKey);staleTimestamp.fileModTime=juce::Time();
     if(magdrum::plugins::isCachedVst3ModuleUpToDate(staleTimestamp,cachedVst3File))return 214;
     const auto cachedVst3Bundle = root.getChildFile("cached-bundle.vst3");
     const auto cachedVst3BundleBinary = cachedVst3Bundle.getChildFile("Contents/x86_64-win/cached-bundle.vst3");
@@ -581,7 +597,7 @@ int runSmokeTests(int argc,char** argv)
     juce::Array<juce::PluginDescription> bundledDescriptions;
     bundledDescriptions.add(bundledInstrument);
     const auto bundledIndex = magdrum::plugins::indexCachedVst3Modules(bundledDescriptions);
-    const auto cachedBundleEntry = bundledIndex.find(cachedVst3Bundle.getFullPathName().toStdString());
+    const auto cachedBundleEntry = bundledIndex.find(magdrum::plugins::vst3ModuleCacheKey(cachedVst3Bundle.getFullPathName()).toStdString());
     if (cachedBundleEntry == bundledIndex.end()
         || !magdrum::plugins::isCachedVst3ModuleUpToDate(cachedBundleEntry->second, cachedVst3Bundle)) return 214;
     if (!cachedVst3BundleBinary.setLastModificationTime(cachedVst3BundleBinary.getLastModificationTime()

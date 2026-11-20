@@ -100,6 +100,7 @@ bool vst3ModuleHasInstrumentDescription(
     const juce::Array<juce::PluginDescription>& descriptions, const juce::File& module);
 CachedVst3ModuleIndex indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions);
+juce::String vst3ModuleCacheKey(const juce::String& path);
 bool isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached, const juce::File& module);
 }
 

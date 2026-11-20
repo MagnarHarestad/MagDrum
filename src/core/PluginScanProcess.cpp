@@ -245,7 +245,7 @@ magdrum::plugins::Vst3ModuleInstrumentCache magdrum::plugins::loadVst3ModuleInst
         const bool hasBinaryCache = entry.binaryPath.isNotEmpty() && entry.binarySize >= 0
             && entry.binaryModifiedMilliseconds >= 0;
         if (!hasManifestCache && !hasBinaryCache) continue;
-        cache[modulePath.toStdString()] = std::move(entry);
+        cache[vst3ModuleCacheKey(modulePath).toStdString()] = std::move(entry);
     }
     return cache;
 }
@@ -254,12 +254,12 @@ std::optional<bool> magdrum::plugins::cachedVst3ModuleMayBeInstrument(
     const Vst3ModuleInstrumentCache& cache, const juce::File& bundle)
 {
     const auto manifest = vst3ModuleManifestFile(bundle);
-    const auto found = cache.find(bundle.getFullPathName().toStdString());
+    const auto found = cache.find(vst3ModuleCacheKey(bundle.getFullPathName()).toStdString());
     if (found == cache.end()) return {};
     const auto& entry = found->second;
     if (manifest.existsAsFile())
     {
-        if (entry.metadataPath != manifest.getFullPathName()
+        if (vst3ModuleCacheKey(entry.metadataPath) != vst3ModuleCacheKey(manifest.getFullPathName())
             || entry.metadataSize != manifest.getSize()
             || entry.metadataModifiedMilliseconds != manifest.getLastModificationTime().toMilliseconds())
             return {};
@@ -267,7 +267,8 @@ std::optional<bool> magdrum::plugins::cachedVst3ModuleMayBeInstrument(
     else
     {
         const auto binary = vst3ModuleBinaryFile(bundle);
-        if (entry.binaryPath != binary.getFullPathName() || !binary.existsAsFile()
+        if (vst3ModuleCacheKey(entry.binaryPath) != vst3ModuleCacheKey(binary.getFullPathName())
+            || !binary.existsAsFile()
             || entry.binarySize != binary.getSize()
             || entry.binaryModifiedMilliseconds != binary.getLastModificationTime().toMilliseconds())
             return {};
@@ -282,7 +283,7 @@ void magdrum::plugins::rememberVst3ModuleInstrumentStatus(
     Vst3ModuleInstrumentCacheEntry entry;
     if (manifest.existsAsFile())
     {
-        entry.metadataPath = manifest.getFullPathName();
+        entry.metadataPath = vst3ModuleCacheKey(manifest.getFullPathName());
         entry.metadataSize = manifest.getSize();
         entry.metadataModifiedMilliseconds = manifest.getLastModificationTime().toMilliseconds();
     }
@@ -290,12 +291,12 @@ void magdrum::plugins::rememberVst3ModuleInstrumentStatus(
     {
         const auto binary = vst3ModuleBinaryFile(bundle);
         if (!binary.existsAsFile()) return;
-        entry.binaryPath = binary.getFullPathName();
+        entry.binaryPath = vst3ModuleCacheKey(binary.getFullPathName());
         entry.binarySize = binary.getSize();
         entry.binaryModifiedMilliseconds = binary.getLastModificationTime().toMilliseconds();
     }
     entry.mayBeInstrument = mayBeInstrument;
-    cache[bundle.getFullPathName().toStdString()] = std::move(entry);
+    cache[vst3ModuleCacheKey(bundle.getFullPathName()).toStdString()] = std::move(entry);
 }
 
 magdrum::plugins::Vst3ModuleDiscoveryAction magdrum::plugins::classifyVst3ModuleForDiscovery(
@@ -509,20 +510,31 @@ magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules
             {
                 if (module.fileModTime != description.lastFileModTime)
                     module.cachedModTimesAgree = false;
-                if (module.filePath != pluginPath.getFullPathName())
+                if (vst3ModuleCacheKey(module.filePath)
+                    != vst3ModuleCacheKey(pluginPath.getFullPathName()))
                     module.cachedFilePathsAgree = false;
             }
             module.hasPluginDescriptions = true;
             module.hasInstrumentDescription = module.hasInstrumentDescription || description.isInstrument;
         };
-        cacheDescriptionFor(description.fileOrIdentifier.toStdString());
+        cacheDescriptionFor(vst3ModuleCacheKey(description.fileOrIdentifier).toStdString());
         if (pluginPath.exists())
         {
-            cacheDescriptionFor(pluginPath.getFullPathName().toStdString());
-            cacheDescriptionFor(vst3BundleRootForPluginPath(pluginPath).getFullPathName().toStdString());
+            cacheDescriptionFor(vst3ModuleCacheKey(pluginPath.getFullPathName()).toStdString());
+            cacheDescriptionFor(vst3ModuleCacheKey(
+                vst3BundleRootForPluginPath(pluginPath).getFullPathName()).toStdString());
         }
     }
     return decisions;
+}
+
+juce::String magdrum::plugins::vst3ModuleCacheKey(const juce::String& path)
+{
+    auto key = path.replaceCharacter('\\', '/');
+#if JUCE_WINDOWS
+    key = key.toLowerCase();
+#endif
+    return key;
 }
 
 bool magdrum::plugins::isCachedVst3ModuleUpToDate(const CachedVst3ModuleInfo& cached,
