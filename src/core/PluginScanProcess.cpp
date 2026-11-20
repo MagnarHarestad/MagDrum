@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 
 namespace
 {
@@ -46,6 +47,135 @@ juce::FileSearchPath magdrum::plugins::createVst3DiscoverySearchPath(
     auto result = defaultLocations;
     if (additionalFolder.isDirectory())
         result.addIfNotAlreadyThere(additionalFolder);
+    return result;
+}
+
+magdrum::plugins::Vst3SearchDirectoryCache magdrum::plugins::loadVst3SearchDirectoryCache(
+    const juce::File& cacheFile)
+{
+    Vst3SearchDirectoryCache cache;
+    if (!cacheFile.existsAsFile()) return cache;
+    const auto xml = juce::XmlDocument::parse(cacheFile);
+    if (xml == nullptr || xml->getTagName() != "MAGDRUM_VST3_DIRECTORY_CACHE"
+        || xml->getIntAttribute("version", 0) != 1)
+        return cache;
+
+    for (auto* directory = xml->getFirstChildElement(); directory != nullptr;
+         directory = directory->getNextElement())
+    {
+        if (directory->getTagName() != "DIRECTORY") continue;
+        const auto path = directory->getStringAttribute("path");
+        const auto modified = directory->getStringAttribute("modifiedMs", "-1").getLargeIntValue();
+        if (path.isEmpty() || modified < 0) continue;
+        Vst3SearchDirectoryCacheEntry entry;
+        entry.modifiedMilliseconds = modified;
+        for (auto* child = directory->getFirstChildElement(); child != nullptr;
+             child = child->getNextElement())
+        {
+            const auto childPath = child->getStringAttribute("path");
+            if (childPath.isEmpty()) continue;
+            if (child->getTagName() == "CHILD") entry.childDirectories.push_back(childPath);
+            else if (child->getTagName() == "MODULE") entry.moduleBundles.push_back(childPath);
+        }
+        cache[path.toLowerCase().toStdString()] = std::move(entry);
+    }
+    return cache;
+}
+
+bool magdrum::plugins::saveVst3SearchDirectoryCache(const juce::File& cacheFile,
+    const Vst3SearchDirectoryCache& cache)
+{
+    juce::XmlElement root("MAGDRUM_VST3_DIRECTORY_CACHE");
+    root.setAttribute("version", 1);
+    std::vector<std::pair<std::string, const Vst3SearchDirectoryCacheEntry*>> ordered;
+    ordered.reserve(cache.size());
+    for (const auto& [path, entry] : cache) ordered.emplace_back(path, &entry);
+    std::sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right)
+    { return left.first < right.first; });
+    for (const auto& [path, entry] : ordered)
+    {
+        auto* directory = root.createNewChildElement("DIRECTORY");
+        directory->setAttribute("path", juce::String::fromUTF8(path.c_str()));
+        directory->setAttribute("modifiedMs", juce::String(entry->modifiedMilliseconds));
+        for (const auto& childPath : entry->childDirectories)
+            directory->createNewChildElement("CHILD")->setAttribute("path", childPath);
+        for (const auto& modulePath : entry->moduleBundles)
+            directory->createNewChildElement("MODULE")->setAttribute("path", modulePath);
+    }
+    return cacheFile.replaceWithText(root.toString());
+}
+
+magdrum::plugins::Vst3ModuleSearchResult magdrum::plugins::enumerateVst3Modules(
+    const juce::FileSearchPath& searchPath, Vst3SearchDirectoryCache& cache)
+{
+    Vst3ModuleSearchResult result;
+    std::unordered_set<std::string> visitedDirectories;
+    std::unordered_set<std::string> seenModules;
+    const auto addModule = [&result, &seenModules](const juce::String& path)
+    {
+        const auto key = path.toLowerCase().toStdString();
+        if (seenModules.insert(key).second) result.modules.add(path);
+    };
+    std::function<void(juce::File)> visitDirectory;
+    visitDirectory = [&](juce::File directory)
+    {
+        if (directory.isSymbolicLink())
+        {
+            const auto target = directory.getLinkedTarget();
+            if (target.isDirectory()) directory = target;
+        }
+        if (!directory.isDirectory()) return;
+        const auto path = directory.getFullPathName();
+        const auto key = path.toLowerCase().toStdString();
+        if (!visitedDirectories.insert(key).second) return;
+        ++result.directoriesVisited;
+
+        auto found = cache.find(key);
+        const auto modified = directory.getLastModificationTime().toMilliseconds();
+        bool cacheValid = found != cache.end() && found->second.modifiedMilliseconds == modified;
+        if (cacheValid)
+        {
+            cacheValid = std::all_of(found->second.childDirectories.begin(),
+                found->second.childDirectories.end(), [](const auto& childPath)
+                { return juce::File(childPath).isDirectory(); })
+                && std::all_of(found->second.moduleBundles.begin(), found->second.moduleBundles.end(),
+                [](const auto& modulePath) { return juce::File(modulePath).exists(); });
+        }
+
+        if (!cacheValid)
+        {
+            Vst3SearchDirectoryCacheEntry entry;
+            entry.modifiedMilliseconds = modified;
+            ++result.directoriesEnumerated;
+            for (const auto& item : juce::RangedDirectoryIterator(directory, false, "*",
+                    juce::File::findFilesAndDirectories, juce::File::FollowSymlinks::yes))
+            {
+                const auto file = item.getFile();
+                if (file.hasFileExtension(".vst3"))
+                    entry.moduleBundles.push_back(file.getFullPathName());
+                else if (file.isDirectory())
+                    entry.childDirectories.push_back(file.getFullPathName());
+            }
+            found = cache.insert_or_assign(key, std::move(entry)).first;
+        }
+        else
+        {
+            ++result.directoriesReused;
+        }
+
+        const auto entry = found->second;
+        for (const auto& modulePath : entry.moduleBundles)
+            addModule(modulePath);
+        for (const auto& childPath : entry.childDirectories)
+            visitDirectory(juce::File(childPath));
+    };
+
+    for (int index = 0; index < searchPath.getNumPaths(); ++index)
+        visitDirectory(searchPath[index]);
+
+    for (auto entry = cache.begin(); entry != cache.end();)
+        if (visitedDirectories.count(entry->first) == 0) entry = cache.erase(entry);
+        else ++entry;
     return result;
 }
 

@@ -34,6 +34,22 @@ struct Vst3ModuleInstrumentCacheEntry
 using Vst3ModuleInstrumentCache = std::unordered_map<std::string, Vst3ModuleInstrumentCacheEntry>;
 enum class Vst3ModuleDiscoveryAction { Skip, ScanInstrument, ExcludeEffect };
 
+struct Vst3SearchDirectoryCacheEntry
+{
+    juce::int64 modifiedMilliseconds = 0;
+    std::vector<juce::String> childDirectories;
+    std::vector<juce::String> moduleBundles;
+};
+using Vst3SearchDirectoryCache = std::unordered_map<std::string, Vst3SearchDirectoryCacheEntry>;
+
+struct Vst3ModuleSearchResult
+{
+    juce::StringArray modules;
+    int directoriesVisited = 0;
+    int directoriesEnumerated = 0;
+    int directoriesReused = 0;
+};
+
 struct Vst3DiscoveryProgress
 {
     int completed = 0;
@@ -54,6 +70,11 @@ struct Vst3DiscoveryExecution
 
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
+Vst3SearchDirectoryCache loadVst3SearchDirectoryCache(const juce::File& cacheFile);
+bool saveVst3SearchDirectoryCache(const juce::File& cacheFile,
+                                  const Vst3SearchDirectoryCache& cache);
+Vst3ModuleSearchResult enumerateVst3Modules(const juce::FileSearchPath& searchPath,
+                                             Vst3SearchDirectoryCache& cache);
 bool vst3ModuleMayBeInstrument(const juce::File& bundle);
 Vst3ModuleInstrumentCache loadVst3ModuleInstrumentCache(const juce::File& cacheFile);
 std::optional<bool> cachedVst3ModuleMayBeInstrument(const Vst3ModuleInstrumentCache& cache,

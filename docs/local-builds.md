@@ -1,6 +1,6 @@
 # Local builds
 
-**Active target: Windows x64/Cubase Pro 15.** Latest release: [v0.1.2-test.287](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.287), public but not installed by the release task. Windows Release CTest passed 10/10 applicable tests (Debug assertion worker skipped); localization and package safeguards passed. Steinberg VST 3.8.1 validation passed 47 standard and 537 extended checks. Exact package state restore and MIDI 0–127 rendering passed. Cubase-host behavior remains unverified. ZIP SHA-256: `13761b0eb742c8c54a433e8adf7ea074b4b2484bd075eb424bbfa4ac8f5bbcc8`; module SHA-256: `9C8E8E99456C7ABDF6BB6953FA3A7BB10E6C1A1CC47218F28745685B7227BFB3`.
+**Active target: Windows x64/Cubase Pro 15.** Latest package: [v0.1.2-test.288](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.288), staged but not installed; release preflight is pending. Windows Release CTest passed 9/9 applicable tests (Debug assertion worker skipped); localization and package safeguards passed. VST3 discovery now caches directory inventories and re-enumerates changed folders. ZIP SHA-256: `70d263fb32922530ddbb5caf65194527c6d4f5c722e5e7c7f084586a5d45f2ad`; module SHA-256: `C149EE32D8C60E264740FB6912AE817291FFF2BF08C7F08B7CBEEB50494E3E50`.
 
 **Platform pause:** Do not start Linux/macOS builds, tests, packaging, publication or installation until the user explicitly requests resumption. Their commands and reports below are retained for historical reference only. Windows ARM64 is also outside the current x64 target.
 

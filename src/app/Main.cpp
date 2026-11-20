@@ -870,8 +870,13 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
         previouslyDiscoveredTypes);
     const auto moduleFilterCacheFile = dataDirectory.getChildFile("vst3-module-filter-cache.xml");
     auto moduleFilterCache = magdrum::plugins::loadVst3ModuleInstrumentCache(moduleFilterCacheFile);
+    const auto searchDirectoryCacheFile = dataDirectory.getChildFile("vst3-search-directory-cache.xml");
+    auto searchDirectoryCache = magdrum::plugins::loadVst3SearchDirectoryCache(searchDirectoryCacheFile);
     juce::StringArray instrumentCandidates;
-    const auto candidates = vst3->searchPathsForPlugins(searchPath, true, false);
+    const auto searchResult = magdrum::plugins::enumerateVst3Modules(searchPath, searchDirectoryCache);
+    if (!magdrum::plugins::saveVst3SearchDirectoryCache(searchDirectoryCacheFile, searchDirectoryCache))
+        return 7;
+    const auto& candidates = searchResult.modules;
     for (const auto& candidate : candidates)
     {
         const auto module = juce::File(candidate);

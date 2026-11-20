@@ -414,6 +414,32 @@ int runSmokeTests(int argc,char** argv)
     const juce::FileSearchPath defaultsWithCustom(defaultPluginPath+";"+customPluginRoot.getFullPathName());
     const auto duplicatePluginSearch=magdrum::plugins::createVst3DiscoverySearchPath(defaultsWithCustom,customPluginRoot);
     if(duplicatePluginSearch.getNumPaths()!=3)return 209;
+    const auto cachedSearchRoot = root.getChildFile("cached-vst3-search-root");
+    const auto cachedSearchNested = cachedSearchRoot.getChildFile("vendor").getChildFile("plugins");
+    if (!cachedSearchNested.createDirectory().wasOk()) return 308;
+    const auto cachedSearchModule = cachedSearchNested.getChildFile("FirstInstrument.vst3");
+    if (!cachedSearchModule.createDirectory().wasOk()) return 309;
+    const juce::FileSearchPath cachedSearchPath(cachedSearchRoot.getFullPathName());
+    magdrum::plugins::Vst3SearchDirectoryCache searchDirectoryCache;
+    const auto firstSearch = magdrum::plugins::enumerateVst3Modules(cachedSearchPath, searchDirectoryCache);
+    if (firstSearch.modules.size() != 1 || firstSearch.modules[0] != cachedSearchModule.getFullPathName()
+        || firstSearch.directoriesEnumerated != 3 || firstSearch.directoriesReused != 0)
+        return 310;
+    const auto directoryCacheFile = root.getChildFile("vst3-search-directory-cache.xml");
+    if (!magdrum::plugins::saveVst3SearchDirectoryCache(directoryCacheFile, searchDirectoryCache)) return 311;
+    auto reloadedDirectoryCache = magdrum::plugins::loadVst3SearchDirectoryCache(directoryCacheFile);
+    const auto cachedSearch = magdrum::plugins::enumerateVst3Modules(cachedSearchPath, reloadedDirectoryCache);
+    if (cachedSearch.modules != firstSearch.modules || cachedSearch.directoriesEnumerated != 0
+        || cachedSearch.directoriesReused != 3) return 312;
+    const auto secondSearchModule = cachedSearchNested.getChildFile("SecondInstrument.vst3");
+    if (!secondSearchModule.createDirectory().wasOk()) return 313;
+    const auto changedSearch = magdrum::plugins::enumerateVst3Modules(cachedSearchPath, reloadedDirectoryCache);
+    if (changedSearch.modules.size() != 2 || changedSearch.directoriesEnumerated < 1
+        || !changedSearch.modules.contains(secondSearchModule.getFullPathName())) return 315;
+    if (!cachedSearchModule.deleteRecursively()) return 316;
+    const auto removedSearch = magdrum::plugins::enumerateVst3Modules(cachedSearchPath, reloadedDirectoryCache);
+    if (removedSearch.modules.size() != 1 || removedSearch.modules[0] != secondSearchModule.getFullPathName())
+        return 317;
     const auto effectBundle = customPluginRoot.getChildFile("WavesEffect.vst3");
     const auto instrumentBundle = customPluginRoot.getChildFile("DrumInstrument.vst3");
     const auto mixedBundle = customPluginRoot.getChildFile("MultiClassInstrument.vst3");
