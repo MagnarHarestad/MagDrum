@@ -2694,7 +2694,11 @@ int main(int argc, char** argv)
         juce::ScopedJuceInitialiser_GUI guiInitialiser;
         MagDrumAudioProcessor editorProcessor;
         const auto editorDatabase = root.getChildFile("plugin-editor-db").getChildFile("samples.sqlite3");
-        MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
+        // The editor owns many GUI components and large fixed-size test state.
+        // Keep it off the small default Windows thread stack to prevent
+        // intermittent 0xc00000fd crashes while the headless UI tests run.
+        auto editorOwner = std::make_unique<MagDrumAudioProcessorEditor>(editorProcessor, editorDatabase);
+        auto& editor = *editorOwner;
         const int partialInventoryCheck = MagDrumAudioProcessorEditorTestAccess::checksPartialPluginInventoryRefresh(editor);
         if (partialInventoryCheck != 0) return 390 + partialInventoryCheck;
         const int pluginScanRangeCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginScanNoteRangePersists(editor);
