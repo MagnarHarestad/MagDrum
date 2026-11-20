@@ -1895,6 +1895,36 @@ public:
             for (const auto& assignment : importedAssignments)
                 if (assignment.path == preservedSample.getFullPathName() || ! juce::File(assignment.path).existsAsFile())
                     return 7;
+
+            processor->prepareToPlay(44100.0, 128);
+            const auto renderImportedKitPeak = [&processor](int velocity)
+            {
+                double peak = 0.0;
+                for (int blockIndex = 0; blockIndex < 8; ++blockIndex)
+                {
+                    juce::AudioBuffer<float> audio(2, 128);
+                    juce::MidiBuffer midi;
+                    if (blockIndex == 0)
+                        midi.addEvent(juce::MidiMessage::noteOn(10, 36,
+                            static_cast<juce::uint8>(velocity)), 0);
+                    processor->processBlock(audio, midi);
+                    for (int channel = 0; channel < audio.getNumChannels(); ++channel)
+                        for (int frame = 0; frame < audio.getNumSamples(); ++frame)
+                            peak = juce::jmax(peak, static_cast<double>(std::abs(
+                                audio.getSample(channel, frame))));
+                }
+                return peak;
+            };
+            for (const auto velocity : {1, 64, 127})
+            {
+                const auto peak = renderImportedKitPeak(velocity);
+                if (!std::isfinite(peak) || peak <= 1.0e-6)
+                {
+                    std::cerr << "Imported Battery kit produced no MIDI note-36 audio at velocity "
+                              << velocity << ".\n";
+                    return 8;
+                }
+            }
         }
         else if (importedAssignments.size() != 1 || importedAssignments.front().midiNote != 36
             || importedAssignments.front().path != preservedSample.getFullPathName())
