@@ -13,7 +13,9 @@ Language currentLanguage();
 juce::ChangeBroadcaster& languageChangeBroadcaster();
 void setLanguage(Language language, bool persistPreference = true);
 juce::String languageName(Language language);
-void showApplicationMenu(juce::Component& target, std::function<void()> onChanged = {});
+void showApplicationMenu(juce::Component& target, std::function<void()> onChanged = {},
+                         std::function<void(juce::PopupMenu&)> appendItems = {},
+                         std::function<void(int)> onAction = {});
 
 inline juce::String localisedText(const char* sourceText)
 {

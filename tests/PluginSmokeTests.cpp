@@ -1200,9 +1200,15 @@ public:
     {
         editor.setPage(4);
         const auto inventoryMenu = editor.createPluginInventoryMenu();
-        if (inventoryMenu.getNumItems() != 3)
+        std::vector<int> inventoryMenuItemIds;
+        juce::PopupMenu::MenuItemIterator inventoryMenuItems(inventoryMenu);
+        while (inventoryMenuItems.next())
+            if (!inventoryMenuItems.getItem().isSeparator)
+                inventoryMenuItemIds.push_back(inventoryMenuItems.getItem().itemID);
+        if (inventoryMenu.getNumItems() != 2 || inventoryMenuItemIds.size() != 2
+            || inventoryMenuItemIds[0] != 101 || inventoryMenuItemIds[1] != 102)
         {
-            std::cerr << "The combined scan action should expose scan, custom-folder and refresh choices.\n";
+            std::cerr << "The scan-options submenu should expose custom-folder and refresh choices.\n";
             return 11;
         }
         const auto sourceMenu = editor.createPluginSourceMenu();

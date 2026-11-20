@@ -430,6 +430,7 @@ countries: de
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Diese Kandidaten basieren auf Klangmerkmalen. Vor dem Ersetzen oder Löschen bitte anhören."
 "PLUGIN SCANNER" = "PLUGIN-SCAN"
 "Refresh instruments" = "Instrumente aktualisieren"
+"Plugin scan options" = "Plug-in-Suchoptionen"
 "Open instrument manager" = "Instrumentenverwaltung öffnen"
 "Scan kit notes" = "Kit-Noten scannen"
 "Velocity levels" = "Anschlagstärken"
@@ -1222,6 +1223,7 @@ countries: fr
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Ces candidats sont basés sur leurs caractéristiques. Écoutez-les avant de remplacer ou supprimer des échantillons."
 "PLUGIN SCANNER" = "SCAN DE PLUG-IN"
 "Refresh instruments" = "Actualiser les instruments"
+"Plugin scan options" = "Options d’analyse des plug-ins"
 "Open instrument manager" = "Ouvrir le gestionnaire d’instruments"
 "Scan kit notes" = "Analyser les notes du kit"
 "Velocity levels" = "Vélocités"
@@ -2014,6 +2016,7 @@ countries: es
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Estos candidatos se basan en características. Escúchalos antes de sustituir o eliminar muestras."
 "PLUGIN SCANNER" = "ESCÁNER DE PLUG-INS"
 "Refresh instruments" = "Actualizar instrumentos"
+"Plugin scan options" = "Opciones de búsqueda de plug-ins"
 "Open instrument manager" = "Abrir administrador de instrumentos"
 "Scan kit notes" = "Escanear notas del kit"
 "Velocity levels" = "Niveles de velocidad"
@@ -2806,6 +2809,7 @@ countries: se
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Dessa kandidater baseras på ljudegenskaper. Lyssna innan du ersätter eller tar bort samples."
 "PLUGIN SCANNER" = "PLUGIN-SKANNER"
 "Refresh instruments" = "Uppdatera instrument"
+"Plugin scan options" = "Plugin-sökalternativ"
 "Open instrument manager" = "Öppna instrumenthanteraren"
 "Scan kit notes" = "Skanna kitnoter"
 "Velocity levels" = "Velocitynivåer"
@@ -3598,6 +3602,7 @@ countries: no
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Disse kandidatene er basert på lydegenskaper. Lytt før du erstatter eller sletter samples."
 "PLUGIN SCANNER" = "PLUGIN-SKANNER"
 "Refresh instruments" = "Oppdater instrumenter"
+"Plugin scan options" = "Alternativer for pluginsøk"
 "Open instrument manager" = "Åpne instrumentbehandling"
 "Scan kit notes" = "Skann kittoner"
 "Velocity levels" = "Velocitynivåer"
@@ -4390,6 +4395,7 @@ countries: dk
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Disse kandidater er baseret på lydegenskaber. Lyt, før du erstatter eller sletter samples."
 "PLUGIN SCANNER" = "PLUGIN-SCANNER"
 "Refresh instruments" = "Opdater instrumenter"
+"Plugin scan options" = "Indstillinger for plugin-scanning"
 "Open instrument manager" = "Åbn instrumenthåndtering"
 "Scan kit notes" = "Scan kitnoder"
 "Velocity levels" = "Velocityniveauer"
@@ -5182,6 +5188,7 @@ countries: fi
 "These are feature-based candidates. Listen before replacing or deleting samples." = "Ehdokkaat perustuvat ääniominaisuuksiin. Kuuntele ne ennen näytteiden korvaamista tai poistamista."
 "PLUGIN SCANNER" = "LIITÄNNÄISSKANNERI"
 "Refresh instruments" = "Päivitä soittimet"
+"Plugin scan options" = "Liitännäishaun asetukset"
 "Open instrument manager" = "Avaa soitinhallinta"
 "Scan kit notes" = "Skannaa kitin nuotit"
 "Velocity levels" = "Velocity-tasot"
@@ -5613,17 +5620,29 @@ void initialiseMagDrumLocalization()
     applyMappings();
 }
 
-void showApplicationMenu(juce::Component& target, std::function<void()> onChanged)
+void showApplicationMenu(juce::Component& target, std::function<void()> onChanged,
+                         std::function<void(juce::PopupMenu&)> appendItems,
+                         std::function<void(int)> onAction)
 {
     juce::PopupMenu menu;
     juce::PopupMenu languages;
     for (int i = 0; i < 8; ++i)
         languages.addItem(i + 1, localisedText(languageName(static_cast<Language>(i))), true, static_cast<int>(currentLanguage()) == i);
     menu.addSubMenu(localisedText("Language"), languages);
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target), [onChanged = std::move(onChanged)](int result) {
-        if (result < 1 || result > 8) return;
-        setLanguage(static_cast<Language>(result - 1));
-        if (onChanged) onChanged();
+    if (appendItems)
+    {
+        menu.addSeparator();
+        appendItems(menu);
+    }
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target),
+        [onChanged = std::move(onChanged), onAction = std::move(onAction)](int result) {
+        if (result >= 1 && result <= 8)
+        {
+            setLanguage(static_cast<Language>(result - 1));
+            if (onChanged) onChanged();
+            return;
+        }
+        if (onAction) onAction(result);
     });
 }
 }
