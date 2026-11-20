@@ -2,6 +2,8 @@
 
 MagDrum stores the local library in `samples.sqlite3` under the user's application data directory. The SQLite database remains local to each device. Opt-in metadata synchronization exports validated JSON snapshots to a user-selected folder; audio, local paths and the live database are never synchronized or uploaded.
 
+Set `MAGDRUM_DATA_DIRECTORY` to an absolute path to place the app, VST and scanner helper's local data in a separate directory, for example during isolated tests. When unset or invalid, MagDrum uses the operating system's per-user application data location.
+
 The database evolves with additive migrations. `schema_info.version` records the current schema level (version 19); SQLite's `user_version` is not used. Existing sample paths, manual categories and user tags are retained while columns, indexes or tables are added. Startup tolerates only the expected duplicate-column error from an already-applied additive migration; other migration errors fail database opening instead of being ignored. Version 17 adds a transactional rebuild of the FTS5 trigram search index from existing sample, tag, source, plugin and kit metadata. Version 18 adds the persistent local device identity used by optional metadata-folder sync. Version 19 adds operation records for user-tag additions and observed removals plus the references each removal observed; startup backfills existing user tags so older libraries can participate in sync. Folder snapshots use these operations to preserve concurrent re-adds. Rows without acoustic fingerprint version 1 or the current sample analysis version (version 8) are rescanned once so updated measurements and filename-derived classifier and articulation tags are populated.
 
 ## Current tables

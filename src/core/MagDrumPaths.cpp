@@ -2,6 +2,9 @@
 
 juce::File getMagDrumDataDirectory()
 {
+    const auto configuredDirectory = juce::SystemStats::getEnvironmentVariable("MAGDRUM_DATA_DIRECTORY", {}).trim();
+    if (configuredDirectory.isNotEmpty() && juce::File::isAbsolutePath(configuredDirectory))
+        return juce::File(configuredDirectory).getFullPathName();
 #if JUCE_IOS
    #ifndef MAGDRUM_APP_GROUP_ID
     #define MAGDRUM_APP_GROUP_ID "group.com.censordesign.magdrum"

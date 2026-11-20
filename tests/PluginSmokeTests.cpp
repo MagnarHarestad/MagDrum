@@ -3,6 +3,7 @@
 #include "plugin/DrumPadLayout.h"
 #include "core/PluginScanProcess.h"
 #include "core/ScopedFileAccess.h"
+#include "core/MagDrumPaths.h"
 #include "ui/MagDrumLocalization.h"
 #include <cmath>
 #include <algorithm>
@@ -1446,6 +1447,167 @@ public:
         return 0;
     }
 
+#if JUCE_WINDOWS
+    static int checksPluginScannerUiWorkflow(const juce::File& pluginBundle,
+                                             const juce::File& testDataDirectory)
+    {
+        const auto scannerApplication = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+            .getParentDirectory().getChildFile("MagDrum.exe");
+        if (!pluginBundle.isDirectory() || !scannerApplication.existsAsFile()
+            || !juce::File::isAbsolutePath(testDataDirectory.getFullPathName())
+            || getMagDrumDataDirectory() != testDataDirectory.getFullPathName())
+        {
+            std::cerr << "The isolated scanner UI test paths are invalid.\n";
+            return 1;
+        }
+        testDataDirectory.deleteRecursively();
+        if (!testDataDirectory.createDirectory().wasOk())
+        {
+            std::cerr << "Could not create the isolated scanner UI data directory.\n";
+            return 2;
+        }
+        juce::VST3PluginFormat format;
+        juce::OwnedArray<juce::PluginDescription> descriptions;
+        format.findAllTypesForFile(descriptions, pluginBundle.getFullPathName());
+        if (descriptions.isEmpty())
+        {
+            std::cerr << "Could not discover MagDrum's VST3 test instrument.\n";
+            return 3;
+        }
+        const auto description = *descriptions.getFirst();
+        const auto sampleFile = testDataDirectory.getChildFile("source-kick.wav");
+        if (!writeFixture(sampleFile))
+        {
+            std::cerr << "Could not create the isolated scanner UI sample.\n";
+            return 4;
+        }
+
+        auto sourceProcessor = std::make_unique<MagDrumAudioProcessor>();
+        if (!sourceProcessor->loadSampleForNote(36, sampleFile))
+        {
+            std::cerr << "Could not prepare the source VST3 kit state.\n";
+            return 5;
+        }
+        juce::MemoryBlock processorState;
+        sourceProcessor->getStateInformation(processorState);
+        juce::XmlElement hostState("VST3PluginState");
+        hostState.createNewChildElement("IComponent")->addTextElement(processorState.toBase64Encoding());
+        juce::MemoryBlock savedState;
+        juce::AudioProcessor::copyXmlToBinary(hostState, savedState);
+        if (processorState.isEmpty() || savedState.isEmpty())
+        {
+            std::cerr << "Could not serialize the selected kit for the scanner UI.\n";
+            return 6;
+        }
+
+        const auto databaseFile = testDataDirectory.getChildFile("samples.sqlite3");
+        {
+            auto editorProcessor = std::make_unique<MagDrumAudioProcessor>();
+            auto editor = std::make_unique<MagDrumAudioProcessorEditor>(*editorProcessor, databaseFile);
+            editor->setPage(4);
+            editor->discoveredPluginInstruments.add(description);
+            editor->pluginInstrumentSelect.addItem(description.name + "  ·  " + description.manufacturerName, 1);
+            editor->pluginInstrumentSelect.setSelectedId(1, juce::dontSendNotification);
+            const auto identifier = description.createIdentifierString();
+            const PluginInstrumentRecord instrument{identifier, description.pluginFormatName,
+                description.name, description.manufacturerName, description.category,
+                description.fileOrIdentifier, description.version};
+            const bool instrumentSaved = editor->databaseReady && editor->database.upsertPluginInstrument(instrument);
+            const auto kitId = instrumentSaved
+                ? editor->database.savePluginKit(identifier, "Scanner UI Test Kit", savedState)
+                : std::optional<std::int64_t>{};
+            if (!instrumentSaved || !kitId)
+            {
+                std::cerr << "Could not save the isolated scanner UI kit.\n";
+                return 7;
+            }
+            editor->refreshPluginKits();
+            if (editor->pluginKitSelect.getText() != "Scanner UI Test Kit")
+            {
+                std::cerr << "The saved kit did not appear in the Plugin Scanner kit selector.\n";
+                return 8;
+            }
+
+            editor->pluginNoteRange.setSelectedId(2, juce::dontSendNotification);
+            editor->pluginVelocities.setText("100", juce::dontSendNotification);
+            editor->pluginNoteDuration.setText("0.05", juce::dontSendNotification);
+            editor->pluginRelease.setText("0.05", juce::dontSendNotification);
+            editor->pluginCaptureLength.setText("0.15", juce::dontSendNotification);
+            editor->pluginRepeatCount.setText("1", juce::dontSendNotification);
+            editor->startPluginNoteScan();
+            if (!editor->pluginScanRunning)
+            {
+                std::cerr << "The Plugin Scanner UI did not start its selected kit scan: "
+                          << editor->status.getText() << '\n';
+                return 9;
+            }
+
+            struct ScanCompletionWait final : juce::Timer
+            {
+                explicit ScanCompletionWait(MagDrumAudioProcessorEditor& target) : editor(target) {}
+                void timerCallback() override
+                {
+                    if (! editor.pluginScanRunning)
+                    {
+                        stopTimer();
+                        juce::MessageManager::getInstance()->stopDispatchLoop();
+                        return;
+                    }
+                    if (juce::Time::getMillisecondCounter() >= deadline)
+                    {
+                        timedOut = true;
+                        editor.cancelPluginNoteScan();
+                        stopTimer();
+                        juce::MessageManager::getInstance()->stopDispatchLoop();
+                    }
+                }
+                MagDrumAudioProcessorEditor& editor;
+                juce::uint32 deadline = juce::Time::getMillisecondCounter() + 150000;
+                bool timedOut = false;
+            } completionWait(*editor);
+            completionWait.startTimer(10);
+            juce::MessageManager::getInstance()->runDispatchLoop();
+
+            if (completionWait.timedOut || editor->pluginScanRunning)
+            {
+                std::cerr << "The selected-kit MIDI scan did not finish within 150 seconds.\n";
+                return 10;
+            }
+
+            bool audibleKickWasIndexed = false;
+            for (const auto& sound : editor->database.getPluginSoundBrowseRecords())
+            {
+                if (sound.pluginIdentifier == identifier && sound.kitName == "Scanner UI Test Kit"
+                    && sound.midiNote == 36 && sound.velocity == 100
+                    && sound.previewFile.existsAsFile() && sound.previewFile.getSize() > 0)
+                    audibleKickWasIndexed = true;
+            }
+            if (!audibleKickWasIndexed || !editor->pluginScanInfo.getText().contains("47 saved")
+                || editor->scanPluginKitButton.getButtonText() != magdrum::ui::localisedText("Scan kit notes"))
+            {
+                std::cerr << "The UI scan did not finish with an indexed C1 capture. Status: "
+                          << editor->pluginScanInfo.getText() << '\n';
+                return 11;
+            }
+
+            SampleBrowseFilter browserFilter;
+            browserFilter.pluginName = description.name;
+            browserFilter.kitName = "Scanner UI Test Kit";
+            const auto browserPage = editor->database.searchSampleBrowseRecords(browserFilter, 20, 0);
+            if (std::none_of(browserPage.records.begin(), browserPage.records.end(),
+                [&identifier](const auto& sample)
+                { return sample.pluginIdentifier == identifier && sample.midiNote == 36; }))
+            {
+                std::cerr << "The captured C1 sound did not appear in the unified sample browser query.\n";
+                return 12;
+            }
+        }
+
+        testDataDirectory.deleteRecursively();
+        return 0;
+    }
+#endif
+
     static int checksPartialPluginInventoryRefresh(MagDrumAudioProcessorEditor& editor)
     {
         const auto inventoryFile = editor.databaseFile.getParentDirectory().getChildFile("vst3-plugins.xml");
@@ -2185,6 +2347,16 @@ public:
 
 int main(int argc, char** argv)
 {
+#if JUCE_WINDOWS
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-plugin-scanner-ui") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        const auto dataDirectory = juce::SystemStats::getEnvironmentVariable("MAGDRUM_DATA_DIRECTORY", {});
+        if (dataDirectory.isEmpty()) return 210;
+        return MagDrumAudioProcessorEditorTestAccess::checksPluginScannerUiWorkflow(
+            juce::File(argv[2]), juce::File(dataDirectory));
+    }
+#endif
     if (argc == 3 && std::strcmp(argv[1], "--magdrum-plugin-scan-worker") == 0)
         return PluginScanProcess::runWorker(juce::File(argv[2]));
 

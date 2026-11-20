@@ -93,6 +93,13 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  get_target_property(MAGDRUM_VST3_TEST_BUNDLE MagDrumPlugin_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
  add_test(NAME MagDrumTests COMMAND MagDrumTests "${MAGDRUM_VST3_TEST_BUNDLE}" "$<TARGET_FILE:MagDrumPluginTests>" "$<TARGET_FILE:MagDrum>")
  if(WIN32)
+  add_dependencies(MagDrumPluginTests MagDrum)
+  add_custom_command(TARGET MagDrumPluginTests POST_BUILD
+   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:MagDrum>" "$<TARGET_FILE_DIR:MagDrumPluginTests>/$<TARGET_FILE_NAME:MagDrum>")
+  add_test(NAME MagDrumPluginScannerWorkflowUi COMMAND MagDrumPluginTests --magdrum-test-plugin-scanner-ui "${MAGDRUM_VST3_TEST_BUNDLE}")
+  set_tests_properties(MagDrumPluginScannerWorkflowUi PROPERTIES
+   TIMEOUT 180
+   ENVIRONMENT "MAGDRUM_DATA_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/plugin-scanner-ui-test-data")
   add_test(NAME MagDrumDebugAssertionWorker COMMAND MagDrumTests --magdrum-debug-assertion-worker-check "$<TARGET_FILE:MagDrum>")
   set_tests_properties(MagDrumDebugAssertionWorker PROPERTIES CONFIGURATIONS Debug SKIP_RETURN_CODE 77)
   add_test(NAME MagDrumHeadlessWorkerWindowSuppression COMMAND MagDrum --magdrum-test-worker-window-suppression)
