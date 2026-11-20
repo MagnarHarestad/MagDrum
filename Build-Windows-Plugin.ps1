@@ -2,7 +2,7 @@
 param(
     [string] $BuildDirectory = 'build/local-windows-dev-x64',
     [ValidateRange(1, 64)]
-    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8)
+    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 2)
 )
 
 $ErrorActionPreference = 'Stop'
