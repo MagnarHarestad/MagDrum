@@ -4169,17 +4169,22 @@ void MagDrumAudioProcessorEditor::finishPluginProgramDiscovery(int exitCode, boo
         updatePluginActionButtons();
         return;
     }
+    if (programs.isEmpty())
+    {
+        const auto guidance = magdrum::ui::localisedText("This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file.");
+        pluginPresetKitName.setText({}, juce::dontSendNotification);
+        pluginScanInfo.setText(guidance, juce::dontSendNotification);
+        updatePluginActionButtons();
+        status.setText(guidance, juce::dontSendNotification);
+        return;
+    }
     for (int i = 0; i < programs.size(); ++i)
         pluginProgramSelect.addItem(programs[i], i + 1);
-    if (! programs.isEmpty())
-    {
-        pluginProgramSelect.setSelectedId(1, juce::dontSendNotification);
-        pluginPresetKitName.setText(programs[0], juce::dontSendNotification);
-    }
-    importPluginProgramButton.setEnabled(! programs.isEmpty() && ! pluginPresetImportRunning);
+    pluginProgramSelect.setSelectedId(1, juce::dontSendNotification);
+    pluginPresetKitName.setText(programs[0], juce::dontSendNotification);
+    importPluginProgramButton.setEnabled(! pluginPresetImportRunning);
     updatePluginActionButtons();
-    status.setText(programs.isEmpty() ? magdrum::ui::localisedText("No programs exposed by this instrument.")
-                                      : magdrum::ui::localisedText("Instrument programs loaded: ") + juce::String(programs.size()),
+    status.setText(magdrum::ui::localisedText("Instrument programs loaded: ") + juce::String(programs.size()),
                    juce::dontSendNotification);
 }
 

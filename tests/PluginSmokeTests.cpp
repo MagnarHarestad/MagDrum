@@ -353,6 +353,31 @@ public:
             || editor.status.getText() != guidance)
             return 2;
 
+        const auto originalLanguage = magdrum::ui::currentLanguage();
+        const auto noProgramListMessage = "This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file.";
+        const std::array languages{
+            magdrum::ui::Language::english, magdrum::ui::Language::german,
+            magdrum::ui::Language::french, magdrum::ui::Language::spanish,
+            magdrum::ui::Language::swedish, magdrum::ui::Language::norwegian,
+            magdrum::ui::Language::danish, magdrum::ui::Language::finnish};
+        bool noProgramListGuidanceMatches = true;
+        for (const auto language : languages)
+        {
+            magdrum::ui::setLanguage(language, false);
+            editor.applyLanguage();
+            editor.finishPluginProgramDiscovery(0, false, {}, false, {});
+            const auto expected = magdrum::ui::localisedText(noProgramListMessage);
+            if (editor.status.getText() != expected
+                || editor.pluginScanInfo.getText() != expected
+                || editor.pluginProgramSelect.getNumItems() != 0
+                || editor.importPluginProgramButton.isEnabled())
+                noProgramListGuidanceMatches = false;
+        }
+        magdrum::ui::setLanguage(originalLanguage, false);
+        editor.applyLanguage();
+        if (! noProgramListGuidanceMatches)
+            return 3;
+
         editor.discoveredPluginInstruments = originalInventory;
         editor.pluginInstrumentSelect.clear(juce::dontSendNotification);
         for (int index = 0; index < originalInventory.size(); ++index)

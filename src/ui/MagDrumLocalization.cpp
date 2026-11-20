@@ -798,6 +798,8 @@ countries: de
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Dieses Instrument stellt generische MIDI-Programmplätze statt Kit-Namen bereit. Lade das gewünschte Kit im Editor, speichere es in der Verwaltung und schließe sie, damit MagDrum aktualisiert wird."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery stellt generische MIDI-Programmplätze statt Kit-Namen bereit. Lade das .nbkt-Kit in Battery, speichere dessen Zustand in der Verwaltung und schließe sie, damit MagDrum aktualisiert wird."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Dieses Instrument stellt keine Programmliste bereit. Wähle sein Kit im Editor aus oder lade eine .vstpreset-Datei."
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1592,6 +1594,8 @@ countries: fr
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Cet instrument ne propose que des emplacements de programme MIDI génériques, pas des noms de kits. Chargez le kit souhaité dans son éditeur, enregistrez-le dans le gestionnaire, puis fermez celui-ci pour actualiser MagDrum."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery propose des emplacements de programme MIDI génériques, pas des noms de kits. Chargez le kit .nbkt dans Battery, enregistrez son état dans le gestionnaire, puis fermez celui-ci pour actualiser MagDrum."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Cet instrument ne fournit aucune liste de programmes. Choisissez son kit dans son éditeur ou chargez un fichier .vstpreset."
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -2386,6 +2390,8 @@ countries: es
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Este instrumento solo ofrece posiciones genéricas de programa MIDI, no nombres de kits. Carga el kit deseado en su editor, guárdalo en el administrador y ciérralo para actualizar MagDrum."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery ofrece posiciones genéricas de programa MIDI, no nombres de kits. Carga el kit .nbkt en Battery, guarda su estado en el administrador y ciérralo para actualizar MagDrum."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Este instrumento no ofrece una lista de programas. Selecciona su kit en el editor o carga un archivo .vstpreset."
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -3180,6 +3186,8 @@ countries: se
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Det här instrumentet visar generiska MIDI-programplatser, inte kitnamn. Ladda önskat kit i dess editor, spara det i hanteraren och stäng den för att uppdatera MagDrum."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery visar generiska MIDI-programplatser, inte kitnamn. Ladda .nbkt-kitet i Battery, spara dess tillstånd i hanteraren och stäng den för att uppdatera MagDrum."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Instrumentet har ingen programlista. Välj dess kit i redigeraren eller läs in en .vstpreset-fil."
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -3974,6 +3982,8 @@ countries: no
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Dette instrumentet viser bare generiske MIDI-programplasser, ikke kitnavn. Last inn ønsket kit i editoren, lagre det i behandleren og lukk behandleren for å oppdatere MagDrum."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery viser generiske MIDI-programplasser, ikke kitnavn. Last inn .nbkt-kitet i Battery, lagre tilstanden i behandleren og lukk den for å oppdatere MagDrum."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Dette instrumentet tilbyr ingen programliste. Velg kitet i redigereren eller last inn en .vstpreset-fil."
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -4768,6 +4778,8 @@ countries: dk
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Dette instrument viser kun generiske MIDI-programpladser, ikke kitnavne. Indlæs kittet i instrumentets editor, gem det i håndteringen, og luk den for at opdatere MagDrum."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery viser generiske MIDI-programpladser, ikke kitnavne. Indlæs .nbkt-kittet i Battery, gem tilstanden i håndteringen, og luk den for at opdatere MagDrum."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Dette instrument har ingen programliste. Vælg dets kit i editoren, eller indlæs en .vstpreset-fil."
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -5562,6 +5574,8 @@ countries: fi
 
 "This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum." = "Tämä soitin näyttää vain yleisiä MIDI-ohjelmapaikkoja, ei kittien nimiä. Lataa haluamasi kitti editorissa, tallenna se hallinnassa ja sulje hallinta MagDrumin päivittämiseksi."
 "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum." = "Battery näyttää yleisiä MIDI-ohjelmapaikkoja, ei kittien nimiä. Lataa .nbkt-kitti Batteryssa, tallenna sen tila hallinnassa ja sulje hallinta MagDrumin päivittämiseksi."
+
+"This instrument exposes no program list. Select its kit in the editor or load a .vstpreset file." = "Tämä instrumentti ei tarjoa ohjelmaluetteloa. Valitse sen kitti editorissa tai lataa .vstpreset-tiedosto."
 )translations";
 
 Language selected = Language::english;
