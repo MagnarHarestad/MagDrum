@@ -289,6 +289,12 @@ public:
 class MagDrumAudioProcessorEditorTestAccess
 {
 public:
+    static bool startInstrumentManagerProcess(MagDrumAudioProcessorEditor& editor,
+                                              const juce::StringArray& arguments)
+    {
+        return editor.startInstrumentManagerProcess(arguments);
+    }
+
     static int checksPluginScanNoteRangePersists(MagDrumAudioProcessorEditor& editor)
     {
         const juce::Point<int> originalSize{editor.getWidth(), editor.getHeight()};
@@ -1542,35 +1548,76 @@ public:
                 return 9;
             }
 
-            struct ScanCompletionWait final : juce::Timer
+            constexpr auto managerKitName = "Battery kit saved by manager";
+            struct WorkflowCompletionWait final : juce::Timer
             {
-                explicit ScanCompletionWait(MagDrumAudioProcessorEditor& target) : editor(target) {}
+                WorkflowCompletionWait(MagDrumAudioProcessorEditor& target, const juce::File& databasePath,
+                                       const juce::String& instrumentId, const juce::MemoryBlock& state,
+                                       juce::String expectedKit)
+                    : editor(target), databaseFile(databasePath), identifier(instrumentId),
+                      kitState(state), kitName(std::move(expectedKit)) {}
                 void timerCallback() override
                 {
-                    if (! editor.pluginScanRunning)
+                    if (! editor.pluginScanRunning && ! managerStarted && ! managerStartFailed)
                     {
-                        stopTimer();
-                        juce::MessageManager::getInstance()->stopDispatchLoop();
-                        return;
+                        if (! managerDatabase.open(databaseFile)
+                            || ! managerDatabase.savePluginKit(identifier, kitName, kitState))
+                        {
+                            managerStartFailed = true;
+                        }
+                        else
+                        {
+                            const auto commandProcessor = juce::SystemStats::getEnvironmentVariable(
+                                "ComSpec", "C:\\Windows\\System32\\cmd.exe");
+                            juce::StringArray arguments;
+                            arguments.add(commandProcessor);
+                            arguments.add("/c");
+                            arguments.add("timeout /t 2 /nobreak > nul");
+                            managerStarted = MagDrumAudioProcessorEditorTestAccess::startInstrumentManagerProcess(
+                                editor, arguments);
+                            managerStartFailed = ! managerStarted;
+                        }
                     }
-                    if (juce::Time::getMillisecondCounter() >= deadline)
+
+                    if (managerStarted && ! editor.instrumentManagerProcess.isRunning())
                     {
-                        timedOut = true;
-                        editor.cancelPluginNoteScan();
+                        for (int item = 0; item < editor.pluginKitSelect.getNumItems(); ++item)
+                            foundKit = foundKit || editor.pluginKitSelect.getItemText(item) == kitName;
+                        if (foundKit)
+                        {
+                            stopTimer();
+                            juce::MessageManager::getInstance()->stopDispatchLoop();
+                            return;
+                        }
+                    }
+
+                    if (managerStartFailed || juce::Time::getMillisecondCounter() >= deadline)
+                    {
+                        timedOut = ! managerStartFailed;
+                        if (editor.pluginScanRunning)
+                            editor.cancelPluginNoteScan();
                         stopTimer();
                         juce::MessageManager::getInstance()->stopDispatchLoop();
                     }
                 }
                 MagDrumAudioProcessorEditor& editor;
-                juce::uint32 deadline = juce::Time::getMillisecondCounter() + 150000;
+                juce::File databaseFile;
+                juce::String identifier;
+                juce::MemoryBlock kitState;
+                juce::String kitName;
+                SampleDatabase managerDatabase;
+                juce::uint32 deadline = juce::Time::getMillisecondCounter() + 15000;
+                bool managerStarted = false;
+                bool managerStartFailed = false;
+                bool foundKit = false;
                 bool timedOut = false;
-            } completionWait(*editor);
+            } completionWait(*editor, databaseFile, identifier, savedState, managerKitName);
             completionWait.startTimer(10);
             juce::MessageManager::getInstance()->runDispatchLoop();
 
-            if (completionWait.timedOut || editor->pluginScanRunning)
+            if (completionWait.timedOut || completionWait.managerStartFailed || editor->pluginScanRunning)
             {
-                std::cerr << "The selected-kit MIDI scan did not finish within 150 seconds.\n";
+                std::cerr << "The selected-kit scan and manager refresh did not finish.\n";
                 return 10;
             }
 
@@ -1600,6 +1647,13 @@ public:
             {
                 std::cerr << "The captured C1 sound did not appear in the unified sample browser query.\n";
                 return 12;
+            }
+
+            if (!completionWait.managerStarted || !completionWait.foundKit
+                || editor->instrumentManagerProcess.isRunning())
+            {
+                std::cerr << "Closing the instrument manager did not refresh its saved kit in Plugin Scanner.\n";
+                return 15;
             }
         }
 

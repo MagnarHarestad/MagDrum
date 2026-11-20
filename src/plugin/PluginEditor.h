@@ -45,6 +45,17 @@ private:
     void timerCallback() override { if (onTick) onTick(); }
 };
 
+class MagDrumManagerProcessTimer final : private juce::Timer
+{
+public:
+    std::function<void()> onTick;
+    void start() { startTimer(250); }
+    void stop() { stopTimer(); }
+
+private:
+    void timerCallback() override { if (onTick) onTick(); }
+};
+
 class MagDrumAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                           private juce::Button::Listener,
                                           private juce::ListBoxModel,
@@ -148,6 +159,8 @@ private:
     void refreshSourceKitFilters();
     void refreshPluginInventory();
     void refreshPluginKits();
+    bool startInstrumentManagerProcess(const juce::StringArray& arguments);
+    void pollInstrumentManagerProcess();
     void choosePluginFolder();
     juce::PopupMenu createPluginInventoryMenu() const;
     juce::PopupMenu createPluginSourceMenu() const;
@@ -316,6 +329,8 @@ private:
     juce::TextButton profileCsvActionsButton{"Import CSV..."}, mappingActionsButton{"Set mapping..."};
     juce::Label mappingSummary;
     juce::ComboBox pluginInstrumentSelect, pluginKitSelect, pluginRenderMode, pluginProgramSelect, pluginNoteRange;
+    juce::ChildProcess instrumentManagerProcess;
+    MagDrumManagerProcessTimer instrumentManagerTimer;
     juce::TextEditor pluginVelocities, pluginNoteDuration, pluginRelease, pluginCaptureLength, pluginRepeatCount;
     double pluginInventoryProgressValue = 0.0;
     juce::ProgressBar pluginInventoryProgress{pluginInventoryProgressValue};

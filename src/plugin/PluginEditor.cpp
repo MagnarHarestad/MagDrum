@@ -1758,6 +1758,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
 {
     activePadParameterGestureNotes.fill(-1);
     magdrum::ui::initialiseMagDrumLocalization();magdrum::ui::languageChangeBroadcaster().addChangeListener(this);processor.addSampleStateListener(this);setLookAndFeel(&theme);setSize(1120,760);setResizable(true,true);setResizeLimits(1000,620,1800,1200);
+    instrumentManagerTimer.onTick=[this]{pollInstrumentManagerProcess();};
     padActivityTimer.onTick=[this]{updatePadActivity();};padActivityTimer.start();
     languageButton.setTooltip(magdrum::ui::localisedText("Menu"));languageButton.onClick=[this]{magdrum::ui::showApplicationMenu(languageButton);};addAndMakeVisible(languageButton);
     libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));pluginScannerTab.setButtonText(magdrum::ui::localisedText("PLUGIN SCANNER"));
@@ -4337,7 +4338,16 @@ void MagDrumAudioProcessorEditor::launchInstrumentScanner()
         status.setText(magdrum::ui::localisedText("The bundled MagDrum instrument scanner was not found beside this VST3. Reinstall the latest package."), juce::dontSendNotification);
         return;
     }
-    juce::String arguments = "--magdrum-plugin-browser";
+    if (instrumentManagerProcess.isRunning())
+    {
+        status.setText(magdrum::ui::localisedText(
+            "Instrument manager opened. Save your kit there; kits and samples refresh here automatically when you close it."),
+            juce::dontSendNotification);
+        return;
+    }
+    juce::StringArray arguments;
+    arguments.add(helper.getFullPathName());
+    arguments.add("--magdrum-plugin-browser");
     juce::File requestFile;
     const int selectedIndex = pluginInstrumentSelect.getSelectedId() - 1;
     if (juce::isPositiveAndBelow(selectedIndex, discoveredPluginInstruments.size()))
@@ -4358,16 +4368,36 @@ void MagDrumAudioProcessorEditor::launchInstrumentScanner()
             status.setText(magdrum::ui::localisedText("Could not open the saved source kit."), juce::dontSendNotification);
             return;
         }
-        arguments << " \"" << requestFile.getFullPathName().replace("\"", "\\\"") << "\"";
+        arguments.add(requestFile.getFullPathName());
     }
 
-    if (!helper.startAsProcess(arguments))
+    if (!startInstrumentManagerProcess(arguments))
     {
         requestFile.deleteFile();
         status.setText(magdrum::ui::localisedText("Could not start the MagDrum instrument scanner."), juce::dontSendNotification);
         return;
     }
-    status.setText(magdrum::ui::localisedText("Instrument manager opened. Load the kit in its editor, save its state, then refresh instruments here."), juce::dontSendNotification);
+    status.setText(magdrum::ui::localisedText(
+        "Instrument manager opened. Save your kit there; kits and samples refresh here automatically when you close it."),
+        juce::dontSendNotification);
+}
+
+bool MagDrumAudioProcessorEditor::startInstrumentManagerProcess(const juce::StringArray& arguments)
+{
+    if (instrumentManagerProcess.isRunning() || ! instrumentManagerProcess.start(arguments, 0))
+        return false;
+    instrumentManagerTimer.start();
+    return true;
+}
+
+void MagDrumAudioProcessorEditor::pollInstrumentManagerProcess()
+{
+    if (instrumentManagerProcess.isRunning())
+        return;
+
+    instrumentManagerTimer.stop();
+    refreshPluginKits();
+    refreshSamples();
 }
 
 void MagDrumAudioProcessorEditor::openSourceKitForSelectedSample()
