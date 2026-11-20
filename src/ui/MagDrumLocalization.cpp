@@ -783,6 +783,9 @@ countries: de
 "(empty)" = "(leer)"
 "Invalid mapping profile" = "Ungültiges Zuordnungsprofil"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Metadatenkonflikte geprüft: {applied} übernommen, {failed} fehlgeschlagen, {skipped} unverändert gelassen."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Dieses Instrument stellt nur generische MIDI-Programmplätze bereit. Lade das gewünschte Kit im Instrumenteneditor, speichere dessen Zustand in der Instrumentenverwaltung und aktualisiere dann die MagDrum-Kits."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery stellt generische MIDI-Programmplätze statt Kit-Namen bereit. Lade ein .nbkt-Kit in Battery, speichere dessen Zustand in der Instrumentenverwaltung und aktualisiere dann die MagDrum-Kits."
 )translations";
 constexpr auto french = R"translations(language: French
 countries: fr
@@ -1562,6 +1565,9 @@ countries: fr
 "(empty)" = "(vide)"
 "Invalid mapping profile" = "Profil de mappage invalide"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Conflits de métadonnées examinés : {applied} appliqués, {failed} échecs, {skipped} conservés inchangés."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Cet instrument ne propose que des emplacements de programme MIDI génériques. Chargez le kit souhaité dans son éditeur, enregistrez son état dans le gestionnaire d’instruments, puis actualisez les kits MagDrum."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery propose des emplacements de programme MIDI génériques, pas des noms de kits. Chargez un kit .nbkt dans Battery, enregistrez son état dans le gestionnaire d’instruments, puis actualisez les kits MagDrum."
 )translations";
 constexpr auto spanish = R"translations(language: Spanish
 countries: es
@@ -2341,6 +2347,9 @@ countries: es
 "(empty)" = "(vacío)"
 "Invalid mapping profile" = "Perfil de asignación no válido"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Conflictos de metadatos revisados: {applied} aplicados, {failed} fallidos, {skipped} sin cambios."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Este instrumento solo ofrece posiciones genéricas de programa MIDI. Carga el kit deseado en su editor, guarda su estado en el administrador de instrumentos y actualiza los kits de MagDrum."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery ofrece posiciones genéricas de programa MIDI, no nombres de kits. Carga un kit .nbkt en Battery, guarda su estado en el administrador de instrumentos y actualiza los kits de MagDrum."
 )translations";
 constexpr auto swedish = R"translations(language: Swedish
 countries: se
@@ -3120,6 +3129,9 @@ countries: se
 "(empty)" = "(tomt)"
 "Invalid mapping profile" = "Ogiltig MIDI-mappningsprofil"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Metadata-konflikter granskade: {applied} tillämpade, {failed} misslyckades, {skipped} lämnades oförändrade."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Det här instrumentet visar bara generiska MIDI-programplatser. Ladda önskat kit i instrumentets editor, spara dess tillstånd i instrumenthanteraren och uppdatera sedan MagDrum-kitlistan."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery visar generiska MIDI-programplatser, inte kitnamn. Ladda ett .nbkt-kit i Battery, spara dess tillstånd i instrumenthanteraren och uppdatera sedan MagDrum-kitlistan."
 )translations";
 constexpr auto norwegian = R"translations(language: Norwegian
 countries: no
@@ -3899,6 +3911,9 @@ countries: no
 "(empty)" = "(tom)"
 "Invalid mapping profile" = "Ugyldig MIDI-mappingsprofil"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Metadatakonflikter gjennomgått: {applied} brukt, {failed} mislyktes, {skipped} beholdt uendret."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Dette instrumentet viser bare generiske MIDI-programplasser. Last inn ønsket kit i instrumentets editor, lagre tilstanden i instrumentbehandleren og oppdater deretter MagDrum-kitene."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery viser generiske MIDI-programplasser, ikke kitnavn. Last inn et .nbkt-kit i Battery, lagre tilstanden i instrumentbehandleren og oppdater deretter MagDrum-kitene."
 )translations";
 constexpr auto danish = R"translations(language: Danish
 countries: dk
@@ -4678,6 +4693,9 @@ countries: dk
 "(empty)" = "(tom)"
 "Invalid mapping profile" = "Ugyldig MIDI-mappingsprofil"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Metadatakonflikter gennemgået: {applied} anvendt, {failed} mislykkedes, {skipped} uændret."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Dette instrument viser kun generiske MIDI-programpladser. Indlæs det ønskede kit i instrumentets editor, gem tilstanden i instrumenthåndteringen, og opdatér derefter MagDrum-kits."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery viser generiske MIDI-programpladser, ikke kitnavne. Indlæs et .nbkt-kit i Battery, gem tilstanden i instrumenthåndteringen, og opdatér derefter MagDrum-kits."
 )translations";
 constexpr auto finnish = R"translations(language: Finnish
 countries: fi
@@ -5457,6 +5475,9 @@ countries: fi
 "(empty)" = "(tyhjä)"
 "Invalid mapping profile" = "Virheellinen MIDI-kartoitusprofiili"
 "Metadata conflict review: {applied} applied, {failed} failed, {skipped} left unchanged." = "Metatietojen ristiriidat käsitelty: {applied} käytössä, {failed} epäonnistui, {skipped} jätettiin ennalleen."
+
+"This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits." = "Tämä soitin näyttää vain yleisiä MIDI-ohjelmapaikkoja. Lataa haluamasi kitti soittimen editorissa, tallenna sen tila soitinhallinnassa ja päivitä sitten MagDrum-kitit."
+"Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits." = "Battery näyttää yleisiä MIDI-ohjelmapaikkoja, ei kittien nimiä. Lataa .nbkt-kitti Batteryssa, tallenna sen tila soitinhallinnassa ja päivitä sitten MagDrum-kitit."
 )translations";
 
 Language selected = Language::english;

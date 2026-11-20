@@ -315,6 +315,49 @@ public:
         return 0;
     }
 
+    static int checksGenericBatteryProgramHandling(MagDrumAudioProcessorEditor& editor)
+    {
+        const auto originalInventory = editor.discoveredPluginInstruments;
+        const int originalSelection = editor.pluginInstrumentSelect.getSelectedId();
+        const int batteryItemId = originalInventory.size() + 1;
+        juce::PluginDescription battery;
+        battery.name = "Battery 4";
+        battery.manufacturerName = "Native Instruments";
+        battery.pluginFormatName = "VST3";
+        battery.fileOrIdentifier = "Battery.vst3";
+        editor.discoveredPluginInstruments.add(battery);
+        editor.pluginInstrumentSelect.addItem("Battery 4", batteryItemId);
+        editor.pluginInstrumentSelect.setSelectedId(batteryItemId, juce::dontSendNotification);
+        editor.pluginProgramScanIdentifier = battery.createIdentifierString();
+
+        juce::StringArray namedPrograms { "Factory Kit A", "Studio Kit B" };
+        editor.finishPluginProgramDiscovery(0, false, namedPrograms, false, {});
+        if (editor.pluginProgramSelect.getNumItems() != 2
+            || editor.pluginProgramSelect.getItemText(0) != "Factory Kit A")
+            return 1;
+
+        juce::StringArray genericPrograms { "MIDI channel 0 program 0", "MIDI channel 0 program 1" };
+        editor.finishPluginProgramDiscovery(0, false, genericPrograms, true, {});
+        const auto guidance = magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits.");
+        if (editor.pluginProgramSelect.getNumItems() != 0
+            || editor.importPluginProgramButton.isEnabled()
+            || editor.status.getText() != guidance)
+            return 2;
+
+        editor.discoveredPluginInstruments = originalInventory;
+        editor.pluginInstrumentSelect.clear(juce::dontSendNotification);
+        for (int index = 0; index < originalInventory.size(); ++index)
+        {
+            const auto& description = originalInventory.getReference(index);
+            editor.pluginInstrumentSelect.addItem(description.name + "  ·  " + description.manufacturerName, index + 1);
+        }
+        editor.pluginInstrumentSelect.setSelectedId(originalSelection, juce::dontSendNotification);
+        editor.pluginProgramSelect.clear(juce::dontSendNotification);
+        editor.pluginProgramScanIdentifier.clear();
+        editor.updatePluginActionButtons();
+        return 0;
+    }
+
     static int checksProgressiveSampleFilters(MagDrumAudioProcessorEditor& editor)
     {
         editor.setPage(0);
@@ -2285,6 +2328,8 @@ int main(int argc, char** argv)
         MagDrumAudioProcessorEditor editor(editorProcessor, editorDatabase);
         const int pluginScanRangeCheck = MagDrumAudioProcessorEditorTestAccess::checksPluginScanNoteRangePersists(editor);
         if (pluginScanRangeCheck != 0) return 400 + pluginScanRangeCheck;
+        const int genericBatteryProgramsCheck = MagDrumAudioProcessorEditorTestAccess::checksGenericBatteryProgramHandling(editor);
+        if (genericBatteryProgramsCheck != 0) return 420 + genericBatteryProgramsCheck;
         if (!MagDrumAudioProcessorEditorTestAccess::mappingNotePlaceholderMatchesLanguage(editor))
         {
             std::cerr << "The MIDI note placeholder does not match the selected language key.\n";

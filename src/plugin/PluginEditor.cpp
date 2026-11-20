@@ -1576,14 +1576,14 @@ public:
         const auto helper = bundledScannerApplication();
         if (! helper.existsAsFile())
         {
-            finish(-1, false, {}, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
+            finish(-1, false, {}, false, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
             return jobHasFinished;
         }
         const auto work = juce::File::getSpecialLocation(juce::File::tempDirectory)
             .getChildFile("MagDrum").getChildFile("program-discovery-" + juce::Uuid().toString());
         if (! work.createDirectory().wasOk())
         {
-            finish(-1, false, {}, magdrum::ui::localisedText("Could not prepare the isolated preset import."));
+            finish(-1, false, {}, false, magdrum::ui::localisedText("Could not prepare the isolated preset import."));
             return jobHasFinished;
         }
         const auto descriptionFile = work.getChildFile("plugin.xml");
@@ -1602,7 +1602,7 @@ public:
             || ! requestFile.replaceWithText(juce::JSON::toString(juce::var(request), true)))
         {
             work.deleteRecursively();
-            finish(-1, false, {}, magdrum::ui::localisedText("Could not prepare the isolated preset import."));
+            finish(-1, false, {}, false, magdrum::ui::localisedText("Could not prepare the isolated preset import."));
             return jobHasFinished;
         }
 
@@ -1631,12 +1631,13 @@ public:
         if (! execution.started)
         {
             work.deleteRecursively();
-            finish(-1, false, {}, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
+            finish(-1, false, {}, false, magdrum::ui::localisedText("The isolated MagDrum preset helper could not start."));
             return jobHasFinished;
         }
         const bool cancelled = execution.cancelled;
 
         juce::StringArray programNames;
+        bool onlyGenericMidiPrograms = false;
         juce::String message;
         const int exitCode = cancelled ? -1 : execution.exitCode;
         if (! cancelled && resultFile.existsAsFile())
@@ -1646,6 +1647,7 @@ public:
             {
                 const auto* result = resultValue.getDynamicObject();
                 message = result->getProperty("message").toString();
+                onlyGenericMidiPrograms = static_cast<bool>(result->getProperty("onlyGenericMidiPrograms"));
                 const auto value = result->getProperty("programs");
                 if (const auto* programs = value.getArray())
                     for (const auto& program : *programs)
@@ -1656,19 +1658,21 @@ public:
         if (execution.timedOut)
             message = magdrum::ui::localisedText("Program scan timed out.");
         work.deleteRecursively();
-        finish(exitCode, cancelled, std::move(programNames), message);
+        finish(exitCode, cancelled, std::move(programNames), onlyGenericMidiPrograms, message);
         return jobHasFinished;
     }
 
 private:
-    void finish(int exitCode, bool cancelled, juce::StringArray programs, juce::String message)
+    void finish(int exitCode, bool cancelled, juce::StringArray programs,
+                bool onlyGenericMidiPrograms, juce::String message)
     {
         const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
         juce::MessageManager::callAsync([safe, exitCode, cancelled, programs = std::move(programs),
-                                         message = std::move(message)]() mutable
+                                         onlyGenericMidiPrograms, message = std::move(message)]() mutable
         {
             if (safe != nullptr)
-                safe->finishPluginProgramDiscovery(exitCode, cancelled, std::move(programs), message);
+                safe->finishPluginProgramDiscovery(exitCode, cancelled, std::move(programs),
+                                                   onlyGenericMidiPrograms, message);
         });
     }
 
@@ -3748,6 +3752,7 @@ void MagDrumAudioProcessorEditor::startPluginProgramDiscovery()
 
 void MagDrumAudioProcessorEditor::finishPluginProgramDiscovery(int exitCode, bool cancelled,
                                                                juce::StringArray programs,
+                                                               bool onlyGenericMidiPrograms,
                                                                const juce::String& message)
 {
     pluginProgramScanRunning = false;
@@ -3771,6 +3776,20 @@ void MagDrumAudioProcessorEditor::finishPluginProgramDiscovery(int exitCode, boo
         return;
     }
     pluginProgramSelect.clear(juce::dontSendNotification);
+    if (onlyGenericMidiPrograms)
+    {
+        const auto instrumentName = discoveredPluginInstruments.getReference(selectedIndex).name;
+        const auto guidance = instrumentName.containsIgnoreCase("Battery")
+            ? magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits.")
+            : magdrum::ui::localisedText("This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits.");
+        pluginPresetKitName.setText({}, juce::dontSendNotification);
+        importPluginProgramButton.setEnabled(false);
+        importPluginKitButton.setEnabled(false);
+        status.setText(guidance, juce::dontSendNotification);
+        pluginScanInfo.setText(guidance, juce::dontSendNotification);
+        updatePluginActionButtons();
+        return;
+    }
     for (int i = 0; i < programs.size(); ++i)
         pluginProgramSelect.addItem(programs[i], i + 1);
     if (! programs.isEmpty())

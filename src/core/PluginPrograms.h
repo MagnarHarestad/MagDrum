@@ -13,6 +13,7 @@ struct PluginProgramList
 {
     std::vector<PluginProgram> programs;
     bool exceedsLimit = false;
+    bool onlyGenericMidiPrograms = false;
 };
 
 PluginProgramList discoverPluginPrograms(juce::AudioProcessor& plugin, int maximumPrograms = 1024);
