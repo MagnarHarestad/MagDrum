@@ -1155,7 +1155,7 @@ public:
             return 11;
         }
         const auto sourceMenu = editor.createPluginSourceMenu();
-        if (sourceMenu.getNumItems() != 4
+        if (sourceMenu.getNumItems() != 6
             || editor.choosePluginPresetButton.getButtonText() != magdrum::ui::localisedText("Choose kit source")+"..."
             || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Choose VST3 preset"))
             || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Find standard presets"))
@@ -1163,7 +1163,7 @@ public:
             || !editor.choosePluginPresetButton.getTooltip().contains(magdrum::ui::localisedText("Scan programs"))
             || !editor.choosePluginPresetButton.isVisible() || editor.scanPluginProgramsButton.isVisible())
         {
-            std::cerr << "Preset selection and program discovery should be grouped under the visible kit-source control.\n";
+            std::cerr << "Preset selection, instrument manager and saved-kit refresh should be grouped under the visible kit-source control.\n";
             return 12;
         }
         const std::array sourceMenuLanguages{
