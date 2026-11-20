@@ -79,16 +79,16 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  target_include_directories(MagDrumTests PRIVATE src)
  target_compile_definitions(MagDrumTests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_PLUGINHOST_VST3=1 MAGDRUM_TESTING=1)
  target_link_libraries(MagDrumTests PRIVATE sqlite3 juce::juce_audio_basics juce::juce_audio_devices juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_cryptography juce::juce_core)
-
- # Keep the version-bounded Battery format probe independent from the large
- # whole-program-optimized smoke-test executable for fast, low-cost iteration.
- juce_add_console_app(MagDrumBatteryKitProbe PRODUCT_NAME "MagDrum Battery Kit Probe")
- juce_generate_juce_header(MagDrumBatteryKitProbe)
- target_sources(MagDrumBatteryKitProbe PRIVATE tests/BatteryKitReaderProbe.cpp src/core/BatteryKitReader.cpp)
- target_include_directories(MagDrumBatteryKitProbe PRIVATE src)
- target_compile_definitions(MagDrumBatteryKitProbe PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
- target_link_libraries(MagDrumBatteryKitProbe PRIVATE juce::juce_core juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+ # Keep the Battery parser probe entirely out of normal builds while the reported
+ # Windows access violation is under investigation. Opt-in enables both the
+ # executable and its isolated parser tests.
  if(MAGDRUM_ENABLE_BATTERY_KIT_PROBE_TESTS)
+  juce_add_console_app(MagDrumBatteryKitProbe PRODUCT_NAME "MagDrum Battery Kit Probe")
+  juce_generate_juce_header(MagDrumBatteryKitProbe)
+  target_sources(MagDrumBatteryKitProbe PRIVATE tests/BatteryKitReaderProbe.cpp src/core/BatteryKitReader.cpp)
+  target_include_directories(MagDrumBatteryKitProbe PRIVATE src)
+  target_compile_definitions(MagDrumBatteryKitProbe PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+  target_link_libraries(MagDrumBatteryKitProbe PRIVATE juce::juce_core juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
   add_test(NAME MagDrumBatteryKitProbeHeadlessErrorMode COMMAND MagDrumBatteryKitProbe --verify-headless-error-mode)
   add_test(NAME MagDrumBatteryKitProbeBufferLifetime COMMAND MagDrumBatteryKitProbe --self-test-buffer-lifetime)
   add_test(NAME MagDrumBatteryKitProbeMalformedInputs COMMAND MagDrumBatteryKitProbe --self-test-malformed-inputs)
