@@ -3760,6 +3760,13 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
     refreshPluginInventory();
     if (cancelled) { status.setText(magdrum::ui::localisedText("VST3 instrument scan cancelled."), juce::dontSendNotification); return; }
     if (exitCode != 0) { status.setText(magdrum::ui::localisedText("VST3 instrument scan failed. Check the MagDrum helper."), juce::dontSendNotification); return; }
+    if (discoveredPluginInstruments.isEmpty() && skippedProblemModules == 0)
+    {
+        status.setText(magdrum::ui::localisedText(
+            "No discovered VST3 instruments. Scan plugin folders above to find instruments."),
+            juce::dontSendNotification);
+        return;
+    }
     status.setText(skippedProblemModules > 0
         ? magdrum::ui::localisedText("VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")
             .replace("%1", juce::String(skippedProblemModules))

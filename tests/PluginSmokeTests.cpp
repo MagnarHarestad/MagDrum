@@ -1716,6 +1716,29 @@ public:
             std::cerr << "Cancelling plugin discovery did not refresh the completed inventory checkpoint.\n";
             return 32;
         }
+
+        juce::KnownPluginList emptyResults;
+        const auto emptyXml = emptyResults.createXml();
+        if (emptyXml == nullptr || !emptyXml->writeTo(inventoryFile))
+        {
+            if (hadInventory) inventoryFile.replaceWithText(previousInventory);
+            else inventoryFile.deleteFile();
+            editor.refreshPluginInventory();
+            std::cerr << "Could not prepare the empty instrument inventory fixture.\n";
+            return 33;
+        }
+        editor.finishPluginInventoryScan(0, false, 0);
+        const bool emptyResultWasExplained = editor.discoveredPluginInstruments.isEmpty()
+            && editor.status.getText() == magdrum::ui::localisedText(
+                "No discovered VST3 instruments. Scan plugin folders above to find instruments.");
+        if (hadInventory) inventoryFile.replaceWithText(previousInventory);
+        else inventoryFile.deleteFile();
+        editor.refreshPluginInventory();
+        if (!emptyResultWasExplained)
+        {
+            std::cerr << "A successful scan with no instruments did not explain the empty result.\n";
+            return 34;
+        }
         return 0;
     }
 
