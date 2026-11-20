@@ -63,7 +63,7 @@ rm -rf "$stage"
 mkdir -p "$stage"
 juce_source="$build_dir/_deps/juce-src"
 [[ -f "$juce_source/LICENSE.md" ]] || { echo "JUCE license was not found under the configured build directory: $juce_source" >&2; exit 1; }
-cp "$repo_root/LICENSE" "$repo_root/THIRD-PARTY-NOTICES.md" "$stage/"
+cp "$repo_root/LICENSE" "$repo_root/GPL-3.0-LICENSE.txt" "$repo_root/THIRD-PARTY-NOTICES.md" "$stage/"
 copy_third_party_license() {
   local relative_path="$1" package_name="$2" license_path="$juce_source/$1"
   [[ -f "$license_path" ]] || { echo "Required third-party license notice was not found in pinned JUCE: $relative_path" >&2; exit 1; }

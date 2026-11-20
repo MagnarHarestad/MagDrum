@@ -13,6 +13,13 @@ that is not the option selected for this project. See the [JUCE 8.0.12 license
 file](https://github.com/juce-framework/JUCE/blob/8.0.12/LICENSE.md) and the
 [JUCE 8 EULA](https://juce.com/legal/juce-8-licence/).
 
+## Battery kit reader
+
+The Battery `.nbkt` reader is adapted from the format readers in the
+[NITools repository](https://github.com/joanroig/nitools), licensed under GNU
+GPL version 3. Source distributions and release packages include the complete
+text as [`GPL-3.0-LICENSE.txt`](../GPL-3.0-LICENSE.txt).
+
 ## Windows and Linux package audit
 
 The Windows x64 and Linux x64 desktop-app/VST3 packages share pinned JUCE

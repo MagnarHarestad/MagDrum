@@ -134,6 +134,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -conta
         'Sample similarity, exact and perceptual duplicate, velocity-layer, round-robin candidate, and portable metadata archive lookups run on background workers in the VST editor.',
         'The Plugin Scanner displays percentage progress, and VST3 discovery uses a cached timestamp index to avoid repeated linear searches while still rescanning changed modules.',
         'The VST Plugin Scanner can search standard VST3 preset locations or a chosen folder in a cancellable background task. Results appear in the VST menu, where one preset can be selected and imported as a kit.',
+        'Battery .nbkt kits can be imported directly in the VST. Partial velocity overlaps are resolved in zone order, exact-range duplicates remain round-robin layers, and a failed or cancelled import preserves the current kit.',
         'Instrument program enumeration and preset/program kit imports run in isolated helper processes with in-app progress and a 90-second timeout; Cancel stops the helper without opening plugin windows.',
         'Sequencer Play follows host PPQ and BPM during DAW playback, schedules exact MIDI mappings in the audio callback, and reports hits that have no exact mapping. When the host is stopped, the plugin tempo preview remains available.',
         'Sequencer base-tempo edits, pattern bars, semantic hits, MIDI mapping and tempo/meter metadata are preserved in the host plugin state.',

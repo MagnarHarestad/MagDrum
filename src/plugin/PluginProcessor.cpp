@@ -339,6 +339,150 @@ bool MagDrumAudioProcessor::loadSampleForVelocityRange(int note, int minimumVelo
     return true;
 }
 
+bool MagDrumAudioProcessor::replaceSampleKit(const std::vector<SampleFileAssignment>& assignments,
+    const std::function<bool()>& shouldCancel, const std::function<void(int, int)>& progress,
+    juce::String* failureReason)
+{
+    if (failureReason != nullptr)
+        *failureReason = {};
+    if (assignments.empty())
+    {
+        if (failureReason != nullptr) *failureReason = "The kit has no sample assignments.";
+        return false;
+    }
+
+    std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> stagedSamples;
+    std::array<std::array<juce::String, maxVelocityLayers>, 128> stagedPaths;
+    std::array<std::array<int, maxVelocityLayers>, 128> stagedRoundRobinGroups{};
+    juce::AudioFormatManager sampleFormats;
+    sampleFormats.registerBasicFormats();
+
+    for (size_t index = 0; index < assignments.size(); ++index)
+    {
+        if (shouldCancel && shouldCancel())
+            return false;
+        const auto& assignment = assignments[index];
+        const int note = assignment.midiNote;
+        const int minimumVelocity = assignment.minimumVelocity;
+        const int maximumVelocity = assignment.maximumVelocity;
+        if (note < 0 || note > 127 || minimumVelocity < 1 || maximumVelocity > 127
+            || minimumVelocity > maximumVelocity || ! assignment.file.existsAsFile())
+        {
+            if (failureReason != nullptr) *failureReason = "A sample assignment has an invalid note, velocity range, or file.";
+            return false;
+        }
+
+        auto& noteSamples = stagedSamples[static_cast<size_t>(note)];
+        auto& notePaths = stagedPaths[static_cast<size_t>(note)];
+        int targetLayer = -1;
+        int roundRobinGroup = -1;
+        for (int layer = 0; layer < maxVelocityLayers; ++layer)
+        {
+            const auto layerIndex = static_cast<size_t>(layer);
+            const auto* existing = noteSamples[layerIndex].get();
+            if (existing == nullptr)
+            {
+                if (targetLayer < 0)
+                    targetLayer = layer;
+                continue;
+            }
+            const bool sameRange = existing->minimumVelocity == minimumVelocity
+                && existing->maximumVelocity == maximumVelocity;
+            if (sameRange)
+            {
+                if (roundRobinGroup < 0)
+                    roundRobinGroup = stagedRoundRobinGroups[static_cast<size_t>(note)][layerIndex];
+                if (notePaths[layerIndex] == assignment.file.getFullPathName())
+                {
+                    if (progress) progress(static_cast<int>(index + 1), static_cast<int>(assignments.size()));
+                    targetLayer = -2;
+                    break;
+                }
+                continue;
+            }
+            if (minimumVelocity <= existing->maximumVelocity && maximumVelocity >= existing->minimumVelocity)
+            {
+                if (failureReason != nullptr) *failureReason = "Sample velocity ranges overlap for one MIDI note.";
+                return false;
+            }
+        }
+        if (targetLayer == -2)
+            continue;
+        if (targetLayer < 0)
+        {
+            if (failureReason != nullptr) *failureReason = "A MIDI note has more velocity layers than MagDrum supports.";
+            return false;
+        }
+
+        std::unique_ptr<juce::AudioFormatReader> reader(sampleFormats.createReaderFor(assignment.file));
+        if (! reader || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0
+            || reader->lengthInSamples > reader->sampleRate * 600.0
+            || reader->lengthInSamples > std::numeric_limits<int>::max() || reader->numChannels == 0)
+        {
+            if (failureReason != nullptr) *failureReason = "MagDrum could not open a sample or its format is unsupported: " + assignment.file.getFileName();
+            return false;
+        }
+
+        auto sample = std::make_unique<SampleData>();
+        sample->sampleRate = reader->sampleRate;
+        sample->minimumVelocity = minimumVelocity;
+        sample->maximumVelocity = maximumVelocity;
+        const int channels = static_cast<int>(juce::jmin(2u, reader->numChannels));
+        const int sampleCount = static_cast<int>(reader->lengthInSamples);
+        sample->audio.setSize(channels, sampleCount);
+        constexpr int sampleChunkSize = 16384;
+        for (int offset = 0; offset < sampleCount; offset += sampleChunkSize)
+        {
+            if ((shouldCancel && shouldCancel())
+                || ! reader->read(&sample->audio, offset, juce::jmin(sampleChunkSize, sampleCount - offset),
+                                  offset, true, true))
+            {
+                if (failureReason != nullptr) *failureReason = "MagDrum could not read a sample: " + assignment.file.getFileName();
+                return false;
+            }
+        }
+        const auto layerIndex = static_cast<size_t>(targetLayer);
+        if (roundRobinGroup < 0)
+            roundRobinGroup = targetLayer;
+        stagedRoundRobinGroups[static_cast<size_t>(note)][layerIndex] = roundRobinGroup;
+        stagedPaths[static_cast<size_t>(note)][layerIndex] = assignment.file.getFullPathName();
+        noteSamples[layerIndex] = std::move(sample);
+        if (progress) progress(static_cast<int>(index + 1), static_cast<int>(assignments.size()));
+    }
+
+    if (shouldCancel && shouldCancel())
+        return false;
+
+    std::array<std::array<std::unique_ptr<SampleData>, maxVelocityLayers>, 128> retiredSamples;
+    {
+        const juce::ScopedLock sampleGuard(sampleLock);
+        const juce::ScopedLock stateGuard(stateLock);
+        if (shouldCancel && shouldCancel())
+            return false;
+        sampleStateLoadGeneration.fetch_add(1, std::memory_order_acq_rel);
+        for (auto& pending : pendingSampleLoads)
+            if (pending.cancellation != nullptr)
+                pending.cancellation->store(false, std::memory_order_release);
+        pendingSampleLoads.clear();
+        retiredSamples.swap(ownedSamples);
+        ownedSamples.swap(stagedSamples);
+        samplePaths.swap(stagedPaths);
+        for (size_t note = 0; note < ownedSamples.size(); ++note)
+        {
+            for (size_t layer = 0; layer < maxVelocityLayers; ++layer)
+            {
+                sampleSlots[note][layer].store(ownedSamples[note][layer].get(), std::memory_order_release);
+                roundRobinCounters[note][layer].store(0, std::memory_order_relaxed);
+            }
+        }
+        for (auto& voice : voices)
+            voice = {};
+        recalculateTailLengthSeconds();
+    }
+    sendChangeMessage();
+    return true;
+}
+
 bool MagDrumAudioProcessor::clearSamplesForNote(int note)
 {
     if (note < 0 || note > 127)

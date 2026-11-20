@@ -170,6 +170,11 @@ private:
     void choosePluginPreset();
     void findStandardPluginPresets();
     void choosePluginPresetFolder();
+    void startBatteryKitImport(const juce::File&);
+    void cancelBatteryKitImport();
+    void updateBatteryKitImportProgress(const juce::String&, int completed, int total);
+    void finishBatteryKitImport(bool success, bool cancelled, const juce::String& kitName,
+                                const juce::String& message, int assignedZones);
     void startPluginPresetSearch(const juce::Array<juce::File>& roots, bool standardLocations);
     void finishPluginPresetSearch(const juce::String& pluginIdentifier,
                                   juce::Array<juce::File> files, bool cancelled,
@@ -347,12 +352,15 @@ private:
     bool pluginProgramScanRunning = false;
     bool pluginPresetSearchRunning = false;
     bool pluginPresetImportFromProgram = false;
+    bool batteryKitImportRunning = false;
     juce::String pluginProgramScanIdentifier;
     juce::ThreadPool pluginPresetImportWorkers{1};
     std::shared_ptr<std::atomic<bool>> pluginProgramScanCancellation;
     juce::ThreadPool pluginProgramScanWorkers{1};
     std::shared_ptr<std::atomic<bool>> pluginPresetSearchCancellation;
     juce::ThreadPool pluginPresetSearchWorkers{1};
+    std::shared_ptr<std::atomic<bool>> batteryKitImportCancellation;
+    juce::ThreadPool batteryKitImportWorkers{1};
 
     friend class PluginPresetSearchJob;
 

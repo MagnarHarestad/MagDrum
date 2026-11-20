@@ -16,7 +16,7 @@ updating the plug-in.
 Reopen the host and rescan its plug-ins. The standalone app and VST3 use the
 same local MagDrum sample database.
 
-The package contains LICENSE, THIRD-PARTY-NOTICES.md and license texts for JUCE,
+The package contains LICENSE, THIRD-PARTY-NOTICES.md, GPL-3.0-LICENSE.txt and license texts for JUCE,
 VST3, FLAC, Ogg Vorbis/libvorbis, JPEG, PNG, zlib, HarfBuzz and SheenBidi.
 MagDrum's original source code is licensed under GNU AGPLv3; third-party
 components keep their own license terms. Linux audio, graphics and font

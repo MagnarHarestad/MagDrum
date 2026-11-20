@@ -33,7 +33,7 @@ is not code-signed. The instrument scanner opens as a separate MagDrum window
 so third-party instrument crashes remain outside Cubase. It uses the same local
 sample database as the VST's sample browser.
 
-The package contains LICENSE, THIRD-PARTY-NOTICES.md and license texts for JUCE,
+The package contains LICENSE, THIRD-PARTY-NOTICES.md, GPL-3.0-LICENSE.txt and license texts for JUCE,
 VST3, FLAC, Ogg Vorbis/libvorbis, JPEG, PNG, zlib, HarfBuzz and SheenBidi.
 MagDrum's original source code is licensed under GNU AGPLv3; third-party
 components keep their own license terms.

@@ -36,6 +36,14 @@ public:
         int roundRobinCount = 1;
     };
 
+    struct SampleFileAssignment
+    {
+        int midiNote = 0;
+        int minimumVelocity = 1;
+        int maximumVelocity = 127;
+        juce::File file;
+    };
+
     struct NoteParameters
     {
         float gainDb = 0.0f;
@@ -89,6 +97,10 @@ public:
     bool loadSampleForNote(int midiNote, const juce::File&);
     bool loadSampleForVelocityRange(int midiNote, int minimumVelocity, int maximumVelocity, const juce::File&,
                                     const std::function<bool()>& shouldCancel = {});
+    bool replaceSampleKit(const std::vector<SampleFileAssignment>&,
+                          const std::function<bool()>& shouldCancel = {},
+                          const std::function<void(int, int)>& progress = {},
+                          juce::String* failureReason = nullptr);
     bool updateSampleLayerVelocityRange(int midiNote, int slotIndex, int minimumVelocity, int maximumVelocity);
     bool removeSampleLayer(int midiNote, int slotIndex);
     bool clearSamplesForNote(int midiNote);

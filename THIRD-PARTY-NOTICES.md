@@ -14,6 +14,13 @@ formats, processors and processor headless, audio utilities, core,
 cryptography, data structures, DSP, events, graphics, GUI basics and GUI extra.
 The VST3 additionally links the JUCE plugin client module.
 
+## Battery `.nbkt` reader
+
+The bounded Battery kit reader is adapted from the Battery format and NI
+container readers in [NITools](https://github.com/joanroig/nitools), by Joan
+Roig, under GNU GPL version 3. The corresponding complete license text is
+included in each package as `GPL-3.0-LICENSE.txt`.
+
 ## Bundled components in Windows and Linux packages
 
 | Component | License | Package file |

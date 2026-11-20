@@ -34,6 +34,7 @@ try {
         'README.txt',
         'LICENSE',
         'THIRD-PARTY-NOTICES.md',
+        'GPL-3.0-LICENSE.txt',
         'JUCE-LICENSE.md',
         'VST3-SDK-LICENSE.txt',
         'FLAC-LICENSE.txt',

@@ -7,6 +7,7 @@
 #include "../core/PluginPresetFiles.h"
 #include "../core/PluginVelocityLayerAnalyzer.h"
 #include "../core/PluginRoundRobinAnalyzer.h"
+#include "../core/BatteryKitReader.h"
 #include "../core/DefaultLibraryDiscovery.h"
 #include "../core/ScopedFileAccess.h"
 #include "../core/WavScanner.h"
@@ -18,6 +19,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <limits>
+#include <unordered_set>
 #include <vector>
 #if JUCE_WINDOWS
 #ifndef NOMINMAX
@@ -1072,6 +1075,208 @@ private:
     juce::File file;
     int note = 36, minimumVelocity = 1, maximumVelocity = 127;
     const std::atomic<bool>& cancelledFlag;
+    Completion onComplete;
+};
+
+class BatteryKitImportJob final : public juce::ThreadPoolJob
+{
+public:
+    struct Result
+    {
+        bool success = false;
+        bool cancelled = false;
+        juce::String kitName;
+        juce::String message;
+        int assignedZones = 0;
+    };
+    using Progress = std::function<void(const juce::String&, int, int)>;
+    using Completion = std::function<void(Result)>;
+
+    BatteryKitImportJob(MagDrumAudioProcessor& audioProcessor, juce::File batteryFile,
+                        std::shared_ptr<std::atomic<bool>> cancellation,
+                        Progress progress, Completion completion)
+        : ThreadPoolJob("MagDrum Battery kit import"), processor(audioProcessor),
+          kitFile(std::move(batteryFile)), cancelled(std::move(cancellation)),
+          onProgress(std::move(progress)), onComplete(std::move(completion)) {}
+
+    JobStatus runJob() override
+    {
+        Result result;
+        const auto isCancelled = [this]
+        {
+            return shouldExit() || (cancelled != nullptr && cancelled->load(std::memory_order_acquire));
+        };
+        const auto finish = [this](Result completed)
+        {
+            juce::MessageManager::callAsync([completion = std::move(onComplete),
+                                             completed = std::move(completed)]() mutable
+            {
+                if (completion) completion(std::move(completed));
+            });
+        };
+        const auto progress = [this](const juce::String& name, int done, int total)
+        {
+            juce::MessageManager::callAsync([callback = onProgress, name, done, total]()
+            {
+                if (callback) callback(name, done, total);
+            });
+        };
+
+        if (isCancelled())
+        {
+            result.cancelled = true;
+            finish(std::move(result));
+            return jobHasFinished;
+        }
+        auto parsed = magdrum::battery::readKit(kitFile);
+        if (! parsed.kit)
+        {
+            result.message = "Battery kit import failed. Check the kit and sample files.";
+            finish(std::move(result));
+            return jobHasFinished;
+        }
+        const auto& kit = *parsed.kit;
+        result.kitName = kit.name;
+        if (kit.hasEmbeddedSamples)
+        {
+            result.message = "Battery kit import failed. Check the kit and sample files.";
+            finish(std::move(result));
+            return jobHasFinished;
+        }
+
+        std::vector<const magdrum::battery::SampleZone*> zones;
+        std::unordered_set<std::string> verifiedPaths;
+        for (const auto& cell : kit.cells)
+            for (const auto& zone : cell.zones)
+            {
+                if (isCancelled())
+                {
+                    result.cancelled = true;
+                    finish(std::move(result));
+                    return jobHasFinished;
+                }
+                if (zone.path.isEmpty() || zone.embedded)
+                {
+                    result.message = "Battery kit uses an embedded or unnamed sample, which MagDrum cannot import.";
+                    finish(std::move(result));
+                    return jobHasFinished;
+                }
+                const auto sampleFile = kitFile.getParentDirectory().getChildFile(zone.path);
+                const auto fullPath = sampleFile.getFullPathName().toStdString();
+                if (verifiedPaths.insert(fullPath).second && ! sampleFile.existsAsFile())
+                {
+                    result.message = "Battery sample file was not found: " + sampleFile.getFullPathName();
+                    finish(std::move(result));
+                    return jobHasFinished;
+                }
+                zones.push_back(&zone);
+            }
+
+        // Battery kits may use partially overlapping velocity zones. Treat
+        // later zones as overrides in those overlaps, while retaining exact
+        // duplicate ranges as round-robin alternatives.
+        std::array<std::array<std::vector<size_t>, 128>, 128> zoneAtVelocity;
+        for (size_t zoneIndex = 0; zoneIndex < zones.size(); ++zoneIndex)
+        {
+            if (isCancelled())
+            {
+                result.cancelled = true;
+                finish(std::move(result));
+                return jobHasFinished;
+            }
+            const auto& zone = *zones[zoneIndex];
+            for (int note = zone.minimumNote; note <= zone.maximumNote; ++note)
+                for (int velocity = zone.minimumVelocity; velocity <= zone.maximumVelocity; ++velocity)
+                {
+                    auto& selected = zoneAtVelocity[static_cast<size_t>(note)][static_cast<size_t>(velocity)];
+                    const bool exactRange = std::any_of(selected.begin(), selected.end(), [&](size_t existingIndex)
+                    {
+                        const auto& existing = *zones[existingIndex];
+                        return existing.minimumNote == zone.minimumNote && existing.maximumNote == zone.maximumNote
+                            && existing.minimumVelocity == zone.minimumVelocity
+                            && existing.maximumVelocity == zone.maximumVelocity;
+                    });
+                    if (exactRange)
+                        selected.push_back(zoneIndex);
+                    else
+                        selected.assign(1, zoneIndex);
+                }
+        }
+
+        std::vector<MagDrumAudioProcessor::SampleFileAssignment> assignments;
+        for (int note = 0; note < 128; ++note)
+        {
+            int layersForNote = 0;
+            int firstVelocity = 1;
+            while (firstVelocity <= 127)
+            {
+                const auto& selected = zoneAtVelocity[static_cast<size_t>(note)][static_cast<size_t>(firstVelocity)];
+                if (selected.empty())
+                {
+                    ++firstVelocity;
+                    continue;
+                }
+                int lastVelocity = firstVelocity;
+                while (lastVelocity < 127
+                    && zoneAtVelocity[static_cast<size_t>(note)][static_cast<size_t>(lastVelocity + 1)] == selected)
+                    ++lastVelocity;
+                layersForNote += static_cast<int>(selected.size());
+                constexpr int magDrumVelocityLayerLimit = 8;
+                if (layersForNote > magDrumVelocityLayerLimit)
+                {
+                    result.message = "Battery kit has more sample layers for MIDI note " + juce::String(note)
+                        + " than MagDrum supports.";
+                    finish(std::move(result));
+                    return jobHasFinished;
+                }
+                for (const auto selectedZone : selected)
+                {
+                    const auto& zone = *zones[selectedZone];
+                    assignments.push_back({note, firstVelocity, lastVelocity,
+                        kitFile.getParentDirectory().getChildFile(zone.path)});
+                    if (assignments.size() > 8192)
+                    {
+                        result.message = "Battery kit exceeds MagDrum's 8192-assignment safety limit.";
+                        finish(std::move(result));
+                        return jobHasFinished;
+                    }
+                }
+                firstVelocity = lastVelocity + 1;
+            }
+        }
+        if (assignments.empty())
+        {
+            result.message = "Battery kit import failed. Check the kit and sample files.";
+            finish(std::move(result));
+            return jobHasFinished;
+        }
+
+        progress(result.kitName, 0, static_cast<int>(assignments.size()));
+        const auto updateProgress = [&result, &progress](int completed, int total)
+        {
+            progress(result.kitName, completed, total);
+        };
+        juce::String loadFailure;
+        if (! processor.replaceSampleKit(assignments, isCancelled, updateProgress, &loadFailure))
+        {
+            result.cancelled = isCancelled();
+            result.message = result.cancelled ? juce::String()
+                : loadFailure.isNotEmpty() ? loadFailure
+                : "Battery kit import failed. Check the kit and sample files.";
+            finish(std::move(result));
+            return jobHasFinished;
+        }
+        result.assignedZones = static_cast<int>(assignments.size());
+        result.success = true;
+        finish(std::move(result));
+        return jobHasFinished;
+    }
+
+private:
+    MagDrumAudioProcessor& processor;
+    juce::File kitFile;
+    std::shared_ptr<std::atomic<bool>> cancelled;
+    Progress onProgress;
     Completion onComplete;
 };
 
@@ -2256,7 +2461,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     refreshPluginInventory();restorePluginEditorState();if(!sequenceEventsInitialised)syncSequenceEventsFromGrid();updateSequencerGrid();updateDrumNotes();setNote(mappedPadNotes[0]);refreshMappingSummary();setPage(0);applyLanguage();
 }
 
-MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){for(size_t index=0;index<activePadParameterGestureNotes.size();++index)endPadParameterGesture(index);padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);inAppSubview.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);if(pluginPresetSearchCancellation)pluginPresetSearchCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleMapWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginPresetSearchWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
+MagDrumAudioProcessorEditor::~MagDrumAudioProcessorEditor(){for(size_t index=0;index<activePadParameterGestureNotes.size();++index)endPadParameterGesture(index);padActivityTimer.stop();magdrum::ui::languageChangeBroadcaster().removeChangeListener(this);processor.removeSampleStateListener(this);inAppSubview.reset();stopTimer();++samplePreviewGeneration;samplePreviewWorkers.removeAllJobs(true,-1);sampleLoadCancellation.store(true,std::memory_order_release);sampleLoadWorkers.removeAllJobs(true,-1);if(scanCancellation)scanCancellation->store(true);if(pluginInventoryScanCancellation)pluginInventoryScanCancellation->store(true);if(pluginPresetImportCancellation)pluginPresetImportCancellation->store(true);if(pluginProgramScanCancellation)pluginProgramScanCancellation->store(true);if(pluginPresetSearchCancellation)pluginPresetSearchCancellation->store(true);if(batteryKitImportCancellation)batteryKitImportCancellation->store(true);pluginScanCancellation.store(true);sampleBrowseWorkers.removeAllJobs(true,-1);sampleMapWorkers.removeAllJobs(true,-1);sampleLookupWorkers.removeAllJobs(true,-1);sampleReviewWorkers.removeAllJobs(true,-1);metadataArchiveWorkers.removeAllJobs(true,-1);scanWorkers.removeAllJobs(true,-1);metadataSyncWorkers.removeAllJobs(true,-1);pluginInventoryWorkers.removeAllJobs(true,-1);pluginPresetImportWorkers.removeAllJobs(true,-1);pluginProgramScanWorkers.removeAllJobs(true,-1);pluginPresetSearchWorkers.removeAllJobs(true,-1);batteryKitImportWorkers.removeAllJobs(true,-1);pluginScanWorkers.removeAllJobs(true,-1);setLookAndFeel(nullptr);}
 
 void MagDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -2433,7 +2638,7 @@ void MagDrumAudioProcessorEditor::resized()
     openPluginManagerButton.setVisible(false);
     sampleScanProgress.setVisible(page==0&&scanning);
     sampleScanProgressLabel.setVisible(page==0&&scanning);
-    pluginInventoryProgress.setVisible(hasPluginScannerPage&&page==4&&pluginInventoryScanRunning);
+    pluginInventoryProgress.setVisible(hasPluginScannerPage&&page==4&&(pluginInventoryScanRunning||batteryKitImportRunning));
     if(page==0)
     {
         auto controls=bounds.removeFromTop(34);sampleSearch.setBounds(controls.removeFromLeft(270));controls.removeFromLeft(6);contentTypeFilter.setBounds(controls.removeFromLeft(220));controls.removeFromLeft(6);categoryFilter.setBounds(controls.removeFromLeft(135));controls.removeFromLeft(6);advancedSampleFiltersButton.setBounds(controls.removeFromRight(145).reduced(0, 1));controls.removeFromRight(6);previewButton.setBounds(controls.removeFromRight(82));
@@ -3671,7 +3876,7 @@ void MagDrumAudioProcessorEditor::finishPluginPresetSearch(const juce::String& p
 void MagDrumAudioProcessorEditor::showBatteryNativeKitGuidance()
 {
     const auto guidance = magdrum::ui::localisedText(
-        "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
+        "Choose a Battery .nbkt kit from the kit source menu to import its cells and velocity layers directly into MagDrum.");
     selectedPluginPresetFile = {};
     pluginProgramSelect.setSelectedId(0, juce::dontSendNotification);
     pluginPresetKitName.setText({}, juce::dontSendNotification);
@@ -3682,16 +3887,101 @@ void MagDrumAudioProcessorEditor::showBatteryNativeKitGuidance()
     pluginScanInfo.setText(guidance, juce::dontSendNotification);
 }
 
+void MagDrumAudioProcessorEditor::startBatteryKitImport(const juce::File& file)
+{
+    if (batteryKitImportRunning || !file.existsAsFile())
+        return;
+    batteryKitImportCancellation = std::make_shared<std::atomic<bool>>(false);
+    batteryKitImportRunning = true;
+    pluginInventoryProgressValue = 0.0;
+    pluginInventoryProgress.repaint();
+    updatePluginActionButtons();
+    resized();
+    status.setText(magdrum::ui::localisedText("Reading Battery kit..."), juce::dontSendNotification);
+    pluginScanInfo.setText(magdrum::ui::localisedText("Reading Battery kit..."), juce::dontSendNotification);
+
+    juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
+    batteryKitImportWorkers.addJob(new BatteryKitImportJob(processor, file, batteryKitImportCancellation,
+        [safe](const juce::String& kitName, int completed, int total)
+        {
+            if (safe != nullptr)
+                safe->updateBatteryKitImportProgress(kitName, completed, total);
+        },
+        [safe](BatteryKitImportJob::Result result)
+        {
+            if (safe != nullptr)
+                safe->finishBatteryKitImport(result.success, result.cancelled, result.kitName,
+                                             result.message, result.assignedZones);
+        }), true);
+}
+
+void MagDrumAudioProcessorEditor::cancelBatteryKitImport()
+{
+    if (batteryKitImportCancellation)
+        batteryKitImportCancellation->store(true, std::memory_order_release);
+    status.setText(magdrum::ui::localisedText("Cancelling Battery kit import; the current kit will stay loaded..."),
+                   juce::dontSendNotification);
+    updatePluginActionButtons();
+}
+
+void MagDrumAudioProcessorEditor::updateBatteryKitImportProgress(const juce::String& kitName,
+                                                                 int completed, int total)
+{
+    if (!batteryKitImportRunning)
+        return;
+    pluginInventoryProgressValue = total > 0
+        ? static_cast<double>(completed) / static_cast<double>(total) : 0.0;
+    pluginInventoryProgress.repaint();
+    const auto message = magdrum::ui::localisedText("Importing Battery kit: ") + kitName
+        + " (" + juce::String(completed) + "/" + juce::String(total) + ")";
+    status.setText(message, juce::dontSendNotification);
+    pluginScanInfo.setText(message, juce::dontSendNotification);
+}
+
+void MagDrumAudioProcessorEditor::finishBatteryKitImport(bool success, bool cancelled,
+    const juce::String& kitName, const juce::String& message, int assignedZones)
+{
+    batteryKitImportRunning = false;
+    batteryKitImportCancellation.reset();
+    pluginInventoryProgressValue = success ? 1.0 : 0.0;
+    pluginInventoryProgress.repaint();
+    updatePluginActionButtons();
+    resized();
+    if (success)
+    {
+        pluginPresetKitName.setText(kitName, juce::dontSendNotification);
+        refreshSampleAssignmentLabels();
+        processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
+        const auto summary = magdrum::ui::localisedText("Imported Battery kit: ") + kitName
+            + " (" + juce::String(assignedZones) + " "
+            + magdrum::ui::localisedText("sample assignments") + ").";
+        status.setText(summary, juce::dontSendNotification);
+        pluginScanInfo.setText(summary, juce::dontSendNotification);
+        return;
+    }
+    if (cancelled)
+    {
+        status.setText(magdrum::ui::localisedText("Battery kit import cancelled; the current kit is unchanged."),
+                       juce::dontSendNotification);
+        pluginScanInfo.setText(magdrum::ui::localisedText("Battery kit import cancelled; the current kit is unchanged."),
+                               juce::dontSendNotification);
+        return;
+    }
+    const auto failure = message.isNotEmpty() ? magdrum::ui::localisedText(message)
+        : magdrum::ui::localisedText("Battery kit import failed; the current kit is unchanged.");
+    status.setText(failure,
+                   juce::dontSendNotification);
+    pluginScanInfo.setText(failure, juce::dontSendNotification);
+}
+
 void MagDrumAudioProcessorEditor::selectPluginPreset(const juce::File& file)
 {
     if (file.existsAsFile() && file.getFileExtension().equalsIgnoreCase(".nbkt"))
     {
-        const int index = pluginInstrumentSelect.getSelectedId() - 1;
-        if (juce::isPositiveAndBelow(index, discoveredPluginInstruments.size())
-            && discoveredPluginInstruments.getReference(index).name.containsIgnoreCase("Battery"))
-        {
-            showBatteryNativeKitGuidance();
-        }
+        selectedPluginPresetFile = {};
+        importPluginPresetButton.setEnabled(false);
+        importPluginProgramButton.setEnabled(false);
+        startBatteryKitImport(file);
         return;
     }
     if (! file.existsAsFile() || ! file.getFileExtension().equalsIgnoreCase(".vstpreset"))
@@ -3943,10 +4233,11 @@ void MagDrumAudioProcessorEditor::refreshPluginKits()
     const bool hasVst3Instrument = juce::isPositiveAndBelow(descriptionIndex, discoveredPluginInstruments.size())
         && discoveredPluginInstruments.getReference(descriptionIndex).pluginFormatName == "VST3";
     scanPluginProgramsButton.setEnabled(hasVst3Instrument && ! pluginProgramScanRunning);
-    choosePluginPresetButton.setEnabled(pluginProgramScanRunning || pluginPresetSearchRunning
+    choosePluginPresetButton.setEnabled(batteryKitImportRunning || pluginProgramScanRunning || pluginPresetSearchRunning
         || (hasVst3Instrument && ! pluginPresetImportRunning));
-    const bool pluginSourceBusy = pluginProgramScanRunning || pluginPresetSearchRunning;
-    choosePluginPresetButton.setButtonText(magdrum::ui::localisedText(pluginProgramScanRunning ? "Cancel program scan"
+    const bool pluginSourceBusy = batteryKitImportRunning || pluginProgramScanRunning || pluginPresetSearchRunning;
+    choosePluginPresetButton.setButtonText(magdrum::ui::localisedText(batteryKitImportRunning ? "Cancel Battery kit import"
+        : pluginProgramScanRunning ? "Cancel program scan"
         : pluginPresetSearchRunning ? "Cancel" : "Choose kit source")
         + (pluginSourceBusy ? juce::String() : juce::String("...")));
     choosePluginPresetButton.setTooltip(magdrum::ui::localisedText("Choose VST3 preset")+"  ·  "
@@ -3985,16 +4276,18 @@ void MagDrumAudioProcessorEditor::updatePluginActionButtons()
     const int selectedInstrument = pluginInstrumentSelect.getSelectedId() - 1;
     const bool hasVst3Instrument = juce::isPositiveAndBelow(selectedInstrument, discoveredPluginInstruments.size())
         && discoveredPluginInstruments.getReference(selectedInstrument).pluginFormatName == "VST3";
-    const auto sourceAction = pluginProgramScanRunning ? "Cancel program scan"
+    const auto sourceAction = batteryKitImportRunning ? "Cancel Battery kit import"
+        : pluginProgramScanRunning ? "Cancel program scan"
         : pluginPresetSearchRunning ? "Cancel" : "Choose kit source";
-    const bool sourceBusy = pluginProgramScanRunning || pluginPresetSearchRunning;
+    const bool sourceBusy = batteryKitImportRunning || pluginProgramScanRunning || pluginPresetSearchRunning;
     choosePluginPresetButton.setButtonText(magdrum::ui::localisedText(sourceAction)
         + (sourceBusy ? juce::String() : juce::String("...")));
     choosePluginPresetButton.setTooltip(magdrum::ui::localisedText("Choose VST3 preset") + "  ·  "
         + magdrum::ui::localisedText("Find standard presets") + "  ·  "
         + magdrum::ui::localisedText("Choose preset folder") + "  ·  "
         + magdrum::ui::localisedText("Scan programs"));
-    choosePluginPresetButton.setEnabled(sourceBusy || (hasVst3Instrument && ! pluginPresetImportRunning));
+    choosePluginPresetButton.setEnabled(batteryKitImportRunning || sourceBusy
+        || (hasVst3Instrument && ! pluginPresetImportRunning));
     const bool canImportPreset = importPluginPresetButton.isEnabled();
     const bool canImportProgram = importPluginProgramButton.isEnabled();
     const bool importing = pluginPresetImportRunning;
@@ -5525,7 +5818,7 @@ void MagDrumAudioProcessorEditor::buttonClicked(juce::Button* button)
     if(button==&compressorTab){showPhaserControls=false;resized();return;}
     if(button==&phaserTab){showPhaserControls=true;resized();return;}
     if(button==&libraryTab){setPage(0);return;}if(button==&machineTab){setPage(1);return;}if(button==&sequencerTab){setPage(2);return;}if(button==&mapsTab){setPage(3);return;}
-    if(button==&scanPluginInventoryButton){if(pluginInventoryScanRunning){startPluginInventoryScan();return;}juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);auto menu=createPluginInventoryMenu();menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&scanPluginInventoryButton),[safe](int choice){if(safe==nullptr)return;if(choice==1)safe->startPluginInventoryScan();else if(choice==2)safe->choosePluginFolder();else if(choice==3)safe->refreshPluginInventory();});return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){if(pluginProgramScanRunning){startPluginProgramDiscovery();return;}if(pluginPresetSearchRunning){if(pluginPresetSearchCancellation)pluginPresetSearchCancellation->store(true);return;}juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);auto menu=createPluginSourceMenu();menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&choosePluginPresetButton),[safe](int choice){if(safe==nullptr)return;if(choice==1)safe->choosePluginPreset();else if(choice==2)safe->findStandardPluginPresets();else if(choice==3)safe->choosePluginPresetFolder();else if(choice==4)safe->startPluginProgramDiscovery();else if(choice==5)safe->launchInstrumentScanner();else if(choice==6){safe->refreshPluginInventory();safe->refreshPluginKits();}});return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}if(button==&importPluginKitButton){if(pluginPresetImportRunning){startPluginPresetImport();return;}if(selectedPluginPresetFile.existsAsFile())startPluginPresetImport();else startPluginProgramImport();return;}if(button==&scanPluginKitButton){if(pluginScanRunning)cancelPluginNoteScan();else startPluginNoteScan();return;}
+    if(button==&scanPluginInventoryButton){if(pluginInventoryScanRunning){startPluginInventoryScan();return;}juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);auto menu=createPluginInventoryMenu();menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&scanPluginInventoryButton),[safe](int choice){if(safe==nullptr)return;if(choice==1)safe->startPluginInventoryScan();else if(choice==2)safe->choosePluginFolder();else if(choice==3)safe->refreshPluginInventory();});return;}if(button==&openPluginManagerButton){launchInstrumentScanner();return;}if(button==&choosePluginPresetButton){if(batteryKitImportRunning){cancelBatteryKitImport();return;}if(pluginProgramScanRunning){startPluginProgramDiscovery();return;}if(pluginPresetSearchRunning){if(pluginPresetSearchCancellation)pluginPresetSearchCancellation->store(true);return;}juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);auto menu=createPluginSourceMenu();menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&choosePluginPresetButton),[safe](int choice){if(safe==nullptr)return;if(choice==1)safe->choosePluginPreset();else if(choice==2)safe->findStandardPluginPresets();else if(choice==3)safe->choosePluginPresetFolder();else if(choice==4)safe->startPluginProgramDiscovery();else if(choice==5)safe->launchInstrumentScanner();else if(choice==6){safe->refreshPluginInventory();safe->refreshPluginKits();}});return;}if(button==&importPluginPresetButton){startPluginPresetImport();return;}if(button==&scanPluginProgramsButton){startPluginProgramDiscovery();return;}if(button==&importPluginProgramButton){startPluginProgramImport();return;}if(button==&scanPluginNotesButton){startPluginNoteScan();return;}if(button==&cancelPluginNotesButton){cancelPluginNoteScan();return;}if(button==&importPluginKitButton){if(pluginPresetImportRunning){startPluginPresetImport();return;}if(selectedPluginPresetFile.existsAsFile())startPluginPresetImport();else startPluginProgramImport();return;}if(button==&scanPluginKitButton){if(pluginScanRunning)cancelPluginNoteScan();else startPluginNoteScan();return;}
      for(size_t lane=0;lane<steps.size();++lane)for(size_t localStep=0;localStep<steps[lane].size();++localStep)if(button==&steps[lane][localStep]){const int globalStep=visibleStepIndex(static_cast<int>(localStep));if(globalStep<0)return;sequenceStepActive[lane][static_cast<size_t>(globalStep)]=steps[lane][localStep].getToggleState();const bool preservedOffGrid=syncSequenceEventForCell(static_cast<int>(lane),globalStep);if(preservedOffGrid)status.setText(magdrum::ui::localisedText("Off-grid hits in this step remain; use Edit hits to review them."),juce::dontSendNotification);savePluginEditorState();return;}
     if(button==&scanButton)
     {

@@ -1715,7 +1715,6 @@ public:
 
         const auto unrelatedPresetFile = fixtureRoot.getChildFile("not-a-vst-preset.fxp");
         const auto selectedPresetFixture = fixtureRoot.getChildFile("Selected Fixture.vstpreset");
-        const auto batteryKitFixture = fixtureRoot.getChildFile("Factory Kit.nbkt");
         if (! unrelatedPresetFile.replaceWithText("fixture"))
         {
             std::cerr << "Could not write the isolated preset-search UI fixture.\n";
@@ -1781,25 +1780,6 @@ public:
             return 4;
         }
 
-        editor->discoveredPluginInstruments.getReference(0).name = "Battery 4";
-        const auto batteryIdentifier = editor->discoveredPluginInstruments.getReference(0).createIdentifierString();
-        const auto batteryKitGuidance = magdrum::ui::localisedText(
-            "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
-        editor->finishPluginPresetSearch(batteryIdentifier, {}, false, false, true);
-        if (editor->status.getText() != batteryKitGuidance
-            || editor->pluginScanInfo.getText() != batteryKitGuidance)
-        {
-            std::cerr << "Battery's missing standard preset folder did not provide the native-kit workflow.\n";
-            return 7;
-        }
-        editor->finishPluginPresetSearch(batteryIdentifier, {}, false, true, true);
-        if (editor->status.getText() != batteryKitGuidance
-            || editor->pluginScanInfo.getText() != batteryKitGuidance)
-        {
-            std::cerr << "Battery's empty standard preset search did not provide the native-kit workflow.\n";
-            return 8;
-        }
-
         if (! selectedPresetFixture.replaceWithText("preset fixture"))
         {
             std::cerr << "Could not write the selected VST3 preset fixture.\n";
@@ -1815,20 +1795,96 @@ public:
             std::cerr << "Selecting a VST3 preset did not configure the shared kit-import action.\n";
             return 10;
         }
-        if (! batteryKitFixture.replaceWithText("native Battery kit fixture"))
+        return 0;
+    }
+
+    static __declspec(noinline) int checksBatteryKitImportAsync(const juce::File& suppliedKit = {})
+    {
+        const auto fixtureRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("MagDrum-BatteryKitUi-" + juce::Uuid().toString());
+        if (! fixtureRoot.createDirectory().wasOk()) return 1;
+        struct FixtureCleanup final
         {
-            std::cerr << "Could not write the isolated Battery kit fixture.\n";
-            return 11;
-        }
+            explicit FixtureCleanup(juce::File directoryToRemove) : directory(std::move(directoryToRemove)) {}
+            ~FixtureCleanup() { directory.deleteRecursively(); }
+            juce::File directory;
+        } cleanup(fixtureRoot);
+
+        const bool importingRealKit = suppliedKit.existsAsFile();
+        const auto batteryKitFixture = importingRealKit
+            ? suppliedKit : fixtureRoot.getChildFile("Factory Kit.nbkt");
+        const auto preservedSample = fixtureRoot.getChildFile("existing-kick.wav");
+        if (! writeFixture(preservedSample)
+            || (! importingRealKit && ! batteryKitFixture.replaceWithText("invalid Battery kit fixture")))
+            return 2;
+        auto processor = std::make_unique<MagDrumAudioProcessor>();
+        if (! processor->loadSampleForNote(36, preservedSample)) return 3;
+        auto editor = std::make_unique<MagDrumAudioProcessorEditor>(*processor,
+            fixtureRoot.getChildFile("samples.sqlite3"));
+        juce::PluginDescription battery;
+        battery.name = "Battery 4";
+        battery.manufacturerName = "MagDrum Tests";
+        battery.pluginFormatName = "VST3";
+        battery.fileOrIdentifier = "BatteryFixture.vst3";
+        battery.isInstrument = true;
+        editor->discoveredPluginInstruments.add(battery);
+        editor->pluginInstrumentSelect.addItem(battery.name, 1);
+        editor->pluginInstrumentSelect.setSelectedId(1, juce::dontSendNotification);
         editor->selectPluginPreset(batteryKitFixture);
-        if (editor->selectedPluginPresetFile.existsAsFile()
-            || editor->pluginPresetKitName.getText().isNotEmpty()
-            || editor->importPluginKitButton.isEnabled()
-            || editor->status.getText() != batteryKitGuidance
-            || editor->pluginScanInfo.getText() != batteryKitGuidance)
+        if (! editor->batteryKitImportRunning || editor->selectedPluginPresetFile.existsAsFile()
+            || editor->importPluginPresetButton.isEnabled() || editor->importPluginProgramButton.isEnabled())
+            return 4;
+
+        struct ImportCompletionWaiter final : juce::Timer
         {
-            std::cerr << "Native Battery kit selection did not provide its in-app supported workflow.\n";
-            return 12;
+            explicit ImportCompletionWaiter(bool& isRunning) : running(isRunning) {}
+            void timerCallback() override
+            {
+                if (! running || --remainingTicks <= 0)
+                {
+                    timedOut = running;
+                    stopTimer();
+                    juce::MessageManager::getInstance()->stopDispatchLoop();
+                }
+            }
+            bool& running;
+            int remainingTicks = 500;
+            bool timedOut = false;
+        } waiter(editor->batteryKitImportRunning);
+        waiter.startTimer(20);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        waiter.stopTimer();
+        const auto importedAssignments = processor->getAllSampleAssignments();
+        if (waiter.timedOut || editor->batteryKitImportRunning || importedAssignments.empty()
+            || editor->status.getText().isEmpty())
+        {
+            std::cerr << "Battery kit import timed out or did not produce its expected result.\n";
+            return 5;
+        }
+        if (importingRealKit)
+        {
+            const auto importedName = batteryKitFixture.getFileNameWithoutExtension();
+            const auto midi36Layers = processor->getSampleLayersForNote(36);
+            const int expectedNote36Layers = importedName == "Alias Kit" ? 3 : 1;
+            if (importedAssignments.size() < 20 || editor->pluginPresetKitName.getText() != importedName
+                || ! editor->pluginScanInfo.getText().startsWith(magdrum::ui::localisedText("Imported Battery kit: "))
+                || static_cast<int>(midi36Layers.size()) != expectedNote36Layers)
+            {
+                std::cerr << "Real Battery kit was not fully imported: " << importedName.toStdString()
+                          << ", assignments=" << importedAssignments.size()
+                          << ", note 36 layers=" << midi36Layers.size()
+                          << ", status=" << editor->pluginScanInfo.getText().toStdString() << ".\n";
+                return 6;
+            }
+            for (const auto& assignment : importedAssignments)
+                if (assignment.path == preservedSample.getFullPathName() || ! juce::File(assignment.path).existsAsFile())
+                    return 7;
+        }
+        else if (importedAssignments.size() != 1 || importedAssignments.front().midiNote != 36
+            || importedAssignments.front().path != preservedSample.getFullPathName())
+        {
+            std::cerr << "Invalid Battery kit did not leave the previous kit untouched.\n";
+            return 8;
         }
         return 0;
     }
@@ -2500,6 +2556,16 @@ int main(int argc, char** argv)
     {
         juce::ScopedJuceInitialiser_GUI guiInitialiser;
         return MagDrumAudioProcessorEditorTestAccess::checksPluginPresetSearchAsync();
+    }
+    if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-battery-kit-ui") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        return MagDrumAudioProcessorEditorTestAccess::checksBatteryKitImportAsync();
+    }
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-battery-kit-ui") == 0)
+    {
+        juce::ScopedJuceInitialiser_GUI guiInitialiser;
+        return MagDrumAudioProcessorEditorTestAccess::checksBatteryKitImportAsync(juce::File(argv[2]));
     }
 #endif
 
@@ -3581,6 +3647,29 @@ int main(int argc, char** argv)
         hasHardAssignment = hasHardAssignment || (assignment.minimumVelocity == 64 && assignment.maximumVelocity == 127);
     }
     if (layeredAssignments.size() != 2 || !hasSoftAssignment || !hasHardAssignment) return 37;
+
+    auto& transactionalKit = makeTestProcessor();
+    if (! transactionalKit.loadSampleForNote(36, softLayer)) return 49;
+    const std::vector<MagDrumAudioProcessor::SampleFileAssignment> failedKitAssignments{
+        {38, 1, 63, hardLayer}, {40, 64, 127, root.getChildFile("missing-battery-zone.wav")}};
+    if (transactionalKit.replaceSampleKit(failedKitAssignments)
+        || transactionalKit.getAllSampleAssignments().size() != 1
+        || transactionalKit.getSamplePathForNote(36) != softLayer.getFullPathName()
+        || transactionalKit.getSamplePathForNote(38).isNotEmpty()) return 50;
+    const std::vector<MagDrumAudioProcessor::SampleFileAssignment> cancelledKitAssignments{
+        {38, 1, 127, hardLayer}};
+    if (transactionalKit.replaceSampleKit(cancelledKitAssignments, [] { return true; })
+        || transactionalKit.getSamplePathForNote(36) != softLayer.getFullPathName()) return 51;
+    const std::vector<MagDrumAudioProcessor::SampleFileAssignment> validKitAssignments{
+        {36, 1, 63, softLayer}, {36, 64, 127, hardLayer}, {38, 1, 127, hardLayer}};
+    if (! transactionalKit.replaceSampleKit(validKitAssignments)
+        || transactionalKit.getAllSampleAssignments().size() != 3
+        || transactionalKit.getSamplePathForNote(36) != softLayer.getFullPathName()
+        || transactionalKit.getSamplePathForNote(38) != hardLayer.getFullPathName()) return 52;
+    transactionalKit.prepareToPlay(44100.0, 128);
+    if (renderPeak(transactionalKit, 36, 32) <= 0.0 || renderPeak(transactionalKit, 36, 96) <= 0.0
+        || renderPeak(transactionalKit, 38, 96) <= 0.0) return 53;
+
     juce::MemoryBlock layeredState;
     layered.getStateInformation(layeredState);
     auto& restoredLayers = makeTestProcessor();
