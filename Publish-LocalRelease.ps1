@@ -184,6 +184,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not query existing GitHub releases.' }
 if ($existingTags -contains $Tag) { throw "Release $Tag already exists." }
 
 if ($PSCmdlet.ShouldProcess("GitHub release $Tag", "Upload $($includedNames.Count) local package(s)")) {
+    if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
+        if ($Tag -notmatch '^v0\.1\.2-test\.([0-9]+)$') {
+            throw "Cannot derive the Windows x64 build revision from release tag $Tag."
+        }
+        $buildRevision = [int]$Matches[1]
+        & (Join-Path $repoRoot 'tools/Test-WindowsReleasePackage.ps1') `
+            -PackagePath (Join-Path $publishDirectory 'MagDrum-Windows-x64.zip') `
+            -BuildRevision $buildRevision
+    }
+
     & gh release create $Tag @releaseAssets --title "MagDrum $Tag" --notes-file $notesPath --prerelease --target main
     if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed for $Tag." }
 
