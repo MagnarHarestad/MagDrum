@@ -83,6 +83,7 @@ private:
     void dispatchSampleMapMiddleDragForTest(juce::Point<float> start, juce::Point<float> end);
     juce::Point<float> sampleMapPointForTest(int sampleIndex) const;
     std::array<float, 3> sampleMapViewportForTest() const;
+    bool sampleMapVisibleGlyphsFitForTest() const;
     void buttonClicked(juce::Button*) override;
     void timerCallback() override;
     void updatePadActivity();

@@ -626,10 +626,18 @@ public:
             std::cerr << "The acoustic map wheel event did not zoom within its supported bounds.\n";
             return 10;
         }
+        for (int step = 0; step < 20; ++step)
+            editor.dispatchSampleMapWheelForTest(previewPoint, 1.0f);
+        const auto maxZoomViewport = editor.sampleMapViewportForTest();
+        if (maxZoomViewport[0] < 11.99f || !editor.sampleMapVisibleGlyphsFitForTest())
+        {
+            std::cerr << "Acoustic-map dots or their glow escaped the plot at maximum zoom.\n";
+            return 18;
+        }
         editor.dispatchSampleMapMiddleDragForTest({5.0f, 5.0f}, {-65.0f, -45.0f});
         const auto outsidePanViewport = editor.sampleMapViewportForTest();
-        if (std::abs(outsidePanViewport[1] - zoomedViewport[1]) > 1.0e-5f
-            || std::abs(outsidePanViewport[2] - zoomedViewport[2]) > 1.0e-5f)
+        if (std::abs(outsidePanViewport[1] - maxZoomViewport[1]) > 1.0e-5f
+            || std::abs(outsidePanViewport[2] - maxZoomViewport[2]) > 1.0e-5f)
         {
             std::cerr << "Middle-button dragging outside the acoustic plot changed its viewport.\n";
             return 11;
@@ -637,8 +645,8 @@ public:
         editor.dispatchSampleMapMiddleDragForTest(previewPoint,
             previewPoint - juce::Point<float>(70.0f, 50.0f));
         const auto pannedViewport = editor.sampleMapViewportForTest();
-        if (std::abs(pannedViewport[1] - zoomedViewport[1]) < 1.0e-5f
-            && std::abs(pannedViewport[2] - zoomedViewport[2]) < 1.0e-5f)
+        if (std::abs(pannedViewport[1] - maxZoomViewport[1]) < 1.0e-5f
+            && std::abs(pannedViewport[2] - maxZoomViewport[2]) < 1.0e-5f)
         {
             std::cerr << "Middle-button dragging did not pan the acoustic map.\n";
             return 12;

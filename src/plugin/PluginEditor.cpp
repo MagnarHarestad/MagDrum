@@ -326,6 +326,24 @@ public:
         return found == acousticPoints.end() ? juce::Point<float>{} : samplePosition(*found, plotBounds());
     }
     std::array<float, 3> viewportForTest() const { return {viewport.zoom, viewport.panX, viewport.panY}; }
+    bool visibleGlyphsFitForTest() const
+    {
+        const auto plot = plotBounds();
+        int visibleGlyphs = 0;
+        for (const auto& projected : acousticPoints)
+        {
+            if (!viewport.contains(projected.x, projected.y)) continue;
+            ++visibleGlyphs;
+            const auto position = samplePosition(projected, plot);
+            // The selected glow extends 14 px from the point centre; other dots
+            // extend 4.2 px. Both must stay clear of the plot frame at all zooms.
+            const float extent = projected.sampleIndex == selectedIndex ? 14.0f : 4.2f;
+            if (position.x - extent < plot.getX() || position.x + extent > plot.getRight()
+                || position.y - extent < plot.getY() || position.y + extent > plot.getBottom())
+                return false;
+        }
+        return visibleGlyphs > 0;
+    }
     void mouseMove(const juce::MouseEvent& event) override
     {
         const int index=sampleAt(event.position);
@@ -583,6 +601,11 @@ juce::Point<float> MagDrumAudioProcessorEditor::sampleMapPointForTest(int sample
 std::array<float, 3> MagDrumAudioProcessorEditor::sampleMapViewportForTest() const
 {
     return sampleMap->viewportForTest();
+}
+
+bool MagDrumAudioProcessorEditor::sampleMapVisibleGlyphsFitForTest() const
+{
+    return sampleMap != nullptr && sampleMap->visibleGlyphsFitForTest();
 }
 
 class MagDrumWaveform final : public juce::Component, public juce::TooltipClient, private juce::ChangeListener
