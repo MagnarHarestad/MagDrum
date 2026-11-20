@@ -314,6 +314,7 @@ int runSmokeTests(int argc,char** argv)
     if(invalidPlayback.isValid())return 247;
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::_Exit(1);
     if(argc==3&&std::strcmp(argv[1],"--magdrum-test-partial-crash-fixture")==0){const auto log=juce::File(argv[2]);log.replaceWithText(R"({"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"})"+juce::String("\n"));std::_Exit(1);}
+    if(argc==4&&std::strcmp(argv[1],"--magdrum-test-vst3-discovery-error-fixture")==0){magdrum::plugins::Vst3DiscoveryProgress progress;progress.total=1;progress.current=juce::File(argv[3]).getFileNameWithoutExtension();progress.currentPath=argv[3];magdrum::plugins::writeVst3DiscoveryProgress(juce::File(argv[2]),progress);std::_Exit(1);}
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;
     if(!matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.099,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::veryShort,0.1,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.1,500.0)||matchesSampleFeatureFilter(SampleFeatureFilter::shortSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::mediumSample,0.5,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::longSample,2.0,500.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,999.9)||matchesSampleFeatureFilter(SampleFeatureFilter::dark,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::midBrightness,1.0,1000.0)||!matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,3000.0)||matchesSampleFeatureFilter(SampleFeatureFilter::bright,1.0,0.0))return 110;
     const auto logLine=StructuredLogger::formatEvent(StructuredLogger::Level::warning,"test.event",{{"detail","quoted \"text\"\nline"}},"2026-01-02T03:04:05Z");const auto parsedLog=juce::JSON::parse(logLine);if(!parsedLog.isObject()||parsedLog.getDynamicObject()->getProperty("level").toString()!="warning"||parsedLog.getDynamicObject()->getProperty("event").toString()!="test.event"||parsedLog.getDynamicObject()->getProperty("detail").toString()!="quoted \"text\"\nline")return 114;
@@ -373,6 +374,32 @@ int runSmokeTests(int argc,char** argv)
     {
         std::cerr << "VST3 discovery did not time out and isolate only the stalled instrument.\n";
         return 306;
+    }
+
+    const auto positiveExitProgressFile = root.getChildFile("vst3-discovery-positive-exit-progress.json");
+    const auto positiveExitModule = root.getChildFile("positive-error-instrument.vst3");
+    const juce::StringArray positiveExitDiscoveryCommand{
+        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
+        "--magdrum-test-vst3-discovery-error-fixture", positiveExitProgressFile.getFullPathName(),
+        positiveExitModule.getFullPathName()};
+    const auto positiveExitDiscovery = magdrum::plugins::monitorVst3Discovery(
+        positiveExitDiscoveryCommand, positiveExitProgressFile, 5000);
+    const auto positiveExitFailedModule = magdrum::plugins::vst3DiscoveryModuleForRecovery(
+        positiveExitDiscovery, positiveExitProgressFile);
+    magdrum::plugins::Vst3DiscoveryProgress positiveExitRecoveredProgress;
+    if (!positiveExitDiscovery.started || positiveExitDiscovery.timedOut
+        || positiveExitDiscovery.exitCode != 1
+        || positiveExitFailedModule != positiveExitModule.getFullPathName()
+        || !magdrum::plugins::recordVst3DiscoveryModuleFailure(positiveExitProgressFile,
+            positiveExitFailedModule)
+        || !magdrum::plugins::readVst3DiscoveryProgress(positiveExitProgressFile,
+            positiveExitRecoveredProgress)
+        || positiveExitRecoveredProgress.completed != 1
+        || positiveExitRecoveredProgress.failedModules.size() != 1
+        || positiveExitRecoveredProgress.failedModules[0] != positiveExitModule.getFullPathName())
+    {
+        std::cerr << "VST3 discovery did not isolate a module that exited with a positive error code.\n";
+        return 307;
     }
 
     const auto defaultPluginRootA=root.getChildFile("default-vst3-a");

@@ -1618,14 +1618,10 @@ public:
 
             // A third-party module can crash or stop responding during discovery.
             // Keep completed results, skip that module and resume in a fresh helper.
-            if ((execution.timedOut || execution.exitCode < 0)
-                && recoveredModules < maximumPluginScanRecoveries)
+            if (recoveredModules < maximumPluginScanRecoveries)
             {
-                magdrum::plugins::Vst3DiscoveryProgress progress;
-                const auto failedModule = execution.timedOut
-                    ? execution.timedOutModulePath
-                    : (magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress)
-                        ? progress.currentPath : juce::String());
+                const auto failedModule = magdrum::plugins::vst3DiscoveryModuleForRecovery(
+                    execution, progressFile);
                 if (failedModule.isNotEmpty()
                     && magdrum::plugins::recordVst3DiscoveryModuleFailure(progressFile,
                         failedModule))

@@ -322,6 +322,18 @@ magdrum::plugins::Vst3DiscoveryExecution magdrum::plugins::monitorVst3Discovery(
     return result;
 }
 
+juce::String magdrum::plugins::vst3DiscoveryModuleForRecovery(
+    const Vst3DiscoveryExecution& execution, const juce::File& progressFile)
+{
+    if (! execution.started || execution.cancelled || (! execution.timedOut && execution.exitCode == 0))
+        return {};
+    if (execution.timedOut)
+        return execution.timedOutModulePath;
+
+    Vst3DiscoveryProgress progress;
+    return readVst3DiscoveryProgress(progressFile, progress) ? progress.currentPath : juce::String();
+}
+
 bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module)
 {

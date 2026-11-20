@@ -71,6 +71,8 @@ bool recordVst3DiscoveryModuleFailure(const juce::File& progressFile, const juce
 Vst3DiscoveryExecution monitorVst3Discovery(const juce::StringArray& command,
     const juce::File& progressFile, int perModuleTimeoutMilliseconds,
     std::function<bool()> shouldCancel = {}, int cancellationGraceMilliseconds = 3000);
+juce::String vst3DiscoveryModuleForRecovery(const Vst3DiscoveryExecution& execution,
+    const juce::File& progressFile);
 bool vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module);
 bool vst3ModuleHasInstrumentDescription(
