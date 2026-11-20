@@ -1186,6 +1186,36 @@ public:
         }
         magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
         editor.applyLanguage();
+        juce::PluginDescription fixtureInstrument;
+        fixtureInstrument.name = "Shared kit fixture";
+        fixtureInstrument.pluginFormatName = "VST3";
+        fixtureInstrument.manufacturerName = "MagDrum test";
+        fixtureInstrument.fileOrIdentifier = "shared-kit-fixture.vst3";
+        fixtureInstrument.uniqueId = 1234;
+        editor.discoveredPluginInstruments.add(fixtureInstrument);
+        const int fixtureInstrumentIndex = editor.discoveredPluginInstruments.size();
+        editor.pluginInstrumentSelect.addItem(fixtureInstrument.name, fixtureInstrumentIndex);
+        editor.pluginInstrumentSelect.setSelectedId(fixtureInstrumentIndex, juce::dontSendNotification);
+        editor.refreshPluginKits();
+        const auto fixtureIdentifier = fixtureInstrument.createIdentifierString();
+        const PluginInstrumentRecord fixtureRecord{fixtureIdentifier, "VST3", fixtureInstrument.name,
+            fixtureInstrument.manufacturerName, "Instrument", fixtureInstrument.fileOrIdentifier, "1"};
+        juce::MemoryBlock fixtureState("fixture-state", 13);
+        if (! editor.databaseReady || ! editor.database.upsertPluginInstrument(fixtureRecord)
+            || ! editor.database.savePluginKit(fixtureIdentifier, "Battery-style kit", fixtureState))
+        {
+            std::cerr << "Could not create a shared instrument kit for the refresh regression.\n";
+            return 15;
+        }
+        editor.refreshPluginKits();
+        bool foundSharedKit = false;
+        for (int item = 0; item < editor.pluginKitSelect.getNumItems(); ++item)
+            foundSharedKit = foundSharedKit || editor.pluginKitSelect.getItemText(item) == "Battery-style kit";
+        if (! foundSharedKit)
+        {
+            std::cerr << "Refreshing Plugin Scanner did not load the newly saved shared kit.\n";
+            return 16;
+        }
         for (const auto language : sourceMenuLanguages)
         {
             magdrum::ui::setLanguage(language, false);
