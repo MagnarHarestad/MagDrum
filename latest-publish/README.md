@@ -1,15 +1,15 @@
 # MagDrum Windows x64 test package
 
-Public Windows x64 prerelease: [v0.1.2-test.288](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.288) (VST3 version 0.1.2.288).
+Verified Windows x64 prerelease candidate: v0.1.2-test.294 (VST3 version 0.1.2.294).
 
-- ZIP SHA-256: `70d263fb32922530ddbb5caf65194527c6d4f5c722e5e7c7f084586a5d45f2ad`
-- VST3 module SHA-256: `C149EE32D8C60E264740FB6912AE817291FFF2BF08C7F08B7CBEEB50494E3E50`
-- Windows x64 Release CTest: 9 applicable tests passed; the Debug-only assertion worker was skipped.
+- ZIP SHA-256: `7eb211a246479468bc223686e4ce8710afdc62fd69f4c8c1b27b630e532f6cd3`
+- VST3 module SHA-256: `05d4a50f0368f6f9ecbf56671c84939c910e3449bed63e5e0a5c3f5b50d12c46`
+- Windows x64 Release CTest: 8 applicable tests passed; the Debug-only assertion worker was skipped.
 - Package contents, license notices, signatures and version checks passed.
-- The package passed project-state restore and isolated MIDI rendering for notes 0–127, including C1.
-- The repeat VST3 scan directory cache reuses unchanged folders and invalidates added or removed bundles.
-- The exact ZIP passed state restore, MIDI 0–127 rendering, 12 offscreen UI captures, and Steinberg VST 3.8.1 validation (47 standard and 537 extensive tests).
-- The scanner page now starts/cancels instrument discovery directly; custom folders and inventory refresh are in the app menu.
-- Published but not installed. Manual Cubase-host interaction remains unverified.
+- The exact ZIP passed saved-state restore and MIDI rendering for all notes 0–127, including C1.
+- Twelve offscreen UI images were rendered from the packaged VST3.
+- Steinberg VST 3.8.1 validation passed 47/47 standard and 537/537 extensive tests.
+- MIDI import preserves unmapped raw pitches; drum-family filters, acoustic-map zoom/pan and Battery-kit parser safeguards are included.
+- The plugin has not been installed; .289 remains the per-user installation. Real Cubase-host behavior remains unverified.
 
 See [the Cubase test guide](../docs/cubase-testing.md).
