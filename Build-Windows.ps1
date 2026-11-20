@@ -3,9 +3,8 @@ param(
     [string] $Architecture = 'x64',
     [string] $BuildDirectory,
     [switch] $SkipTests,
-    [switch] $EnableBatteryKitProbeTests,
     [ValidateRange(1, 64)]
-    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 8),
+    [int] $Parallel = [Math]::Min([Environment]::ProcessorCount, 2),
     [ValidateRange(0, 99999)]
     [int] $BuildRevision = 0
 )
@@ -107,7 +106,6 @@ try {
         '-A', $Architecture,
         "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
         "-DBUILD_TESTING=$buildTesting",
-        "-DMAGDRUM_ENABLE_BATTERY_KIT_PROBE_TESTS=$($EnableBatteryKitProbeTests.IsPresent -and -not $SkipTests)",
         '-DMAGDRUM_VST3_LOAD_DIAGNOSTICS=OFF',
         '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
     )
@@ -167,16 +165,9 @@ try {
     $buildTargets = if ($SkipTests) {
         @('MagDrum', 'MagDrumPlugin_VST3')
     } else {
-        # MagDrumTests depends on the app, VST3, and plugin-test executable.
-        # The Battery parser probe is opt-in because a user reported a Windows
-        # access-violation dialog from that test executable.
-        # One MSBuild invocation excludes unrelated cached targets such as the
-        # mobile preview while building every executable CTest invokes.
-        if ($EnableBatteryKitProbeTests) {
-            @('MagDrumTests', 'MagDrumBatteryKitProbe')
-        } else {
-            @('MagDrumTests')
-        }
+        # MagDrumTests depends on the app, VST3, plugin-test executable, and parser regressions.
+        # One MSBuild invocation excludes unrelated cached targets such as the mobile preview.
+        @('MagDrumTests')
     }
     $compileTimer = [System.Diagnostics.Stopwatch]::StartNew()
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel

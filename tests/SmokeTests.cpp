@@ -34,6 +34,7 @@
 #include <memory>
 #include <limits>
 #include <utility>
+int runBatteryKitReaderTests();
 
 class SyntheticInstrument final : public juce::AudioProcessor
 {
@@ -1693,6 +1694,11 @@ int runSmokeTests(int argc,char** argv)
 int main(int argc, char** argv)
 {
     magdrum::tests::suppressWindowsErrorDialogs();
+    if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-battery-reader") == 0)
+    {
+        if (!magdrum::tests::windowsErrorDialogsAreSuppressed()) return 4;
+        return runBatteryKitReaderTests();
+    }
     if (argc == 4 && std::strcmp(argv[1], "--magdrum-audit-sample-folder") == 0)
     {
         const juce::File root(argv[2]);
