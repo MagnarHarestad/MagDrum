@@ -1566,6 +1566,48 @@ int runSmokeTests(int argc,char** argv)
      MidiPattern pattern;pattern.events.push_back(hat);pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::tempoMetaEvent(600000)});pattern.tempoAndSignature.push_back({0.0,juce::MidiMessage::timeSignatureMetaEvent(7,8)});pattern.lengthBeats=8.0;
     MidiPatternIO midiIO;const auto midiFile=root.getChildFile("mapping.mid");
     if(!midiIO.write(midiFile,pattern,gm,false))return 23;
+    MidiPattern gmAliasedNotes;
+    gmAliasedNotes.events.push_back({DrumInstrument::Snare,DrumArticulation::Center,100,0.0,0.25});
+    gmAliasedNotes.events.push_back({DrumInstrument::Snare,DrumArticulation::Rimshot,100,1.0,0.25});
+    const auto gmAliasedFile=root.getChildFile("gm-aliased-notes.mid");
+    MidiPattern decodedGmAliasedNotes;
+    const auto gmAliasedReport=midiIO.write(gmAliasedFile,gmAliasedNotes,gm,false)
+        ? midiIO.read(gmAliasedFile,gm,decodedGmAliasedNotes)
+        : MidiImportReport{};
+    if(!gmAliasedReport.ok||gmAliasedReport.ambiguousNotes.size()!=1
+        ||gmAliasedReport.ambiguousNotes.front().note!=40
+        ||gmAliasedReport.ambiguousNotes.front().eventCount!=1
+        ||decodedGmAliasedNotes.events.size()!=2
+        ||decodedGmAliasedNotes.events[0].instrument!=DrumInstrument::Snare
+        ||decodedGmAliasedNotes.events[0].articulation!=DrumArticulation::Center
+        ||decodedGmAliasedNotes.events[1].instrument!=DrumInstrument::Snare
+        ||decodedGmAliasedNotes.events[1].articulation!=DrumArticulation::Rimshot)
+    {
+        std::cerr<<"General MIDI import reported same-drum articulation aliases as instrument ambiguity.\n";
+        return 296;
+    }
+    MidiPattern unknownPitchPattern;
+    unknownPitchPattern.events.push_back({DrumInstrument::Percussion,DrumArticulation::Default,90,0.5,0.125,31});
+    unknownPitchPattern.events.push_back({DrumInstrument::Percussion,DrumArticulation::Default,82,1.5,0.125,41});
+    const auto unknownPitchFile=root.getChildFile("gm-unknown-pitches.mid");
+    MidiPattern decodedUnknownPitchPattern;
+    const auto unknownPitchReport=midiIO.write(unknownPitchFile,unknownPitchPattern,gm,false)
+        ? midiIO.read(unknownPitchFile,gm,decodedUnknownPitchPattern)
+        : MidiImportReport{};
+    if(!unknownPitchReport.ok||unknownPitchReport.unmappedNotes!=std::vector<int>{31,41}
+        ||decodedUnknownPitchPattern.events.size()!=2
+        ||decodedUnknownPitchPattern.events[0].instrument!=DrumInstrument::Percussion
+        ||decodedUnknownPitchPattern.events[0].midiNote!=31
+        ||gm.toMidi(decodedUnknownPitchPattern.events[0],MidiFallbackPolicy::disabled).note!=std::optional<std::uint8_t>(31)
+        ||decodedUnknownPitchPattern.events[1].instrument!=DrumInstrument::Percussion
+        ||decodedUnknownPitchPattern.events[1].midiNote!=41
+        ||gm.toMidi(decodedUnknownPitchPattern.events[1],MidiFallbackPolicy::disabled).note!=std::optional<std::uint8_t>(41)
+        ||!compareMidiPatterns(unknownPitchPattern,decodedUnknownPitchPattern).addedEvents.empty()
+        ||!compareMidiPatterns(unknownPitchPattern,decodedUnknownPitchPattern).removedEvents.empty())
+    {
+        std::cerr<<"Unmapped MIDI pitches were not kept as raw Percussion events.\n";
+        return 297;
+    }
     MidiPattern fallbackPattern;fallbackPattern.events.push_back(unsupported);const auto omittedFallbackFile=root.getChildFile("fallback-omitted.mid");std::vector<DrumEvent> omittedFallbackEvents;std::vector<MidiFallbackUse> unusedFallbacks;
     if(!midiIO.write(omittedFallbackFile,fallbackPattern,gm,false,&omittedFallbackEvents,&unusedFallbacks)||omittedFallbackEvents.size()!=1||!unusedFallbacks.empty())return 190;
     const auto mappedFallbackFile=root.getChildFile("fallback-enabled.mid");std::vector<DrumEvent> unsupportedFallbackEvents;std::vector<MidiFallbackUse> appliedFallbacks;
@@ -1883,7 +1925,7 @@ int main(int argc, char** argv)
         MidiPatternIO midiIO;
         size_t parseFailures = 0;
         size_t emptyPatterns = 0;
-        size_t drumEvents = 0;
+        size_t importedMidiEvents = 0;
         size_t unmappedNoteEvents = 0;
         size_t ambiguousNoteEvents = 0;
         std::array<size_t, 128> unmappedByNote{};
@@ -1907,7 +1949,7 @@ int main(int argc, char** argv)
                 continue;
             }
             if (pattern.events.empty()) ++emptyPatterns;
-            drumEvents += pattern.events.size();
+            importedMidiEvents += pattern.events.size();
             unmappedNoteEvents += report.unmappedNotes.size();
             for (const auto note : report.unmappedNotes)
                 if (juce::isPositiveAndBelow(note, static_cast<int>(unmappedByNote.size())))
@@ -1923,10 +1965,10 @@ int main(int argc, char** argv)
                   << "Root: " << root.getFullPathName() << '\n'
                   << "Files discovered: " << files.size() << " (limit " << maximumMidiFiles << ")\n"
                   << "Parse/validation failures: " << parseFailures << '\n'
-                  << "Imported drum events: " << drumEvents << '\n'
+                  << "Imported MIDI note events: " << importedMidiEvents << '\n'
                   << "Unmapped note events: " << unmappedNoteEvents << '\n'
                   << "Ambiguous note events: " << ambiguousNoteEvents << '\n'
-                  << "Files with no mapped drum events: " << emptyPatterns << '\n';
+                  << "Files with no imported MIDI note events: " << emptyPatterns << '\n';
         const auto printTopNotes = [](const char* label, const std::array<size_t, 128>& counts)
         {
             std::vector<std::pair<int, size_t>> ordered;

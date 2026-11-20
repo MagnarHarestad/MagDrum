@@ -26,6 +26,26 @@ bool sameMetaEvent(const MidiMetaEvent& left, const MidiMetaEvent& right)
                       right.message.getRawData());
 }
 
+bool hasImportAmbiguity(const std::vector<MidiNoteMapping>& candidates)
+{
+    for (std::size_t left = 0; left < candidates.size(); ++left)
+    {
+        for (std::size_t right = left + 1; right < candidates.size(); ++right)
+        {
+            const auto& a = candidates[left];
+            const auto& b = candidates[right];
+            if (a.instrument != b.instrument)
+                return true;
+
+            const bool bothSpecific = a.articulation != DrumArticulation::Default
+                && b.articulation != DrumArticulation::Default;
+            if (bothSpecific && a.articulation != b.articulation)
+                return true;
+        }
+    }
+    return false;
+}
+
 void replaceMetaAtBeat(MidiPattern& pattern, bool tempo, const juce::MidiMessage& replacement, double positionBeats)
 {
     pattern.tempoAndSignature.erase(std::remove_if(pattern.tempoAndSignature.begin(), pattern.tempoAndSignature.end(),
@@ -172,7 +192,7 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
     {
         const auto noteNumber = static_cast<std::uint8_t>(note);
         const auto candidates = profile.mappingsForMidiNote(noteNumber);
-        if (candidates.size() > 1)
+        if (hasImportAmbiguity(candidates))
         {
             auto& ambiguous = ambiguousNotes[note];
             ambiguous.note = note;
@@ -181,7 +201,12 @@ MidiImportReport MidiPatternIO::read(const juce::File& file,const MidiMappingPro
         }
         const auto event = profile.fromMidi(noteNumber, velocity, position, duration);
         if (event) output.events.push_back(*event);
-        else report.unmappedNotes.push_back(note);
+        else
+        {
+            report.unmappedNotes.push_back(note);
+            output.events.push_back({DrumInstrument::Percussion, DrumArticulation::Default,
+                                     velocity, position, duration, note});
+        }
     };
     struct TimedMessage
     {
