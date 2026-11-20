@@ -85,9 +85,10 @@ if (Test-Path -LiteralPath $packagePath -PathType Leaf) {
 } else {
     Write-Warning "Release package not found; installed-module hash comparison was skipped: $packagePath"
 }
-Write-Host "Installed MagDrum VST3: $version"
+Write-Host "Validated MagDrum VST3 bundle: $version"
+Write-Host "Bundle path: $bundlePath"
 Write-Host "Module SHA-256: $moduleHash"
-Write-Host 'Running the Windows core smoke suite and isolated 128-note VST3 scanner/render check...'
+Write-Host 'Running the Windows core smoke suite and isolated 128-note VST3 scanner/render check against this bundle...'
 & $coreTestPath $modulePath $pluginTestPath $scannerPath
-if ($LASTEXITCODE -ne 0) { throw "Installed VST3 smoke test failed with exit code $LASTEXITCODE." }
-Write-Host 'PASS: installed VST3 restored sample state and rendered all 128 MIDI notes, including C1.'
+if ($LASTEXITCODE -ne 0) { throw "VST3 bundle smoke test failed with exit code $LASTEXITCODE." }
+Write-Host 'PASS: this VST3 bundle restored sample state and rendered all 128 MIDI notes, including C1.'
