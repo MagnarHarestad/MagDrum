@@ -3786,8 +3786,8 @@ void MagDrumAudioProcessorEditor::finishPluginProgramDiscovery(int exitCode, boo
     {
         const auto instrumentName = discoveredPluginInstruments.getReference(selectedIndex).name;
         const auto guidance = instrumentName.containsIgnoreCase("Battery")
-            ? magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits.")
-            : magdrum::ui::localisedText("This instrument exposes only generic MIDI program slots. Load the desired kit in its editor, save its state in the instrument manager, then refresh MagDrum kits.");
+            ? magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.")
+            : magdrum::ui::localisedText("This instrument exposes generic MIDI program slots, not kit names. Load the desired kit in its editor, save it in the manager, then close the manager to refresh MagDrum.");
         pluginPresetKitName.setText({}, juce::dontSendNotification);
         importPluginProgramButton.setEnabled(false);
         importPluginKitButton.setEnabled(false);

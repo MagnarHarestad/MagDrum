@@ -345,7 +345,7 @@ public:
 
         juce::StringArray genericPrograms { "MIDI channel 0 program 0", "MIDI channel 0 program 1" };
         editor.finishPluginProgramDiscovery(0, false, genericPrograms, true, {});
-        const auto guidance = magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load a .nbkt kit in Battery, save its state in the instrument manager, then refresh MagDrum kits.");
+        const auto guidance = magdrum::ui::localisedText("Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
         if (editor.pluginProgramSelect.getNumItems() != 0
             || editor.importPluginProgramButton.isEnabled()
             || editor.status.getText() != guidance)
