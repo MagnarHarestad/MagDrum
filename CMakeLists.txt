@@ -102,7 +102,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  set_tests_properties(MagDrumBatteryKitImportUi PROPERTIES TIMEOUT 15)
  endif()
 
- add_dependencies(MagDrumTests MagDrum MagDrumPlugin_VST3 MagDrumPluginTests)
+ add_dependencies(MagDrumTests MagDrum MagDrumPlugin_VST3 MagDrumPluginTests MagDrumBatteryKitProbe)
  add_dependencies(MagDrumPluginTests MagDrumPlugin_VST3)
  get_target_property(MAGDRUM_VST3_TEST_BUNDLE MagDrumPlugin_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
  add_test(NAME MagDrumTests COMMAND MagDrumTests "${MAGDRUM_VST3_TEST_BUNDLE}" "$<TARGET_FILE:MagDrumPluginTests>" "$<TARGET_FILE:MagDrum>")
