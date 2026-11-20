@@ -370,6 +370,8 @@ public:
  void timerCallback()override{stopTimer();refresh(false);}
  void paint(juce::Graphics&g)override{magdrum::ui::paintTexturedBackground(g,getLocalBounds(),0.42f);g.setColour(magdrum::ui::Palette::Border);g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(20.0f),12.0f,1.0f);g.setColour(magdrum::ui::Palette::Accent);g.fillRoundedRectangle(22,22,5,44,2);}
  void openPluginBrowser(const juce::String& initialInstrumentIdentifier = {});
+ bool hasPluginEditorOpenFor(const juce::String& identifier) const;
+ int pluginEditorStateBytesFor(const juce::String& identifier) const;
  void resized()override
  {
   auto a=getLocalBounds().reduced(30,24);auto h=a.removeFromTop(78);title.setBounds(h.removeFromTop(40));subtitle.setBounds(h);languageButton.setBounds(getWidth()-100,24,70,34);a.removeFromTop(8);
@@ -611,7 +613,7 @@ private:
   }
  private:juce::Component::SafePointer<MainComponent>main;MidiPattern pattern;std::array<juce::File,9>files;juce::File output;std::shared_ptr<std::atomic<bool>>cancellation;std::uint64_t generation;
  };
- void initDb(){auto base=getMagDrumDataDirectory();if(!base.isDirectory()&&!base.createDirectory().wasOk()){status.setText(magdrum::ui::localisedText("Could not create the MagDrum data directory."),juce::dontSendNotification);return;}pluginListFile=base.getChildFile("vst3-plugins.xml");pluginCrashList=base.getChildFile("RecentlyCrashedPluginsList");databaseFile=base.getChildFile("samples.sqlite3");if(database.open(databaseFile)){database.markRunningSampleScansInterrupted();browseDatabaseReady=browseDatabase.open(databaseFile);}if(!browseDatabaseReady)status.setText(magdrum::ui::localisedText("Could not open the sample index for browsing."),juce::dontSendNotification);}
+ void initDb(){auto base=getMagDrumDataDirectory();if(!base.isDirectory()&&!base.createDirectory().wasOk()){status.setText(magdrum::ui::localisedText("Could not create the MagDrum data directory."),juce::dontSendNotification);return;}pluginListFile=base.getChildFile("vst3-plugins.xml");pluginCrashList=base.getChildFile("RecentlyCrashedPluginsList");const auto isolatedTestDatabase=juce::SystemStats::getEnvironmentVariable("MAGDRUM_TEST_DATABASE_PATH",{});databaseFile=isolatedTestDatabase.isNotEmpty()?juce::File(isolatedTestDatabase):base.getChildFile("samples.sqlite3");if(database.open(databaseFile)){database.markRunningSampleScansInterrupted();browseDatabaseReady=browseDatabase.open(databaseFile);}if(!browseDatabaseReady)status.setText(magdrum::ui::localisedText("Could not open the sample index for browsing."),juce::dontSendNotification);}
  void loadPluginList(){if(auto xml=juce::XmlDocument::parse(pluginListFile))knownPlugins.recreateFromXml(*xml);}
  void syncPluginInventory(){for(const auto& plugin:knownPlugins.getTypes()){if(!plugin.isInstrument)continue;database.upsertPluginInstrument({plugin.createIdentifierString(),plugin.pluginFormatName,plugin.name,plugin.manufacturerName,plugin.category,plugin.fileOrIdentifier,plugin.version});}}
  void changeListenerCallback(juce::ChangeBroadcaster* changeSource)override{if(changeSource==&magdrum::ui::languageChangeBroadcaster()){applyLanguage();refreshLanguageFilters();refresh(true);return;}if(changeSource==&knownPlugins){if(auto xml=knownPlugins.createXml())xml->writeTo(pluginListFile);syncPluginInventory();refresh(true);}}
@@ -808,6 +810,8 @@ private:
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 void MainComponent::openPluginBrowser(const juce::String& initialInstrumentIdentifier){if(pluginWindow==nullptr)pluginWindow=std::make_unique<PluginWindow>(*this);pluginWindow->toFront(true);status.setText(juce::String(database.getPluginInstruments().size())+" plugin instruments indexed.",juce::dontSendNotification);if(initialInstrumentIdentifier.isNotEmpty()){auto* browser=pluginWindow->getBrowser();if(browser==nullptr||!browser->loadInstrumentByIdentifier(initialInstrumentIdentifier))status.setText(magdrum::ui::localisedText("The source instrument is not installed or discovered. Scan its plugin folder first."),juce::dontSendNotification);}}
+bool MainComponent::hasPluginEditorOpenFor(const juce::String& identifier) const{return selectedPlugin!=nullptr&&selectedPluginIdentifier==identifier&&pluginEditorWindow!=nullptr&&pluginEditorWindow->isVisible();}
+int MainComponent::pluginEditorStateBytesFor(const juce::String& identifier) const{if(!hasPluginEditorOpenFor(identifier))return 0;juce::MemoryBlock state;selectedPlugin->getStateInformation(state);return static_cast<int>(state.getSize());}
 int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& additionalFolder = {})
 {
     if (additionalFolder != juce::File() && ! additionalFolder.isDirectory())
@@ -1291,6 +1295,35 @@ public:
             quit();
             return;
         }
+        if (arguments.size() == 3 && arguments[0] == "--magdrum-test-plugin-browser-handoff")
+        {
+            if (!suppressPluginWorkerWindows())
+            {
+                setApplicationReturnValue(8);
+                quit();
+                return;
+            }
+            handoffResultFile = juce::File(arguments[2].unquoted());
+            const auto requestFile = juce::File(arguments[1].unquoted());
+            const auto requestJson = requestFile.existsAsFile() && requestFile.getSize() <= 65536
+                ? requestFile.loadFileAsString() : juce::String();
+            const auto request = PluginSourceKitRequest::fromVar(juce::JSON::parse(requestJson));
+            if (!request || !request->isValid()
+                || (!handoffResultFile.getParentDirectory().isDirectory()
+                    && !handoffResultFile.getParentDirectory().createDirectory().wasOk()))
+            {
+                handoffResultFile.replaceWithText("{\"ok\":false,\"error\":\"invalid request or result path\"}");
+                setApplicationReturnValue(2);
+                quit();
+                return;
+            }
+            const auto isolatedDatabase = handoffResultFile.getSiblingFile("handoff-samples.sqlite3");
+            SetEnvironmentVariableW(L"MAGDRUM_TEST_DATABASE_PATH", isolatedDatabase.getFullPathName().toWideCharPointer());
+            window = std::make_unique<Window>(true);
+            window->openPluginBrowserRequest(requestFile);
+            pollBrowserHandoff(request->pluginIdentifier, 0);
+            return;
+        }
         if (arguments.size() == 3 && arguments[0] == "--magdrum-test-host-sequencer")
         {
             const int result = runHostTransportSequencerFixture(juce::File(arguments[1].unquoted()),
@@ -1419,6 +1452,9 @@ public:
 
 private:
     magdrum::ui::LookAndFeel lookAndFeel;
+    juce::File handoffResultFile;
+
+    void pollBrowserHandoff(const juce::String& identifier, int elapsedMs);
 
     class Window final : public juce::DocumentWindow
     {
@@ -1448,6 +1484,13 @@ private:
                 main->openPluginBrowser(request ? request->pluginIdentifier : juce::String());
         }
 
+        int pluginEditorStateBytesFor(const juce::String& identifier) const
+        {
+            if (auto* main = dynamic_cast<MainComponent*>(getContentComponent()))
+                return main->pluginEditorStateBytesFor(identifier);
+            return 0;
+        }
+
         void openSourceKitRequest(const juce::File& file)
         {
             const auto json = file.existsAsFile() && file.getSize() <= 65536
@@ -1468,4 +1511,29 @@ private:
 
     std::unique_ptr<Window> window;
 };
+
+void MagDrumApplication::pollBrowserHandoff(const juce::String& identifier, int elapsedMs)
+{
+    const int stateBytes = window != nullptr ? window->pluginEditorStateBytesFor(identifier) : 0;
+    if (stateBytes > 0)
+    {
+        juce::DynamicObject::Ptr result(new juce::DynamicObject());
+        result->setProperty("ok", true);
+        result->setProperty("pluginIdentifier", identifier);
+        result->setProperty("stateBytes", stateBytes);
+        handoffResultFile.replaceWithText(juce::JSON::toString(juce::var(result.get())));
+        setApplicationReturnValue(0);
+        quit();
+        return;
+    }
+    if (elapsedMs >= 30000)
+    {
+        handoffResultFile.replaceWithText("{\"ok\":false,\"error\":\"instrument editor did not open with serializable state before timeout\"}");
+        setApplicationReturnValue(1);
+        quit();
+        return;
+    }
+    juce::Timer::callAfterDelay(100, [this, identifier, elapsedMs] { pollBrowserHandoff(identifier, elapsedMs + 100); });
+}
+
 START_JUCE_APPLICATION(MagDrumApplication)
