@@ -1,5 +1,30 @@
 # Classifier evaluation
 
+The evaluator scans and classifies labeled files under the supplied root, then runs
+the quadratic manual-example and perceptual-similarity checks on a deterministic,
+category-balanced subset of at most 200 samples by default. This keeps large local
+libraries from causing an unbounded all-pairs workload. Use `--expensive-limit N`
+to select a different subset size from 1 to 500. The initial scan still decodes the
+full labeled corpus, while the expensive comparisons use only the reported subset.
+The subset is chosen evenly through each category's path-sorted scan order; it is
+repeatable for an unchanged library but is not a statistically independent test set.
+
+## Local Battery library diagnostic
+
+On 2026-11-20, a temporary subset of 300 locally installed NI Battery Factory
+Library samples was evaluated: 30 each for Kick, Snare, Tom, Clap, Closed hi-hat,
+Open hi-hat, Pedal hi-hat, Crash, Ride and Percussion. All 300 decoded and received
+folder labels after adding `Closed hi-hat` and `Pedal hi-hat` directory aliases.
+The 100-sample expensive subset was balanced across the 10 categories. Filename plus
+audio features scored 90.3% accuracy, while audio-only features scored 12.0% accuracy
+and 0.123 macro F1. Manual-example leave-one-sample-out scored 25.0%; similarity
+candidate folder-category agreement was 44.4% (24/54), with 19 queries returning
+candidates. These results show that filename evidence drives the strong combined
+score and the current audio-only and similarity results are weak. Folder names are
+only proxy labels, this is one proprietary library, and the subset is small; it is
+not a human listening test or a representative benchmark. Audio was read from its
+installed location and was not copied into the repository or release.
+
 MagDrum can evaluate its current classifier on a local audio collection organized into category folders. The evaluator analyzes supported audio files without copying or modifying them and reports per-class precision, recall, F1, overall accuracy and macro F1. It prints two reports: the normal filename-plus-audio result and an audio-only result that hides each filename before classification. Each report also shows the coverage and accuracy of categories at or above the app's 0.75 review threshold; `Unknown` remains unaccepted. This selective result reflects the current review rule, not calibrated probability.
 
 Build the optional evaluator with the same CMake, JUCE, compiler and platform dependencies used by MagDrum:

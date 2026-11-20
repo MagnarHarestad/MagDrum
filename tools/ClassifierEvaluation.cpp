@@ -145,10 +145,12 @@ juce::String labelForFolder(const juce::String& rawName)
     const auto name = canonicalFolderName(rawName);
     if (name == "kick" || name == "kicks" || name == "bass drum" || name == "bass drums" || name == "808s") return "Kick";
     if (name == "snare" || name == "snares") return "Snare";
-    if (name == "closed hat" || name == "closed hats" || name == "hi hat" || name == "hi hats"
+    if (name == "closed hat" || name == "closed hats" || name == "closed hi hat" || name == "closed hi hats"
+        || name == "hi hat" || name == "hi hats"
         || name == "hihat" || name == "hihats" || name == "hi-hat") return "Closed hi-hat";
     if (name == "open hat" || name == "open hats" || name == "open hi hat" || name == "open hi hats") return "Open hi-hat";
-    if (name == "pedal hat" || name == "pedal hats" || name == "foot hat" || name == "foot hats") return "Pedal hi-hat";
+    if (name == "pedal hat" || name == "pedal hats" || name == "pedal hi hat" || name == "pedal hi hats"
+        || name == "foot hat" || name == "foot hats") return "Pedal hi-hat";
     if (name == "clap" || name == "claps" || name == "handclap" || name == "handclaps") return "Clap";
     if (name == "tom" || name == "toms" || name == "floor tom" || name == "floor toms" || name == "rack tom" || name == "rack toms" || name == "htom" || name == "ltom" || name == "tomhi" || name == "tomlo") return "Tom";
     if (name == "rimshot" || name == "rimshots" || name == "side stick" || name == "side sticks") return "Rimshot";
@@ -174,12 +176,43 @@ juce::String labelForSample(const juce::File& file, const juce::File& root)
 
 void printUsage()
 {
-    std::cout << "Usage: MagDrumClassifierEvaluation <labeled-root> [--feature-summary]\n"
+    std::cout << "Usage: MagDrumClassifierEvaluation <labeled-root> [--feature-summary] [--expensive-limit N]\n"
                  "Place samples under category folders such as kicks/, snares/, claps/,\n"
                  "hi-hats/, open-hats/, toms/, rides/, crashes/ or percs/. Unrecognized\n"
                  "folders are skipped. --feature-summary prints per-category median and\n"
                  "interquartile ranges to help diagnose acoustic feature overlap. Reports\n"
-                 "are local only; audio files are not copied.\n";
+                 "are local only; audio files are not copied. Expensive model and similarity\n"
+                 "metrics use a deterministic, category-balanced subset (default 200, max 500).\n";
+}
+
+std::vector<LabeledSample> selectBalancedEvaluationSubset(const std::vector<LabeledSample>& samples,
+                                                          std::size_t limit)
+{
+    std::map<std::string, std::vector<const LabeledSample*>> byCategory;
+    for (const auto& sample : samples)
+        byCategory[sample.label].push_back(&sample);
+
+    std::vector<LabeledSample> selected;
+    selected.reserve(std::min(limit, samples.size()));
+    if (byCategory.empty() || limit == 0) return selected;
+
+    const auto categoryCount = byCategory.size();
+    const auto baseQuota = limit / categoryCount;
+    const auto remainder = limit % categoryCount;
+    std::size_t categoryIndex = 0;
+    for (const auto& [label, group] : byCategory)
+    {
+        (void) label;
+        const auto quota = baseQuota + (categoryIndex < remainder ? 1u : 0u);
+        ++categoryIndex;
+        const auto count = std::min(quota, group.size());
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            const auto sourceIndex = (i * group.size()) / count;
+            selected.push_back(*group[sourceIndex]);
+        }
+    }
+    return selected;
 }
 
 double quantile(std::vector<double> values, double fraction)
@@ -362,11 +395,43 @@ void evaluateManualExampleModel(const std::vector<LabeledSample>& samples, bool 
 
 int main(int argc, char** argv)
 {
-    const bool showFeatureSummary = argc == 3 && std::string(argv[2]) == "--feature-summary";
-    if (argc < 2 || argc > 3 || (argc == 3 && !showFeatureSummary))
+    if (argc < 2)
     {
         printUsage();
         return 2;
+    }
+
+    bool showFeatureSummary = false;
+    std::size_t expensiveLimit = 200;
+    for (int index = 2; index < argc; ++index)
+    {
+        const std::string option(argv[index]);
+        if (option == "--feature-summary")
+            showFeatureSummary = true;
+        else if (option == "--expensive-limit" && index + 1 < argc)
+        {
+            try
+            {
+                const std::string value(argv[++index]);
+                std::size_t parsedCharacters = 0;
+                const auto parsed = std::stoul(value, &parsedCharacters);
+                if (parsedCharacters != value.size())
+                    throw std::invalid_argument("value must be a whole number");
+                if (parsed == 0 || parsed > 500)
+                    throw std::out_of_range("evaluation limit must be from 1 to 500");
+                expensiveLimit = static_cast<std::size_t>(parsed);
+            }
+            catch (const std::exception& error)
+            {
+                std::cerr << "Invalid --expensive-limit: " << error.what() << '\n';
+                return 2;
+            }
+        }
+        else
+        {
+            printUsage();
+            return 2;
+        }
     }
 
     const juce::File root(juce::String::fromUTF8(argv[1]));
@@ -412,12 +477,15 @@ int main(int argc, char** argv)
     withFilenameCues.print("Filename and audio features");
     withoutFilenameCues.print("Audio features only (filename hidden)");
     if (showFeatureSummary) printFeatureSummary(labeledSamples);
-    evaluateManualExampleModel(labeledSamples, false);
+    const auto expensiveSamples = selectBalancedEvaluationSubset(labeledSamples, expensiveLimit);
+    std::cout << "\nExpensive evaluation subset: " << expensiveSamples.size() << '/' << labeledSamples.size()
+              << " labeled samples, category-balanced, deterministic. Increase with --expensive-limit (max 500).\n";
+    evaluateManualExampleModel(expensiveSamples, false);
     std::set<std::string> labeledKits;
-    for (const auto& sample : labeledSamples)
+    for (const auto& sample : expensiveSamples)
         labeledKits.insert(sample.sample.file.getParentDirectory().getParentDirectory().getFileName().toStdString());
     if (labeledKits.size() > 1)
-        evaluateManualExampleModel(labeledSamples, true);
-    if (!evaluatePerceptualCandidates(labeledSamples)) return 1;
+        evaluateManualExampleModel(expensiveSamples, true);
+    if (!evaluatePerceptualCandidates(expensiveSamples)) return 1;
     return scanStats.filesAnalyzed > 0 && withFilenameCues.samples > 0 ? 0 : 1;
 }
