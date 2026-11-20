@@ -1,6 +1,6 @@
 # Local builds
 
-**Active target: Windows x64/Cubase Pro 15.** Current Windows build: 0.1.2.284. Release CTest passed six applicable tests (Debug assertion worker skipped); localization and package safeguards passed. Steinberg VST 3.8.1 validation passed 47 standard and 537 extended checks. Three real Battery factory kits passed offscreen direct-import checks. This build is staged locally; Cubase-host behavior remains unverified. ZIP SHA-256: `88448F76A2350017CC501AD398A080935B98D43D21552B5357E05F35732B8C9A`; module SHA-256: `69ADFF5C6F02656AC4C3D41C0F06E0F1BDE609E37235A501B748F9FB9E7998D2`.
+**Active target: Windows x64/Cubase Pro 15.** Latest release: [v0.1.2-test.284](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.284), installed per user. Release CTest passed six applicable tests (Debug assertion worker skipped); localization and package safeguards passed. Steinberg VST 3.8.1 validation passed 47 standard and 537 extended checks. Three real Battery factory kits passed offscreen direct-import checks. Cubase-host behavior remains unverified. ZIP SHA-256: `88448F76A2350017CC501AD398A080935B98D43D21552B5357E05F35732B8C9A`; module SHA-256: `69ADFF5C6F02656AC4C3D41C0F06E0F1BDE609E37235A501B748F9FB9E7998D2`.
 
 **Platform pause:** Do not start Linux/macOS builds, tests, packaging, publication or installation until the user explicitly requests resumption. Their commands and reports below are retained for historical reference only. Windows ARM64 is also outside the current x64 target.
 
