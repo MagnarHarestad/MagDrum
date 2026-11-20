@@ -23,6 +23,7 @@
 #include <iostream>
 #include <array>
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -750,6 +751,16 @@ int runSmokeTests(int argc,char** argv)
     const auto classificationTagRoot=root.getSiblingFile("MagDrumClassificationTagTest");classificationTagRoot.deleteRecursively();if(!classificationTagRoot.createDirectory().wasOk())return 149;
     const auto classifiedFile=classificationTagRoot.getChildFile("808_Open_HiHat_deep.wav");if(!waveFile.copyFileTo(classifiedFile))return 150;
     const auto classifiedSamples=scanner.scan(classificationTagRoot);if(classifiedSamples.size()!=1||classifiedSamples.getFirst().category!="Open hi-hat"||!classifiedSamples.getFirst().classificationTags.contains("808")||!classifiedSamples.getFirst().classificationTags.contains("Electronic")||!classifiedSamples.getFirst().classificationTags.contains("Deep"))return 151;
+    const auto batteryClassificationRoot=root.getSiblingFile("MagDrumBatteryClassificationTest");batteryClassificationRoot.deleteRecursively();if(!batteryClassificationRoot.createDirectory().wasOk())return 310;
+    const auto batteryHatDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/HiHat"),batteryCymbalDirectory=batteryClassificationRoot.getChildFile("Samples/Drums/Cymbal");
+    if(!batteryHatDirectory.createDirectory().wasOk()||!batteryCymbalDirectory.createDirectory().wasOk())return 311;
+    if(!waveFile.copyFileTo(batteryHatDirectory.getChildFile("ClosedHH 606 1.wav"))
+        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("China Gong V1.wav"))
+        ||!waveFile.copyFileTo(batteryCymbalDirectory.getChildFile("China Gothik.wav")))return 312;
+    const auto batteryClassifiedSamples=scanner.scan(batteryClassificationRoot);std::map<std::string,std::string> batteryCategories;
+    for(const auto& sample:batteryClassifiedSamples)batteryCategories.emplace(sample.file.getFileName().toStdString(),sample.category.toStdString());
+    if(batteryCategories.size()!=3||batteryCategories["ClosedHH 606 1.wav"]!="Closed hi-hat"
+        ||batteryCategories["China Gong V1.wav"]!="Percussion"||batteryCategories["China Gothik.wav"]!="Crash")return 313;
     SampleDatabase classificationTagDb;if(!classificationTagDb.open(classificationTagRoot.getChildFile("classification-tags.sqlite3"))||!classificationTagDb.insertSample(classifiedSamples.getFirst()))return 152;
     const auto storedClassificationTags=classificationTagDb.getClassificationTags(classifiedFile);if(!storedClassificationTags.contains("808")||!storedClassificationTags.contains("Electronic")||!storedClassificationTags.contains("Deep"))return 153;
     SampleBrowseFilter classificationTagFilter;classificationTagFilter.query="Electronic";const auto classifierTagSearch=classificationTagDb.searchSampleBrowseRecords(classificationTagFilter,10,0);if(classifierTagSearch.records.size()!=1||!classifierTagSearch.records[0].classificationTags.contains("Electronic"))return 154;
@@ -1584,6 +1595,51 @@ int runSmokeTests(int argc,char** argv)
 
 int main(int argc, char** argv)
 {
+    if (argc == 4 && std::strcmp(argv[1], "--magdrum-audit-sample-folder") == 0)
+    {
+        const juce::File root(argv[2]);
+        const int limit = std::atoi(argv[3]);
+        if (!root.isDirectory() || limit < 1 || limit > 1000)
+        {
+            std::cerr << "Sample audit requires an existing folder and a limit from 1 to 1000.\n";
+            return 274;
+        }
+
+        WavScanner::Stats stats;
+        int analyzed = 0;
+        std::map<std::string, int> categories;
+        juce::StringArray suspicious;
+        WavScanner{}.scan(root,
+            [&analyzed, limit] { return analyzed >= limit; }, {}, &stats,
+            [&analyzed, &categories, &suspicious, &root](const ScannedSample& sample)
+            {
+                ++analyzed;
+                ++categories[sample.category.toStdString()];
+                if (sample.category == "Snare"
+                    && (root.getFileName().containsIgnoreCase("hat")
+                        || root.getFileName().containsIgnoreCase("cymbal")))
+                    suspicious.add(sample.file.getFileName() + " [confidence "
+                        + juce::String(sample.classificationConfidence, 2) + "]");
+                return true;
+            });
+
+        std::cout << "Root: " << root.getFullPathName() << "\n"
+                  << "Analyzed WAV samples: " << analyzed << "\n"
+                  << "Errors: " << stats.errors << "\n"
+                  << "Categories: ";
+        bool first = true;
+        for (const auto& [category, count] : categories)
+        {
+            if (!first) std::cout << ", ";
+            first = false;
+            std::cout << category << "=" << count;
+        }
+        std::cout << "\n";
+        for (const auto& item : suspicious)
+            std::cout << "Possible folder-label conflict: " << item << "\n";
+        return analyzed == limit && stats.errors == 0 ? 0 : 275;
+    }
+
     if (argc == 5 && std::strcmp(argv[1], "--magdrum-test-vst3-discovery-timeout-fixture") == 0)
     {
         const juce::File progressFile(argv[2]);

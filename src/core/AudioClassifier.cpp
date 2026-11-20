@@ -20,7 +20,7 @@ bool hasPercussionInstrumentCue(juce::String name)
         "tambourines", "agogo", "agogo bell", "agogo bells", "woodblock", "woodblocks",
         "wood block", "wood blocks", "triangle", "triangles", "clave", "claves", "guiro",
         "guiros", "güiro", "güiros", "timbale", "timbales", "cabasa", "djembe", "djembes",
-        "cajon", "cajón", "castanet", "castanets", "maraca", "maracas", "vibraslap"
+        "cajon", "cajón", "castanet", "castanets", "maraca", "maracas", "vibraslap", "gong", "gongs"
     };
     for (const auto* cue : cues)
         if (name.containsWholeWordIgnoreCase(cue))
@@ -110,15 +110,16 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (has({"distort", "distorted", "distortion", "distortions", "saturate", "saturated",
              "saturation", "fuzz", "fuzzy", "overdrive", "overdriven"})) addTag("Distorted");
 
-    const bool hasHiHatCue = has({"hi hat", "hihat", "hh", "closed hat", "closed hats", "closedhat",
+    const bool hasHiHatCue = has({"hi hat", "hihat", "hh", "closed hat", "closed hats", "closedhat", "closedhh",
                                   "open hat", "open hats", "openhat", "pedal hat", "pedal hats", "pedalhat",
-                                  "foot hat", "foot hats", "chh", "hhc", "ohh", "hho", "phh", "hhp"});
-    const bool hasClosedHiHatCue = has({"closed hat", "closed hats", "closedhat", "closed hihat",
+                                   "foot hat", "foot hats", "chh", "hhc", "ohh", "hho", "phh", "hhp",
+                                   "openhh", "pedalhh"});
+    const bool hasClosedHiHatCue = has({"closed hat", "closed hats", "closedhat", "closedhh", "closed hihat",
                                         "closed hi hat", "closed hihats", "closed hi hats", "closed hh",
                                         "hh closed", "chh", "hhc"});
-    const bool hasOpenHiHatCue = has({"open hat", "open hats", "openhat", "open hihat", "open hi hat",
+    const bool hasOpenHiHatCue = has({"open hat", "open hats", "openhat", "openhh", "open hihat", "open hi hat",
                                       "open hihats", "open hi hats", "open hh", "hh open", "ohh", "hho"});
-    const bool hasPedalHiHatCue = has({"pedal hat", "pedal hats", "pedalhat", "pedal hihat", "pedal hi hat",
+    const bool hasPedalHiHatCue = has({"pedal hat", "pedal hats", "pedalhat", "pedalhh", "pedal hihat", "pedal hi hat",
                                        "pedal hihats", "pedal hi hats", "pedal hh", "hh pedal",
                                        "foot hat", "foot hats", "phh", "hhp"});
     if (hasHiHatCue)
@@ -180,9 +181,12 @@ DrumClassification classify(const ScannedSample& sample) const override
     if (hasPercussionInstrumentCue(name)) namedCategories.add("Percussion");
 
     bool categoryFromFolder = false;
+    bool cymbalFolder = false;
     auto folder = sample.file.getParentDirectory();
     for (int depth = 0; depth < 5 && folder.getFileName().isNotEmpty(); ++depth)
     {
+        const auto folderName = folder.getFileName().trim().toLowerCase();
+        cymbalFolder = cymbalFolder || folderName == "cymbal" || folderName == "cymbals";
         const auto folderCategory = drumCategoryForFolder(folder.getFileName());
         if (folderCategory.isNotEmpty())
         {
@@ -195,13 +199,19 @@ DrumClassification classify(const ScannedSample& sample) const override
         folder = parent;
     }
 
+    // Battery's factory library uses a generic Cymbal directory for named
+    // China cymbals and gong samples. Use those names in that folder context
+    // instead of allowing their short, pitched attacks to fall through as snares.
+    if (cymbalFolder && has({"china"}) && !has({"gong", "gongs"}))
+        namedCategories.add("Crash");
+
     if (namedCategories.contains("Rimshot") && namedCategories.contains("Snare"))
         namedCategories.removeString("Snare");
 
     if (namedCategories.size() == 1)
     {
         out.category = namedCategories[0];
-        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "tom", "tomhi", "tomlo", "htom", "ltom", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick"}) || hasPercussionInstrumentCue(name);
+        const bool filenameCategoryCue = has({"808", "909", "kick", "bd", "snare", "snr", "sd", "hihat", "hi-hat", "hi hat", "hh", "chh", "ohh", "phh", "hhc", "hho", "hhp", "closedhh", "openhh", "pedalhh", "china", "tom", "tomhi", "tomlo", "htom", "ltom", "clap", "ride", "ridebell", "crash", "rimshot", "side stick", "sidestick", "cross stick", "cross-stick", "x-stick"}) || hasPercussionInstrumentCue(name);
         out.confidence = categoryFromFolder ? (filenameCategoryCue ? 0.97 : 0.84) : (filenameCategoryCue ? 0.92 : 0.82);
         return out;
     }
