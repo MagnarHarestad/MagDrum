@@ -194,6 +194,55 @@ int verifySyntheticBufferLifetime()
         }
     return 0;
 }
+
+int verifyMalformedBatteryInputs()
+{
+    const auto fixture = makeSyntheticBatteryKit();
+    if (! magdrum::battery::readKit(fixture.data(), fixture.size()).kit)
+    {
+        std::cerr << "Valid Battery fixture failed before malformed-input checks.\n";
+        return 13;
+    }
+
+    for (std::size_t length = 0; length < fixture.size(); ++length)
+        if (magdrum::battery::readKit(fixture.data(), length).kit)
+        {
+            std::cerr << "Truncated Battery fixture was accepted at " << length << " bytes.\n";
+            return 14;
+        }
+
+    // Exercise object, chunk, string and compressed-stream boundaries using a
+    // deterministic mutation set. The parser must reject malformed layouts
+    // without an access violation or an unbounded expansion.
+    auto candidate = fixture;
+    for (std::size_t offset = 0; offset < fixture.size(); offset += 7)
+    {
+        for (unsigned bit = 0; bit < 8; ++bit)
+        {
+            candidate[offset] = static_cast<std::uint8_t>(fixture[offset] ^ (1u << bit));
+            (void) magdrum::battery::readKit(candidate.data(), candidate.size());
+        }
+        candidate[offset] = fixture[offset];
+    }
+
+    std::uint32_t state = 0x6d2b79f5u;
+    for (int iteration = 0; iteration < 512; ++iteration)
+    {
+        candidate = fixture;
+        state = state * 1664525u + 1013904223u;
+        const auto changes = 1u + (state & 3u);
+        for (std::uint32_t change = 0; change < changes; ++change)
+        {
+            state = state * 1664525u + 1013904223u;
+            const auto offset = static_cast<std::size_t>(state) % candidate.size();
+            state = state * 1664525u + 1013904223u;
+            candidate[offset] ^= static_cast<std::uint8_t>(1u << (state & 7u));
+        }
+        (void) magdrum::battery::readKit(candidate.data(), candidate.size());
+    }
+
+    return 0;
+}
 }
 
 int main(int argc, char** argv)
@@ -203,6 +252,8 @@ int main(int argc, char** argv)
         return magdrum::tests::windowsErrorDialogsAreSuppressed() ? 0 : 4;
     if (argc == 2 && std::string_view(argv[1]) == "--self-test-buffer-lifetime")
         return verifySyntheticBufferLifetime();
+    if (argc == 2 && std::string_view(argv[1]) == "--self-test-malformed-inputs")
+        return verifyMalformedBatteryInputs();
 
     if (argc != 2)
     {

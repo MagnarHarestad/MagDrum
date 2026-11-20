@@ -165,9 +165,11 @@ try {
         @('MagDrum', 'MagDrumPlugin_VST3')
     } else {
         # MagDrumTests depends on the app, VST3, and plugin-test executable.
-        # One dependency-root invocation avoids repeated MSBuild startup while
-        # excluding unrelated cached targets such as the mobile preview.
-        @('MagDrumTests')
+        # BatteryKitProbe is a standalone test executable and must be listed
+        # explicitly so newly registered probe tests never run a stale binary.
+        # One MSBuild invocation excludes unrelated cached targets such as the
+        # mobile preview while building every executable CTest invokes.
+        @('MagDrumTests', 'MagDrumBatteryKitProbe')
     }
     $compileTimer = [System.Diagnostics.Stopwatch]::StartNew()
     & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel

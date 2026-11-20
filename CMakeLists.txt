@@ -83,6 +83,7 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
  target_link_libraries(MagDrumBatteryKitProbe PRIVATE juce::juce_core juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
  add_test(NAME MagDrumBatteryKitProbeHeadlessErrorMode COMMAND MagDrumBatteryKitProbe --verify-headless-error-mode)
  add_test(NAME MagDrumBatteryKitProbeBufferLifetime COMMAND MagDrumBatteryKitProbe --self-test-buffer-lifetime)
+ add_test(NAME MagDrumBatteryKitProbeMalformedInputs COMMAND MagDrumBatteryKitProbe --self-test-malformed-inputs)
 
  juce_add_console_app(MagDrumPluginTests PRODUCT_NAME "MagDrum Plugin Tests")
  juce_generate_juce_header(MagDrumPluginTests)
