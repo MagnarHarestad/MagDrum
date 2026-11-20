@@ -330,10 +330,12 @@ public:
     {
         const auto plot = plotBounds();
         int visibleGlyphs = 0;
+        bool selectedVisible = false;
         for (const auto& projected : acousticPoints)
         {
             if (!viewport.contains(projected.x, projected.y)) continue;
             ++visibleGlyphs;
+            if (projected.sampleIndex == selectedIndex) selectedVisible = true;
             const auto position = samplePosition(projected, plot);
             // The selected glow extends 14 px from the point centre; other dots
             // extend 4.2 px. Both must stay clear of the plot frame at all zooms.
@@ -342,7 +344,7 @@ public:
                 || position.y - extent < plot.getY() || position.y + extent > plot.getBottom())
                 return false;
         }
-        return visibleGlyphs > 0;
+        return visibleGlyphs > 0 && selectedVisible;
     }
     void mouseMove(const juce::MouseEvent& event) override
     {
@@ -384,8 +386,9 @@ public:
     {
         const auto plot = plotBounds();
         if (!plot.contains(event.position)) return;
-        const float nx = (event.position.x - plot.getX()) / plot.getWidth();
-        const float ny = (event.position.y - plot.getY()) / plot.getHeight();
+        const auto content = pointContentBounds(plot);
+        const float nx = juce::jlimit(0.0f, 1.0f, (event.position.x - content.getX()) / content.getWidth());
+        const float ny = juce::jlimit(0.0f, 1.0f, (event.position.y - content.getY()) / content.getHeight());
         viewport.zoomAt(wheel.deltaY, nx, ny);
         repaint();
     }
@@ -394,8 +397,9 @@ public:
         if (!isPanning) return;
         const auto plot = plotBounds();
         if (plot.isEmpty()) return;
+        const auto content = pointContentBounds(plot);
         viewport.panFrom(panStartX, panStartY, event.position.x - panStart.x,
-                         event.position.y - panStart.y, plot.getWidth(), plot.getHeight());
+                         event.position.y - panStart.y, content.getWidth(), content.getHeight());
         repaint();
     }
     void paint(juce::Graphics& g) override
@@ -499,6 +503,12 @@ private:
         plot.removeFromTop(16.0f);
         plot.removeFromBottom(20.0f);
         return plot;
+    }
+    static juce::Rectangle<float> pointContentBounds(juce::Rectangle<float> plot)
+    {
+        // samplePosition maps normalized acoustic coordinates into this same
+        // inset region; zoom anchors and pan deltas must use matching units.
+        return plot.reduced(22.0f);
     }
     static juce::Point<float> samplePosition(const SampleBrowseRecord& sample)
     {
@@ -2011,6 +2021,7 @@ MagDrumAudioProcessorEditor::MagDrumAudioProcessorEditor(MagDrumAudioProcessor& 
     contentTypeFilter.addItem(magdrum::ui::localisedText("Synth one-shots"),6);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"),7);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"),8);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Other one-shots & FX"),9);
     contentTypeFilter.setSelectedId(2);
     addAndMakeVisible(contentTypeFilter);
     const char* features[]{"All sound features","Very short","Short","Medium","Long","Dark","Mid brightness","Bright"};for(int i=0;i<8;++i)featureFilter.addItem(magdrum::ui::localisedText(features[i]),i+1);featureFilter.setSelectedId(1);addAndMakeVisible(featureFilter);
@@ -2883,7 +2894,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     libraryTab.setButtonText(magdrum::ui::localisedText("SAMPLE LIBRARY"));machineTab.setButtonText(magdrum::ui::localisedText("DRUM MACHINE"));sequencerTab.setButtonText(magdrum::ui::localisedText("SEQUENCER"));mapsTab.setButtonText(magdrum::ui::localisedText("MIDI MAPS"));pluginScannerTab.setButtonText(magdrum::ui::localisedText("PLUGIN SCANNER"));manageLayersButton.setButtonText(magdrum::ui::localisedText("Layers"));manageLayersButton.setTooltip(magdrum::ui::localisedText("Manage velocity layers for the selected pad."));languageButton.setTooltip(magdrum::ui::localisedText("Menu"));
     sampleSearch.setTextToShowWhenEmpty(magdrum::ui::localisedText("Search indexed samples"),Palette::Muted);
     indexedList.setTooltip(magdrum::ui::localisedText("Double-click to preview; right-click for sample actions"));
-    const int contentTypeId = juce::jlimit(1, 8, contentTypeFilter.getSelectedId());
+    const int contentTypeId = juce::jlimit(1, 9, contentTypeFilter.getSelectedId());
     contentTypeFilter.clear(juce::dontSendNotification);
     contentTypeFilter.addItem(magdrum::ui::localisedText("All sounds"), 1);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Drum one-shots"), 2);
@@ -2893,6 +2904,7 @@ void MagDrumAudioProcessorEditor::applyLanguage()
     contentTypeFilter.addItem(magdrum::ui::localisedText("Synth one-shots"), 6);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Synth loops"), 7);
     contentTypeFilter.addItem(magdrum::ui::localisedText("Other loops"), 8);
+    contentTypeFilter.addItem(magdrum::ui::localisedText("Other one-shots & FX"), 9);
     contentTypeFilter.setSelectedId(contentTypeId, juce::dontSendNotification);
     const int fallbackPolicyId=juce::jlimit(1,3,midiFallbackPolicy.getSelectedId());
     midiFallbackPolicy.clear(juce::dontSendNotification);
@@ -4476,7 +4488,7 @@ void MagDrumAudioProcessorEditor::loadSamplePage(bool reset, std::uint64_t reque
 
     SampleBrowseFilter options;
     options.query = sampleSearch.getText();
-    options.contentKind = juce::jlimit(0, 7, contentTypeFilter.getSelectedId() - 1);
+    options.contentKind = juce::jlimit(0, 8, contentTypeFilter.getSelectedId() - 1);
     if (categoryFilter.getSelectedId() > 1)
     {
         static constexpr const char* categories[]{"All categories", "Kick", "Snare", "Closed hi-hat", "Open hi-hat",

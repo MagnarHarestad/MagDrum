@@ -2775,8 +2775,11 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         case 5: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND NOT " + loopTerms
                        + " AND NOT (s.duration>=4.0 AND s.transient_count>=8)"; break;
         case 6: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND (" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
-        case 7: contentPredicate = loopTerms + " AND NOT (" + drumCategory + " OR " + drumTerms
-                       + " OR (" + bassFamily + ") OR " + synthTerms + ")"; break;
+        case 7: contentPredicate = "(" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT ("
+                       + drumCategory + " OR " + drumTerms + " OR (" + bassFamily + ") OR " + synthTerms + ")"; break;
+        case 8: contentPredicate = "NOT (" + drumCategory + " OR " + drumTerms + " OR (" + bassFamily
+                       + ") OR " + synthTerms + " OR " + loopTerms
+                       + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
         default: break;
     }
     const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";

@@ -25,8 +25,10 @@ inline bool isSampleSimilarityPointVisible(float x, float y, float zoom, float p
         return false;
 
     const float visibleWidth = 1.0f / zoom;
-    return x >= panX && x <= panX + visibleWidth
-        && y >= 1.0f - panY - visibleWidth && y <= 1.0f - panY;
+    constexpr float edgeTolerance = 1.0e-5f;
+    return x >= panX - edgeTolerance && x <= panX + visibleWidth + edgeTolerance
+        && y >= 1.0f - panY - visibleWidth - edgeTolerance
+        && y <= 1.0f - panY + edgeTolerance;
 }
 
 // Keeps the sample-map wheel zoom and middle-button pan math consistent
@@ -72,7 +74,8 @@ struct SampleSimilarityViewport
 
     juce::Point<float> transform(float x, float y) const noexcept
     {
-        return {(x - panX) * zoom, (1.0f - y - panY) * zoom};
+        return {std::clamp((x - panX) * zoom, 0.0f, 1.0f),
+                std::clamp((1.0f - y - panY) * zoom, 0.0f, 1.0f)};
     }
 };
 

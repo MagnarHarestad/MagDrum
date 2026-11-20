@@ -886,6 +886,8 @@ int runSmokeTests(int argc,char** argv)
         ||!addContentFilterFixture("breakbeat.wav","Unknown",0.6,2,{})
         ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop")
         ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop")
+        ||!addContentFilterFixture("unlabeled-long-sample.wav","Unknown",8.0,16,{})
+        ||!addContentFilterFixture("analog-fx-one-shot.wav","Unknown",1.2,1,{})
         ||!addContentFilterFixture("Beat Agent\\kick-agent-fixture.wav","Kick",0.2,1,{}))return 243;
     const auto addUserTaggedContentFixture=[&](const juce::String& name,const juce::String& tag)
     {
@@ -926,9 +928,14 @@ int runSmokeTests(int argc,char** argv)
         ||!expectContentFixture(4,"neutral-b.wav",true)
         ||!expectContentFixture(5,"synth-pad-one-shot.wav",true)||!expectContentFixture(5,"synth-pad-loop.wav",false)
         ||!expectContentFixture(6,"synth-pad-loop.wav",true)||!expectContentFixture(7,"orchestral-phrase-loop.wav",true)
-        ||!expectContentFixture(7,"multi-sampled-loop.wav",true))
+        ||!expectContentFixture(7,"multi-sampled-loop.wav",true)
+        ||!expectContentFixture(7,"unlabeled-long-sample.wav",true)
+        ||!expectContentFixture(8,"analog-fx-one-shot.wav",true)||!expectContentFixture(8,"single-kick.wav",false)
+        ||!expectContentFixture(8,"bass-note-one-shot.wav",false)||!expectContentFixture(8,"synth-pad-one-shot.wav",false)
+        ||!expectContentFixture(8,"drum-break-loop.wav",false)||!expectContentFixture(8,"orchestral-phrase-loop.wav",false)
+        ||!expectContentFixture(8,"unlabeled-long-sample.wav",false))
     {
-        for (int kind = 1; kind <= 7; ++kind)
+        for (int kind = 1; kind <= 8; ++kind)
         {
             SampleBrowseFilter debugFilter; debugFilter.contentKind = kind;
             const auto page = contentFilterDb.searchSampleBrowseRecords(debugFilter, 20, 0);
@@ -1747,6 +1754,65 @@ int main(int argc, char** argv)
         for (const auto& item : unknown)
             std::cout << "Unknown sample: " << item << "\n";
         return analyzed == limit && stats.errors == 0 ? 0 : 275;
+    }
+
+    if (argc == 4 && std::strcmp(argv[1], "--magdrum-audit-content-folder") == 0)
+    {
+        const juce::File root(argv[2]);
+        const int limit = std::atoi(argv[3]);
+        if (!root.isDirectory() || limit < 1 || limit > 1000)
+        {
+            std::cerr << "Content audit requires an existing folder and a limit from 1 to 1000.\n";
+            return 276;
+        }
+
+        const auto databaseFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getNonexistentChildFile("MagDrum-content-audit", ".sqlite3", false);
+        int analyzed = 0;
+        int databaseErrors = 0;
+        WavScanner::Stats stats;
+        {
+            SampleDatabase database;
+            if (!database.open(databaseFile))
+            {
+                std::cerr << "Could not create temporary content-audit database.\n";
+                return 277;
+            }
+
+            WavScanner{}.scan(root, [&analyzed, limit] { return analyzed >= limit; }, {}, &stats,
+                [&database, &analyzed, &databaseErrors](const ScannedSample& sample)
+                {
+                    ++analyzed;
+                    if (!database.insertSample(sample))
+                    {
+                        ++databaseErrors;
+                        return false;
+                    }
+                    return true;
+                });
+
+            static const char* const kindNames[] =
+                { "all", "drum-hits", "drum-loops", "bass-one-shots", "bass-loops", "synth-one-shots", "synth-loops", "other-loops", "other-one-shots" };
+            std::cout << "Root: " << root.getFullPathName() << "\n"
+                      << "Analyzed samples: " << analyzed << "\n"
+                      << "Decode errors: " << stats.errors << "\n"
+                      << "Database errors: " << databaseErrors << "\n"
+                      << "Content filters: ";
+            for (int kind = 1; kind <= 8; ++kind)
+            {
+                SampleBrowseFilter filter;
+                filter.contentKind = kind;
+                const auto page = database.searchSampleBrowseRecords(filter, limit + 1, 0);
+                if (kind > 1) std::cout << ", ";
+                std::cout << kindNames[kind] << '=' << page.records.size();
+                if (page.hasMore) std::cout << '+';
+            }
+            std::cout << "\n";
+        }
+        databaseFile.deleteFile();
+        databaseFile.getSiblingFile(databaseFile.getFileName() + "-wal").deleteFile();
+        databaseFile.getSiblingFile(databaseFile.getFileName() + "-shm").deleteFile();
+        return stats.errors == 0 && databaseErrors == 0 ? 0 : 278;
     }
 
     if (argc == 5 && std::strcmp(argv[1], "--magdrum-test-vst3-discovery-timeout-fixture") == 0)

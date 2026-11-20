@@ -629,7 +629,12 @@ public:
         for (int step = 0; step < 20; ++step)
             editor.dispatchSampleMapWheelForTest(previewPoint, 1.0f);
         const auto maxZoomViewport = editor.sampleMapViewportForTest();
-        if (maxZoomViewport[0] < 11.99f || !editor.sampleMapVisibleGlyphsFitForTest())
+        if (maxZoomViewport[0] < 11.99f)
+        {
+            std::cerr << "The acoustic map did not reach maximum zoom.\n";
+            return 18;
+        }
+        if (!editor.sampleMapVisibleGlyphsFitForTest())
         {
             std::cerr << "Acoustic-map dots or their glow escaped the plot at maximum zoom.\n";
             return 18;
@@ -665,16 +670,18 @@ public:
         };
         if (!addFamilyFixture("Family Fixture Kick One Shot.wav", "Kick")
             || !addFamilyFixture("Family Fixture Bass Beat Loop.wav", "Unknown")
-            || !addFamilyFixture("Family Fixture Synth Loop.wav", "Unknown"))
+            || !addFamilyFixture("Family Fixture Synth Loop.wav", "Unknown")
+            || !addFamilyFixture("Family Fixture FX One Shot.wav", "Unknown"))
         {
             std::cerr << "Could not seed the content-family map fixtures.\n";
             return 13;
         }
         editor.sampleSearch.setText("Family Fixture", juce::dontSendNotification);
-        const std::array<std::pair<int, juce::String>, 3> familyFixtures{{
+        const std::array<std::pair<int, juce::String>, 4> familyFixtures{{
             {2, "Family Fixture Kick One Shot.wav"},
             {5, "Family Fixture Bass Beat Loop.wav"},
-            {7, "Family Fixture Synth Loop.wav"}}};
+            {7, "Family Fixture Synth Loop.wav"},
+            {9, "Family Fixture FX One Shot.wav"}}};
         struct FamilyFilterCheckState { size_t index = 0; bool matches = true; };
         const auto checkState = std::make_shared<FamilyFilterCheckState>();
         const auto familyDeadline = juce::Time::getMillisecondCounter() + 10000;
@@ -2272,7 +2279,7 @@ public:
         for (const auto language : languages)
         {
             magdrum::ui::setLanguage(language, false);
-            const std::array<LabelCheck, 47> checks{{
+            const std::array<LabelCheck, 48> checks{{
                 {"sample-library tab", editor.libraryTab.getButtonText(), magdrum::ui::localisedText("SAMPLE LIBRARY")},
                 {"drum-machine tab", editor.machineTab.getButtonText(), magdrum::ui::localisedText("DRUM MACHINE")},
                 {"sequencer tab", editor.sequencerTab.getButtonText(), magdrum::ui::localisedText("SEQUENCER")},
@@ -2295,6 +2302,7 @@ public:
                 {"synth one-shot family filter", editor.contentTypeFilter.getItemText(5), magdrum::ui::localisedText("Synth one-shots")},
                 {"synth loop family filter", editor.contentTypeFilter.getItemText(6), magdrum::ui::localisedText("Synth loops")},
                 {"other loop family filter", editor.contentTypeFilter.getItemText(7), magdrum::ui::localisedText("Other loops")},
+                {"other one-shot and FX family filter", editor.contentTypeFilter.getItemText(8), magdrum::ui::localisedText("Other one-shots & FX")},
                 {"sample sort filter", editor.sortFilter.getText(), magdrum::ui::localisedText("Name A-Z")},
                 {"pad attack control", editor.attackLabel.getText(), magdrum::ui::localisedText("PAD ATTACK")},
                 {"pad decay control", editor.decayLabel.getText(), magdrum::ui::localisedText("PAD DECAY")},
