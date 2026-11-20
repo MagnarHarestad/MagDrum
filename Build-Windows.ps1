@@ -108,6 +108,7 @@ try {
         "-DMAGDRUM_BUILD_REVISION=$BuildRevision",
         "-DBUILD_TESTING=$buildTesting",
         "-DMAGDRUM_ENABLE_BATTERY_KIT_PROBE_TESTS=$($EnableBatteryKitProbeTests.IsPresent -and -not $SkipTests)",
+        '-DMAGDRUM_VST3_LOAD_DIAGNOSTICS=OFF',
         '-DMAGDRUM_BUILD_MOBILE_PREVIEW=OFF'
     )
     $juceSource = Join-Path $dependencyDirectory 'juce-src'

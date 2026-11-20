@@ -1,8 +1,8 @@
 diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
-index 10af21d53a4..154cc7c4e3d 100644
+index 7e2231007..0eac84b2c 100644
 --- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
 +++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
-@@ -1292,7 +1292,7 @@ struct RefCountedDllHandle final : public ReferenceCountedObject
+@@ -1292,24 +1292,54 @@ private:
  struct VST3ModuleHandle final
  {
  public:
@@ -11,26 +11,120 @@ index 10af21d53a4..154cc7c4e3d 100644
      {
          VST3ModuleHandle result;
          result.handle = RefCountedDllHandle::getHandle (pluginFile.getFullPathName());
-@@ -1305,6 +1305,18 @@ struct VST3ModuleHandle final
-         if (factory == nullptr)
-             return {};
  
+         if (result.handle == nullptr)
+-            return {};
++        {
++            result.failureReason = "Could not open the VST3 module binary.";
++            return result;
++        }
+ 
+         auto factory = result.handle->getPluginFactory();
+ 
+         if (factory == nullptr)
+-            return {};
++        {
++            result.failureReason = "The VST3 module did not provide a plug-in factory.";
++            return result;
++        }
++
 +        // Shell plugins (e.g. WaveShell) re-enumerate their factory classes when
 +        // the host context is set, shifting every class index. Set it before
-+        // searching so the index found here still refers to the same class when
-+        // VST3ComponentHolder::initialise() sets the same context again and
-+        // instantiates by this index.
++        // searching so the index refers to the class exposed by this context.
++        const auto classesBeforeHostContext = factory->countClasses();
++        bool hasFactory3 = false;
++        int hostContextResult = static_cast<int> (kNotImplemented);
 +        {
 +            VSTComSmartPtr<IPluginFactory3> pf3;
 +
 +            if (pf3.loadFrom (factory.get()))
-+                pf3->setHostContext (hostContext);
++            {
++                hasFactory3 = true;
++                hostContextResult = static_cast<int> (pf3->setHostContext (hostContext));
++            }
 +        }
-+
+ 
          const auto numClasses = factory->countClasses();
++        result.classCountAtMatch = numClasses;
          result.classIndex = findClassMatchingDescription (factory, desc);
-
-@@ -3614,7 +3626,7 @@ static std::unique_ptr<AudioPluginInstance> createVST3Instance (VST3PluginFormat
+ 
+         if (result.classIndex == numClasses)
+-            return {};
++        {
++            result.failureReason = "No class matched '" + desc.name + "'; classes before/after host context="
++                + String (classesBeforeHostContext) + "/" + String (numClasses)
++                + ", IPluginFactory3=" + (hasFactory3 ? "yes" : "no")
++                + (hasFactory3 ? ", setHostContext result=" + String (hostContextResult)
++                               : ", setHostContext not called") + ".";
++            return result;
++        }
+ 
+         return result;
+     }
+@@ -1324,6 +1354,16 @@ public:
+         return classIndex;
+     }
+ 
++    Steinberg::int32 getClassCountAtMatch() const
++    {
++        return classCountAtMatch;
++    }
++
++    String getFailureReason() const
++    {
++        return failureReason;
++    }
++
+     String getName() const
+     {
+         auto factory = getPluginFactory();
+@@ -1385,6 +1425,8 @@ private:
+ 
+     RefCountedDllHandle::Ptr handle;
+     Steinberg::int32 classIndex{};
++    Steinberg::int32 classCountAtMatch{};
++    String failureReason;
+ 
+     //==============================================================================
+     JUCE_LEAK_DETECTOR (VST3ModuleHandle)
+@@ -1584,7 +1626,6 @@ struct VST3ComponentHolder
+ 
+         if (pf3.loadFrom (factory.get()))
+         {
+-            pf3->setHostContext (host->getFUnknown());
+             infoW.reset (new PClassInfoW());
+             pf3->getClassInfoUnicode (classIdx, infoW.get());
+         }
+@@ -1631,12 +1672,6 @@ struct VST3ComponentHolder
+         if (factory == nullptr)
+             return false;
+ 
+-        VSTComSmartPtr<IPluginFactory3> pf3;
+-        pf3.loadFrom (factory.get());
+-
+-        if (pf3 != nullptr)
+-            pf3->setHostContext (host->getFUnknown());
+-
+         const auto classIdx = module.getClassIndex();
+ 
+         if (classIdx == factory->countClasses())
+@@ -3607,10 +3642,14 @@ template <typename TypeToCreate>
+ static std::unique_ptr<AudioPluginInstance> createVST3Instance (VST3PluginFormatHeadless& format,
+                                                                 const PluginDescription& description,
+                                                                 const File& file,
+-                                                                VSTComSmartPtr<VST3HostContextHeadless> host)
++                                                                VSTComSmartPtr<VST3HostContextHeadless> host,
++                                                                String& failureReason)
+ {
+     if (! format.fileMightContainThisPluginType (description.fileOrIdentifier))
++    {
++        failureReason = "The VST3 format rejected the module path.";
+         return nullptr;
++    }
+ 
+     struct ScopedWorkingDirectory
+     {
+@@ -3621,20 +3660,35 @@ static std::unique_ptr<AudioPluginInstance> createVST3Instance (VST3PluginFormat
      const ScopedWorkingDirectory scope;
      file.getParentDirectory().setAsCurrentWorkingDirectory();
  
@@ -38,4 +132,58 @@ index 10af21d53a4..154cc7c4e3d 100644
 +    const auto module = VST3ModuleHandle::create (file, description, host->getFUnknown());
  
      if (! module.isValid())
++    {
++        failureReason = module.getFailureReason();
++        if (failureReason.isEmpty())
++            failureReason = "The matched factory class became invalid (index "
++                + String (module.getClassIndex()) + ", classes at match "
++                + String (module.getClassCountAtMatch()) + ").";
          return nullptr;
++    }
+ 
+     auto holder = std::make_unique<VST3ComponentHolder> (module, host);
+ 
+     if (! holder->initialise())
++    {
++        failureReason = "The matched factory class could not initialize its VST3 component (index "
++            + String (module.getClassIndex()) + ", classes at match "
++            + String (module.getClassCountAtMatch()) + ").";
+         return nullptr;
++    }
+ 
+     auto instance = std::make_unique<TypeToCreate> (std::move (holder));
+ 
+     if (! instance->initialise())
++    {
++        failureReason = "The VST3 audio processor could not initialize.";
+         return nullptr;
++    }
+ 
+     return instance;
+ }
+@@ -3645,16 +3699,23 @@ static void createVst3InstanceImpl (VST3PluginFormatHeadless& format,
+                                     const PluginDescription& description,
+                                     AudioPluginFormat::PluginCreationCallback callback)
+ {
++    String failureReason;
++
+     for (const auto& file : getLibraryPaths (format, description.fileOrIdentifier))
+     {
+-        if (auto result = createVST3Instance<TypeToCreate> (format, description, file, host))
++        if (auto result = createVST3Instance<TypeToCreate> (format, description, file, host, failureReason))
+         {
+             callback (std::move (result), {});
+             return;
+         }
+     }
+ 
+-    callback (nullptr, TRANS ("Unable to load XXX plug-in file").replace ("XXX", "VST-3"));
++    auto error = TRANS ("Unable to load XXX plug-in file").replace ("XXX", "VST-3");
++   #if defined (MAGDRUM_VST3_LOAD_DIAGNOSTICS)
++    if (failureReason.isNotEmpty())
++        error << " [" << failureReason << "]";
++   #endif
++    callback (nullptr, error);
+ }
+ 
+ JUCE_END_NO_SANITIZE
