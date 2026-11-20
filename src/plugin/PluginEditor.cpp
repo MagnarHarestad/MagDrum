@@ -4318,7 +4318,7 @@ void MagDrumAudioProcessorEditor::launchInstrumentScanner()
         status.setText(magdrum::ui::localisedText("Could not start the MagDrum instrument scanner."), juce::dontSendNotification);
         return;
     }
-    status.setText(magdrum::ui::localisedText("Opened the isolated instrument scanner. Its captured samples will appear in this shared library."), juce::dontSendNotification);
+    status.setText(magdrum::ui::localisedText("Instrument manager opened. Load the kit in its editor, save its state, then refresh instruments here."), juce::dontSendNotification);
 }
 
 void MagDrumAudioProcessorEditor::openSourceKitForSelectedSample()
