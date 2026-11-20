@@ -3528,8 +3528,11 @@ void MagDrumAudioProcessorEditor::choosePluginPreset()
         return;
     }
 
+    const auto& description = discoveredPluginInstruments.getReference(index);
+    const auto presetFilter = description.name.containsIgnoreCase("Battery")
+        ? "*.vstpreset;*.nbkt" : "*.vstpreset";
     const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(this);
-    chooseFileInApp(magdrum::ui::localisedText("Choose a VST3 preset"),juce::File(),"*.vstpreset",
+    chooseFileInApp(magdrum::ui::localisedText("Choose a VST3 preset"),juce::File(),presetFilter,
         juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,
         [safe](const juce::File& file)
         {
@@ -3661,6 +3664,25 @@ void MagDrumAudioProcessorEditor::finishPluginPresetSearch(const juce::String& p
 
 void MagDrumAudioProcessorEditor::selectPluginPreset(const juce::File& file)
 {
+    if (file.existsAsFile() && file.getFileExtension().equalsIgnoreCase(".nbkt"))
+    {
+        const int index = pluginInstrumentSelect.getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(index, discoveredPluginInstruments.size())
+            && discoveredPluginInstruments.getReference(index).name.containsIgnoreCase("Battery"))
+        {
+            const auto guidance = magdrum::ui::localisedText(
+                "Battery exposes generic MIDI program slots, not kit names. Load the .nbkt kit in Battery, save its state in the manager, then close the manager to refresh MagDrum.");
+            selectedPluginPresetFile = {};
+            pluginProgramSelect.setSelectedId(0, juce::dontSendNotification);
+            pluginPresetKitName.setText({}, juce::dontSendNotification);
+            importPluginPresetButton.setEnabled(false);
+            importPluginProgramButton.setEnabled(false);
+            updatePluginActionButtons();
+            status.setText(guidance, juce::dontSendNotification);
+            pluginScanInfo.setText(guidance, juce::dontSendNotification);
+        }
+        return;
+    }
     if (! file.existsAsFile() || ! file.getFileExtension().equalsIgnoreCase(".vstpreset"))
         return;
     selectedPluginPresetFile = file;
