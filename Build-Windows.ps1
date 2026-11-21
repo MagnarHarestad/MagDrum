@@ -12,6 +12,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Keep both this orchestration process and the native build workers responsive
+# for foreground applications such as Cubase or games.
+[System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $architectureKey = $Architecture.ToLowerInvariant()
 $buildDirectory = if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
@@ -132,7 +136,7 @@ try {
     }
     if ($resourceBootstrapTargets.Count -gt 0) {
         Write-Host "Generating JUCE Windows resource files with targets: $($resourceBootstrapTargets -join ', ')"
-        & $cmakePath --build $buildDirectory --config Release --target $resourceBootstrapTargets --parallel $Parallel
+        & $cmakePath --build $buildDirectory --config Release --target $resourceBootstrapTargets --parallel $Parallel -- '/lowPriority' '/p:CL_MPCount=1'
         if ($LASTEXITCODE -ne 0) { throw "Windows resource bootstrap failed with exit code $LASTEXITCODE." }
     }
     foreach ($target in @('MagDrum', 'MagDrumPlugin')) {
@@ -170,7 +174,7 @@ try {
         @('MagDrumTests')
     }
     $compileTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel
+    & $cmakePath --build $buildDirectory --config Release --target $buildTargets --parallel $Parallel -- '/lowPriority' '/p:CL_MPCount=1'
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE." }
     $compileTimer.Stop()
 
@@ -268,7 +272,7 @@ try {
     Write-Host "SHA-256: $hash"
     Write-Host "Product version: 0.1.2.$BuildRevision"
     Write-Host "Bundled Microsoft Visual C++ $runtimeArchitecture Redistributable: $vcRedistVersion."
-    Write-Host "Build parallelism: $Parallel."
+    Write-Host "Build workers: $Parallel MSBuild worker(s), one C++ compiler process per worker, below-normal priority."
     Write-Host "CMake configure: $($configureTimer.Elapsed.ToString('hh\:mm\:ss')); compile/link: $($compileTimer.Elapsed.ToString('hh\:mm\:ss'))."
     if ($testTimer) { Write-Host "Tests: $($testTimer.Elapsed.ToString('hh\:mm\:ss'))." }
     $packageTimer.Stop()

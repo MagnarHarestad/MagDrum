@@ -8,6 +8,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Keep incremental plugin builds responsive while the user works in other apps.
+[System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $buildPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $BuildDirectory))
 $repoPrefix = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
@@ -108,7 +111,7 @@ try {
 
     $buildTargets = if ($appNeedsBuild) { @('MagDrum', 'MagDrumPlugin_VST3') } else { @('MagDrumPlugin_VST3') }
     Write-Host "Building Debug targets: $($buildTargets -join ', ')"
-    & $cmakePath --build $buildPath --config Debug --target $buildTargets --parallel $Parallel
+    & $cmakePath --build $buildPath --config Debug --target $buildTargets --parallel $Parallel -- '/lowPriority' '/p:CL_MPCount=1'
     if ($LASTEXITCODE -ne 0) { throw "Windows x64 development build failed with exit code $LASTEXITCODE." }
 
     $bundle = Join-Path $buildPath 'MagDrumPlugin_artefacts/Debug/VST3/MagDrum.vst3'
@@ -119,7 +122,7 @@ try {
 
     $buildTimer.Stop()
     Write-Host "Fast Windows x64 Debug VST3 build ready: $bundle"
-    Write-Host "Incremental build elapsed: $($buildTimer.Elapsed.ToString('hh\:mm\:ss'))."
+    Write-Host "Incremental build elapsed: $($buildTimer.Elapsed.ToString('hh\:mm\:ss')); $Parallel MSBuild worker(s), one C++ compiler process per worker, below-normal priority."
     Write-Host 'This development build uses the Debug configuration and skips CTest, packaging, publishing, and installation.'
     Write-Host 'Use Build-Windows.ps1 -BuildRevision <test-number> for the optimized Release build, full checks, tests, and package.'
 }
