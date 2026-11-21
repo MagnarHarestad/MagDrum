@@ -129,6 +129,7 @@ if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
     $noteLines += @(
         '',
         'Sample Library loop filters now use transient timing against a repeating beat grid to separate unlabeled rhythmic loops from long one-shot sounds.',
+        'Multi-sampled one-shot names stay in Drum Hits unless they explicitly indicate a loop; compound BassDrum names are also classified as drum hits, not bass one-shots.',
         'The sample analysis version advances; the next library scan recalculates timing features for previously indexed WAV files.'
     )
 }
