@@ -2744,7 +2744,9 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         + " OR " + containsContentTerm("sidestick") + " OR " + containsContentTerm("cross stick")
         + " OR " + containsContentTerm("clap")
         + " OR " + containsContentTerm("cowbell") + " OR " + containsContentTerm("drum")
-        + " OR " + containsContentTerm("drums") + " OR " + containsContentTerm("percussion")
+        + " OR " + containsContentTerm("drums") + " OR " + containsContentTerm("bass drum")
+        + " OR " + containsContentTerm("bass drums") + " OR " + containsContentTerm("bassdrum")
+        + " OR " + containsContentTerm("bassdrums") + " OR " + containsContentTerm("percussion")
         + " OR " + containsContentTerm("shaker") + " OR " + containsContentTerm("tambourine")
         + " OR " + containsContentTerm("breakbeat") + ")";
     const auto beatTerms = juce::String("((") + containsContentTerm("beat") + " OR " + containsContentTerm("beats")
@@ -2761,7 +2763,9 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         + " OR " + containsContentTerm("rhythms") + ")";
     const auto bassTerms = juce::String("(") + containsContentTerm("bass") + " OR " + containsContentTerm("bassline")
         + " OR " + containsContentTerm("sub-bass") + " OR " + containsContentTerm("sub bass") + ")";
-    const auto bassFamily = bassTerms + " AND NOT " + containsContentTerm("bass drum") + " AND NOT " + drumCategory;
+    const auto bassDrumTerms = juce::String("(") + containsContentTerm("bass drum") + " OR " + containsContentTerm("bass drums")
+        + " OR " + containsContentTerm("bassdrum") + " OR " + containsContentTerm("bassdrums") + ")";
+    const auto bassFamily = bassTerms + " AND NOT " + bassDrumTerms + " AND NOT " + drumCategory;
     const auto synthTerms = juce::String("(") + containsContentTerm("synth") + " OR " + containsContentTerm("synthesizer")
         + " OR " + containsContentTerm("arpeggio") + " OR " + containsContentTerm("arp") + " OR " + containsContentTerm("ambient pad")
         + " OR " + containsContentTerm("synth pad") + ")";
