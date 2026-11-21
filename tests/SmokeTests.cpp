@@ -544,6 +544,15 @@ int runSmokeTests(int argc,char** argv)
     discoveryDescriptions.remove(discoveryDescriptions.size()-1);
     if(magdrum::plugins::vst3ModuleHasInstrumentDescription(discoveryDescriptions,instrumentBundle))return 254;
     juce::KnownPluginList knownPluginList;
+    juce::KnownPluginList emptyDiscoveryList;
+    auto unresolvedShellCache = magdrum::plugins::Vst3ModuleInstrumentCache{};
+    if (magdrum::plugins::rememberVst3ModuleInstrumentStatus(
+            unresolvedShellCache, legacyBundle, emptyDiscoveryList)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(unresolvedShellCache, legacyBundle).has_value())
+    {
+        std::cerr << "A shell module with no discovered classes was incorrectly cached as effects-only.\n";
+        return 261;
+    }
     for(int index=0;index<4096;++index)
     {
         juce::PluginDescription unrelated;
@@ -560,6 +569,10 @@ int runSmokeTests(int argc,char** argv)
     knownInstrument.isInstrument=true;
     knownPluginList.addType(knownInstrument);
     if(!magdrum::plugins::vst3ModuleHasInstrumentDescription(knownPluginList,instrumentBundle))return 255;
+    if (!magdrum::plugins::rememberVst3ModuleInstrumentStatus(
+            unresolvedShellCache, instrumentBundle, knownPluginList)
+        || magdrum::plugins::cachedVst3ModuleMayBeInstrument(unresolvedShellCache, instrumentBundle)
+            != std::optional<bool>(true)) return 262;
     knownPluginList.removeType(knownInstrument);
     if(magdrum::plugins::vst3ModuleHasInstrumentDescription(knownPluginList,instrumentBundle))return 256;
     for(int index=0;index<4096;++index)

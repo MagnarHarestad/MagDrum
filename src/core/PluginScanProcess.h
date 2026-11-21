@@ -81,6 +81,8 @@ std::optional<bool> cachedVst3ModuleMayBeInstrument(const Vst3ModuleInstrumentCa
                                                     const juce::File& bundle);
 void rememberVst3ModuleInstrumentStatus(Vst3ModuleInstrumentCache& cache, const juce::File& bundle,
                                         bool mayBeInstrument);
+bool rememberVst3ModuleInstrumentStatus(Vst3ModuleInstrumentCache& cache, const juce::File& bundle,
+                                        const juce::KnownPluginList& discoveredPlugins);
 Vst3ModuleDiscoveryAction classifyVst3ModuleForDiscovery(Vst3ModuleInstrumentCache& cache,
                                                           const juce::File& bundle,
                                                           bool cachedBinaryIsUpToDate);

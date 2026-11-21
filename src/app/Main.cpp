@@ -975,11 +975,9 @@ int runIsolatedVst3Discovery(const juce::File& progressFile, const juce::File& a
             || candidatePath.getChildFile("Contents").getChildFile("moduleinfo.json").existsAsFile();
         if (!candidateHasSidecarManifest)
         {
-            const auto moduleHasInstrument = magdrum::plugins::vst3ModuleHasInstrumentDescription(
-                knownPlugins, candidatePath);
-            magdrum::plugins::rememberVst3ModuleInstrumentStatus(moduleFilterCache, candidatePath,
-                moduleHasInstrument);
-            magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);
+            if (magdrum::plugins::rememberVst3ModuleInstrumentStatus(
+                    moduleFilterCache, candidatePath, knownPlugins))
+                magdrum::plugins::saveVst3ModuleInstrumentCache(moduleFilterCacheFile, moduleFilterCache);
         }
         // Commit discoveries incrementally. If a third-party binary crashes
         // this helper, a later scan keeps completed results and the JUCE

@@ -485,6 +485,29 @@ bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
     });
 }
 
+bool magdrum::plugins::rememberVst3ModuleInstrumentStatus(
+    Vst3ModuleInstrumentCache& cache, const juce::File& module,
+    const juce::KnownPluginList& discoveredPlugins)
+{
+    // An empty result is not evidence that a legacy shell contains effects only.
+    // Keep it eligible for another scan rather than caching a false negative.
+    const auto descriptions = discoveredPlugins.getTypes();
+    const juce::File modulePath(module.getFullPathName());
+    const auto hasAnyVst3Description = std::any_of(descriptions.begin(), descriptions.end(),
+        [&modulePath](const auto& description)
+        {
+            const juce::File descriptionPath(description.fileOrIdentifier);
+            return description.pluginFormatName == "VST3"
+                && (descriptionPath == modulePath || descriptionPath.isAChildOf(modulePath));
+        });
+    if (!hasAnyVst3Description)
+        return false;
+
+    rememberVst3ModuleInstrumentStatus(cache, module,
+        vst3ModuleHasInstrumentDescription(descriptions, modulePath));
+    return true;
+}
+
 magdrum::plugins::CachedVst3ModuleIndex magdrum::plugins::indexCachedVst3Modules(
     const juce::Array<juce::PluginDescription>& cachedDescriptions)
 {

@@ -187,3 +187,36 @@ index 7e2231007..0eac84b2c 100644
  }
  
  JUCE_END_NO_SANITIZE
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
+@@ -82,8 +82,15 @@ void VST3PluginFormatHeadless::findAllTypesForFile (OwnedArray<PluginDescription>& results,
+         if (pluginFactory == nullptr)
+             continue;
+ 
+         VSTComSmartPtr host { new VST3HostContextHeadless(), IncrementRef::yes };
++
++        // Shell modules may rebuild their class list when the host context is set.
++        // Apply the context before the first factory enumeration to avoid stale indices.
++        VSTComSmartPtr<IPluginFactory3> factory3;
++        if (factory3.loadFrom (pluginFactory.get()))
++            factory3->setHostContext (host->getFUnknown());
++
+         for (const auto& d : DescriptionLister::findDescriptionsSlow (*host, *pluginFactory, File (file)))
+             results.add (new PluginDescription (d));
+     }
+ }
+diff --git a/extras/Build/CMake/JUCEUtils.cmake b/extras/Build/CMake/JUCEUtils.cmake
+--- a/extras/Build/CMake/JUCEUtils.cmake
++++ b/extras/Build/CMake/JUCEUtils.cmake
+@@ -832,8 +832,8 @@ function(_juce_set_target_properties)
+         get_target_property(generated_icon ${source_target} JUCE_ICON_FILE)
+-        set(dependency)
++        set(dependency DEPENDS "${input_info_file}")
+ 
+         if(generated_icon)
+-            set(dependency DEPENDS "${generated_icon}")
++            list(APPEND dependency "${generated_icon}")
+         endif()
+ 
+         set(resource_rc_file "${juce_library_code}/${source_target}_resources.rc")
