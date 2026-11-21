@@ -30,6 +30,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 }
 $previousGhToken = $env:GH_TOKEN
 $usingGitCredential = $false
+Push-Location -LiteralPath $repoRoot
 try {
     & gh auth status
     if ($LASTEXITCODE -ne 0) {
@@ -223,4 +224,5 @@ finally {
         if ($null -eq $previousGhToken) { Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue }
         else { $env:GH_TOKEN = $previousGhToken }
     }
+    Pop-Location
 }
