@@ -20,7 +20,11 @@ The Battery `.nbkt` reader is adapted from the format readers in the
 GPL version 3. Source distributions and release packages include the complete
 text as [`GPL-3.0-LICENSE.txt`](../GPL-3.0-LICENSE.txt).
 
+AGPLv3 section 13 expressly permits combining an AGPLv3-covered work with a GPLv3-covered work; each license continues to apply to its covered components. The source and binary archive carry both full license texts ([GNU AGPLv3](https://www.gnu.org/licenses/agpl-3.0.html#section13), [GNU GPLv3](https://www.gnu.org/licenses/gpl-3.0.html#section13)).
+
 ## Windows and Linux package audit
+
+The actual Windows x64 v0.1.2-test.300 archive was rechecked with the [Windows package verifier](../tools/Test-WindowsPackage.ps1), using BuildRevision 300. The check passed application and VST3 version checks, required AGPLv3 and third-party notice entries, and the Microsoft runtime signature. This records the Windows x64 archive contents; Linux and Apple package audits remain separate platform work.
 
 The Windows x64 and Linux x64 desktop-app/VST3 packages share pinned JUCE
 modules for audio basics, audio devices, audio formats, processors, processor
