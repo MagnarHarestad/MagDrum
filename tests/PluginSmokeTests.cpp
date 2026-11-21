@@ -1793,6 +1793,12 @@ public:
 #if JUCE_WINDOWS
     static int checksLivePluginInventoryScan(const juce::File& testDataDirectory)
     {
+        if (juce::SystemStats::getEnvironmentVariable("MAGDRUM_ALLOW_LIVE_VST_SCAN", {}) != "1")
+        {
+            std::cerr << "Live VST inventory scanning is disabled by default. Set "
+                         "MAGDRUM_ALLOW_LIVE_VST_SCAN=1 only for an intentional isolated scan.\n";
+            return 209;
+        }
         if (!juce::File::isAbsolutePath(testDataDirectory.getFullPathName())
             || getMagDrumDataDirectory() != testDataDirectory.getFullPathName())
         {
