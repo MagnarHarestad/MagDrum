@@ -7,7 +7,7 @@
 
 class DrumClassificationModel;
 
-inline constexpr int currentSampleAnalysisVersion = 8;
+inline constexpr int currentSampleAnalysisVersion = 9;
 
 struct ScannedSample
 {
@@ -24,6 +24,7 @@ struct ScannedSample
     double transientStrength = 0.0;
     int transientCount = 0;
     std::vector<double> transientAttackTimesSeconds;
+    double rhythmicLoopConfidence = 0.0;
     double fundamentalHz = 0.0;
     double pitchConfidence = 0.0;
     int analysisVersion = currentSampleAnalysisVersion;
@@ -36,6 +37,11 @@ struct ScannedSample
     juce::StringArray classificationTags;
     double classificationConfidence = 0.0;
 };
+
+// Estimates whether transient attacks span the clip and align to a repeating
+// beat subdivision. This is a loop hint, not a genre or instrument classifier.
+double estimateRhythmicLoopConfidence(const std::vector<double>& transientAttackTimesSeconds,
+                                      double durationSeconds);
 
 class WavScanner
 {

@@ -124,6 +124,13 @@ $noteLines = @(
 if ($missingNames.Count -gt 0) {
     $noteLines += @('', 'Not included in this release:', ($missingNames | ForEach-Object { "- $_" }))
 }
+if ($includedNames -contains 'MagDrum-Windows-x64.zip') {
+    $noteLines += @(
+        '',
+        'Sample Library loop filters now use transient timing against a repeating beat grid to separate unlabeled rhythmic loops from long one-shot sounds.',
+        'The sample analysis version advances; the next library scan recalculates timing features for previously indexed WAV files.'
+    )
+}
 if ($includedNames -contains 'MagDrum-Windows-x64.zip' -or $includedNames -contains 'MagDrum-Windows-ARM64.zip') {
     $noteLines += @(
         '',

@@ -164,6 +164,61 @@ juce::String createAcousticFingerprint(juce::AudioFormatReader& reader, juce::ds
 }
 }
 
+double estimateRhythmicLoopConfidence(const std::vector<double>& attacks, double durationSeconds)
+{
+    if (!std::isfinite(durationSeconds) || durationSeconds < 2.0 || attacks.size() < 8)
+        return 0.0;
+
+    std::vector<double> validAttacks;
+    validAttacks.reserve(juce::jmin(static_cast<int>(attacks.size()), 256));
+    for (const auto time : attacks)
+        if (std::isfinite(time) && time >= 0.0 && time < durationSeconds)
+            validAttacks.push_back(time);
+    if (validAttacks.size() < 8)
+        return 0.0;
+    std::sort(validAttacks.begin(), validAttacks.end());
+
+    // Bound work for pathological material with thousands of detected attacks.
+    if (validAttacks.size() > 256)
+    {
+        std::vector<double> bounded;
+        bounded.reserve(256);
+        const auto stride = static_cast<double>(validAttacks.size() - 1) / 255.0;
+        for (int index = 0; index < 256; ++index)
+            bounded.push_back(validAttacks[static_cast<size_t>(std::lround(index * stride))]);
+        validAttacks = std::move(bounded);
+    }
+
+    const double firstAttack = validAttacks.front();
+    const double coverage = (validAttacks.back() - firstAttack) / durationSeconds;
+    if (coverage < 0.55)
+        return 0.0;
+
+    double bestAlignment = 0.0;
+    constexpr double slowestBeatSeconds = 60.0 / 200.0;
+    constexpr double fastestBeatSeconds = 60.0 / 55.0;
+    constexpr double beatStepSeconds = 0.0025;
+    for (double beatSeconds = slowestBeatSeconds; beatSeconds <= fastestBeatSeconds;
+         beatSeconds += beatStepSeconds)
+    {
+        const double gridStepSeconds = beatSeconds / 4.0;
+        const double toleranceSeconds = juce::jmin(0.045, gridStepSeconds * 0.32);
+        int aligned = 0;
+        for (const auto time : validAttacks)
+        {
+            const double gridPosition = (time - firstAttack) / gridStepSeconds;
+            const double nearestGridTime = std::round(gridPosition) * gridStepSeconds;
+            if (std::abs((time - firstAttack) - nearestGridTime) <= toleranceSeconds)
+                ++aligned;
+        }
+        bestAlignment = juce::jmax(bestAlignment,
+            static_cast<double>(aligned) / static_cast<double>(validAttacks.size()));
+    }
+
+    const double coverageWeight = juce::jlimit(0.0, 1.0, coverage / 0.80);
+    return juce::jlimit(0.0, 1.0, bestAlignment * coverageWeight);
+}
+
 juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel shouldCancel,
                                             ShouldSkipFile shouldSkipFile, Stats* stats,
                                             SampleConsumer sampleConsumer,
@@ -404,6 +459,8 @@ juce::Array<ScannedSample> WavScanner::scan(const juce::File& root, ShouldCancel
         sample.transientStrength = transientMax;
         sample.transientAttackTimesSeconds = findTransientAttackTimes(transientEnvelope, reader->sampleRate, sample.rms);
         sample.transientCount = static_cast<int>(sample.transientAttackTimesSeconds.size());
+        sample.rhythmicLoopConfidence = estimateRhythmicLoopConfidence(
+            sample.transientAttackTimesSeconds, sample.durationSeconds);
         sample.spectralCentroidHz = centroidMagnitude > 0.0 ? centroidWeightedMagnitude / centroidMagnitude : 0.0;
         sample.spectralFlatness = spectralWindowCount > 0 ? spectralFlatnessTotal / spectralWindowCount : 0.0;
         sample.fingerprint = juce::SHA256(file).toHexString();

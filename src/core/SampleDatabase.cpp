@@ -392,7 +392,7 @@ bool SampleDatabase::open(const juce::File& file)
     sqlite3_busy_timeout(connection, 5000);
     if (sqlite3_exec(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON", nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
-    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,spectral_flatness REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,transient_count INTEGER NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '',size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',acoustic_fingerprint_version INTEGER NOT NULL DEFAULT 0,analysis_version INTEGER NOT NULL DEFAULT 0)";
+    const char* schema = "CREATE TABLE IF NOT EXISTS samples (path TEXT PRIMARY KEY,name TEXT NOT NULL,duration REAL NOT NULL DEFAULT 0,channels INTEGER NOT NULL DEFAULT 0,sample_rate REAL NOT NULL DEFAULT 0,format TEXT NOT NULL DEFAULT '',bit_depth INTEGER NOT NULL DEFAULT 0,peak REAL NOT NULL DEFAULT 0,rms REAL NOT NULL DEFAULT 0,spectral_centroid REAL NOT NULL DEFAULT 0,spectral_flatness REAL NOT NULL DEFAULT 0,transient_strength REAL NOT NULL DEFAULT 0,transient_count INTEGER NOT NULL DEFAULT 0,rhythmic_loop_confidence REAL NOT NULL DEFAULT 0,fundamental_hz REAL NOT NULL DEFAULT 0,pitch_confidence REAL NOT NULL DEFAULT 0,fingerprint TEXT NOT NULL DEFAULT '',category TEXT NOT NULL DEFAULT 'Unknown',classification_confidence REAL NOT NULL DEFAULT 0,user_category TEXT NOT NULL DEFAULT '',size_bytes INTEGER NOT NULL DEFAULT 0,modified_time_ms INTEGER NOT NULL DEFAULT 0,acoustic_fingerprint TEXT NOT NULL DEFAULT '',acoustic_fingerprint_version INTEGER NOT NULL DEFAULT 0,analysis_version INTEGER NOT NULL DEFAULT 0)";
     if (sqlite3_exec(connection, schema, nullptr, nullptr, nullptr) != SQLITE_OK)
         return false;
     // Upgrade databases created by earlier MagDrum builds without losing indexed paths.
@@ -405,6 +405,7 @@ bool SampleDatabase::open(const juce::File& file)
         "ALTER TABLE samples ADD COLUMN spectral_flatness REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN transient_strength REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN transient_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE samples ADD COLUMN rhythmic_loop_confidence REAL NOT NULL DEFAULT 0",
         "ALTER TABLE samples ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE samples ADD COLUMN category TEXT NOT NULL DEFAULT 'Unknown'",
         "ALTER TABLE samples ADD COLUMN classification_confidence REAL NOT NULL DEFAULT 0",
@@ -1194,10 +1195,12 @@ juce::Array<PluginSoundBrowseRecord> SampleDatabase::getPluginSoundBrowseRecords
 
 bool SampleDatabase::insertSample(const ScannedSample& sample, std::int64_t sourceId)
 {
-    if (connection == nullptr || sample.transientCount < 0 || sample.transientCount > 65535) return false;
+    if (connection == nullptr || sample.transientCount < 0 || sample.transientCount > 65535
+        || !std::isfinite(sample.rhythmicLoopConfidence) || sample.rhythmicLoopConfidence < 0.0
+        || sample.rhythmicLoopConfidence > 1.0) return false;
     if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,spectral_flatness,transient_strength,transient_count,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version,analysis_version,source_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,spectral_flatness=excluded.spectral_flatness,transient_strength=excluded.transient_strength,transient_count=excluded.transient_count,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version,analysis_version=excluded.analysis_version,source_id=COALESCE(excluded.source_id,samples.source_id)";
+    const char* sql = "INSERT INTO samples(path,name,duration,channels,sample_rate,format,bit_depth,peak,rms,spectral_centroid,spectral_flatness,transient_strength,transient_count,rhythmic_loop_confidence,fundamental_hz,pitch_confidence,fingerprint,category,classification_confidence,size_bytes,modified_time_ms,acoustic_fingerprint,acoustic_fingerprint_version,analysis_version,source_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,duration=excluded.duration,channels=excluded.channels,sample_rate=excluded.sample_rate,format=excluded.format,bit_depth=excluded.bit_depth,peak=excluded.peak,rms=excluded.rms,spectral_centroid=excluded.spectral_centroid,spectral_flatness=excluded.spectral_flatness,transient_strength=excluded.transient_strength,transient_count=excluded.transient_count,rhythmic_loop_confidence=excluded.rhythmic_loop_confidence,fundamental_hz=excluded.fundamental_hz,pitch_confidence=excluded.pitch_confidence,fingerprint=excluded.fingerprint,category=CASE WHEN samples.user_category='' THEN excluded.category ELSE samples.user_category END,classification_confidence=excluded.classification_confidence,size_bytes=excluded.size_bytes,modified_time_ms=excluded.modified_time_ms,acoustic_fingerprint=excluded.acoustic_fingerprint,acoustic_fingerprint_version=excluded.acoustic_fingerprint_version,analysis_version=excluded.analysis_version,source_id=COALESCE(excluded.source_id,samples.source_id)";
     if (sqlite3_prepare_v2(connection, sql, -1, &statement, nullptr) != SQLITE_OK)
     {
         sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
@@ -1209,14 +1212,15 @@ bool SampleDatabase::insertSample(const ScannedSample& sample, std::int64_t sour
     sqlite3_bind_text(statement,6,sample.format.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(statement,7,sample.bitDepth);
     sqlite3_bind_double(statement,8,sample.peak); sqlite3_bind_double(statement,9,sample.rms); sqlite3_bind_double(statement,10,sample.spectralCentroidHz);
     sqlite3_bind_double(statement,11,sample.spectralFlatness); sqlite3_bind_double(statement,12,sample.transientStrength); sqlite3_bind_int(statement,13,sample.transientCount);
-    sqlite3_bind_double(statement,14,sample.fundamentalHz); sqlite3_bind_double(statement,15,sample.pitchConfidence);
-    sqlite3_bind_text(statement,16,sample.fingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
-    sqlite3_bind_text(statement,17,sample.category.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_double(statement,18,sample.classificationConfidence);
-    sqlite3_bind_int64(statement,19,sample.fileSizeBytes); sqlite3_bind_int64(statement,20,sample.modifiedTimeMillis);
-    sqlite3_bind_text(statement,21,sample.acousticFingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
-    sqlite3_bind_int(statement,22,sample.acousticFingerprintVersion);
-    sqlite3_bind_int(statement,23,sample.analysisVersion);
-    if (sourceId > 0) sqlite3_bind_int64(statement,24,sourceId); else sqlite3_bind_null(statement,24);
+    sqlite3_bind_double(statement,14,sample.rhythmicLoopConfidence);
+    sqlite3_bind_double(statement,15,sample.fundamentalHz); sqlite3_bind_double(statement,16,sample.pitchConfidence);
+    sqlite3_bind_text(statement,17,sample.fingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement,18,sample.category.toRawUTF8(),-1,SQLITE_TRANSIENT); sqlite3_bind_double(statement,19,sample.classificationConfidence);
+    sqlite3_bind_int64(statement,20,sample.fileSizeBytes); sqlite3_bind_int64(statement,21,sample.modifiedTimeMillis);
+    sqlite3_bind_text(statement,22,sample.acousticFingerprint.toRawUTF8(),-1,SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement,23,sample.acousticFingerprintVersion);
+    sqlite3_bind_int(statement,24,sample.analysisVersion);
+    if (sourceId > 0) sqlite3_bind_int64(statement,25,sourceId); else sqlite3_bind_null(statement,25);
     bool ok = sqlite3_step(statement) == SQLITE_DONE;
     sqlite3_finalize(statement);
     if (ok)
@@ -1415,7 +1419,7 @@ std::vector<ScannedSample> SampleDatabase::getManualClassificationExamples(int l
 
     sqlite3_stmt* statement = nullptr;
     const char* sql = "SELECT path,user_category,duration,channels,sample_rate,format,bit_depth,peak,rms,"
-                      "spectral_centroid,spectral_flatness,transient_strength,transient_count,fundamental_hz,"
+                      "spectral_centroid,spectral_flatness,transient_strength,transient_count,rhythmic_loop_confidence,fundamental_hz,"
                       "pitch_confidence,analysis_version,size_bytes,modified_time_ms,fingerprint,"
                       "acoustic_fingerprint,acoustic_fingerprint_version FROM samples "
                       "WHERE user_category<>'' AND user_category<>'Unknown' "
@@ -1445,14 +1449,15 @@ std::vector<ScannedSample> SampleDatabase::getManualClassificationExamples(int l
         example.spectralFlatness = sqlite3_column_double(statement, 10);
         example.transientStrength = sqlite3_column_double(statement, 11);
         example.transientCount = sqlite3_column_int(statement, 12);
-        example.fundamentalHz = sqlite3_column_double(statement, 13);
-        example.pitchConfidence = sqlite3_column_double(statement, 14);
-        example.analysisVersion = sqlite3_column_int(statement, 15);
-        example.fileSizeBytes = sqlite3_column_int64(statement, 16);
-        example.modifiedTimeMillis = sqlite3_column_int64(statement, 17);
-        example.fingerprint = text(18);
-        example.acousticFingerprint = text(19);
-        example.acousticFingerprintVersion = sqlite3_column_int(statement, 20);
+        example.rhythmicLoopConfidence = sqlite3_column_double(statement, 13);
+        example.fundamentalHz = sqlite3_column_double(statement, 14);
+        example.pitchConfidence = sqlite3_column_double(statement, 15);
+        example.analysisVersion = sqlite3_column_int(statement, 16);
+        example.fileSizeBytes = sqlite3_column_int64(statement, 17);
+        example.modifiedTimeMillis = sqlite3_column_int64(statement, 18);
+        example.fingerprint = text(19);
+        example.acousticFingerprint = text(20);
+        example.acousticFingerprintVersion = sqlite3_column_int(statement, 21);
         examples.push_back(std::move(example));
     }
     sqlite3_finalize(statement);
@@ -2765,21 +2770,21 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
     switch (filter.contentKind)
     {
         case 1: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND NOT " + loopTerms
-                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
+                       + " AND NOT (s.rhythmic_loop_confidence>=0.82) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
         case 2: contentPredicate = "(" + drumCategory + " OR " + drumTerms + ") AND (" + loopTerms
-                       + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
+                       + " OR s.rhythmic_loop_confidence>=0.82) AND NOT (" + bassFamily + ") AND NOT " + synthTerms; break;
         case 3: contentPredicate = "(" + bassFamily + ") AND NOT " + loopTerms
-                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8)"; break;
+                       + " AND NOT (s.rhythmic_loop_confidence>=0.82)"; break;
         case 4: contentPredicate = "(" + bassFamily + ") AND (" + loopTerms
-                       + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
+                       + " OR s.rhythmic_loop_confidence>=0.82)"; break;
         case 5: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND NOT " + loopTerms
-                       + " AND NOT (s.duration>=4.0 AND s.transient_count>=8)"; break;
-        case 6: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND (" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
-        case 7: contentPredicate = "(" + loopTerms + " OR (s.duration>=4.0 AND s.transient_count>=8)) AND NOT ("
+                       + " AND NOT (s.rhythmic_loop_confidence>=0.82)"; break;
+        case 6: contentPredicate = synthTerms + " AND NOT (" + bassFamily + ") AND (" + loopTerms + " OR s.rhythmic_loop_confidence>=0.82)"; break;
+        case 7: contentPredicate = "(" + loopTerms + " OR s.rhythmic_loop_confidence>=0.82) AND NOT ("
                        + drumCategory + " OR " + drumTerms + " OR (" + bassFamily + ") OR " + synthTerms + ")"; break;
         case 8: contentPredicate = "NOT (" + drumCategory + " OR " + drumTerms + " OR (" + bassFamily
                        + ") OR " + synthTerms + " OR " + loopTerms
-                       + " OR (s.duration>=4.0 AND s.transient_count>=8))"; break;
+                       + " OR s.rhythmic_loop_confidence>=0.82)"; break;
         default: break;
     }
     const char* ordering = "s.name COLLATE NOCASE,s.path COLLATE NOCASE";

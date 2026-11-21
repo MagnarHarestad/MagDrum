@@ -909,32 +909,47 @@ int runSmokeTests(int argc,char** argv)
     juce::StringArray manualTags;manualTags.add("Reviewed");if(!classificationTagDb.setUserTags(classifiedFile,manualTags)||!classificationTagDb.setUserCategory(classifiedFile,"Snare"))return 156;
     const auto contentFilterRoot=root.getSiblingFile("MagDrumContentFilterTest");contentFilterRoot.deleteRecursively();if(!contentFilterRoot.createDirectory().wasOk())return 243;
     SampleDatabase contentFilterDb;if(!contentFilterDb.open(contentFilterRoot.getChildFile("content-filter.sqlite3")))return 243;
-    const auto addContentFilterFixture=[&](const juce::String& name,const juce::String& category,double duration,int transientCount,const juce::String& tag)
+    std::vector<double> steadyLoopAttacks;
+    for (int attack = 0; attack < 64; ++attack)
+        steadyLoopAttacks.push_back(0.05 + attack * 0.125 + (attack % 2 == 0 ? 0.008 : -0.008));
+    if (estimateRhythmicLoopConfidence(steadyLoopAttacks, 8.0) < 0.82) return 314;
+    std::vector<double> irregularLoopAttacks;
+    std::uint32_t noiseSeed = 5421u;
+    for (int attack = 0; attack < 96; ++attack)
+    {
+        noiseSeed = 1664525u * noiseSeed + 1013904223u;
+        irregularLoopAttacks.push_back((noiseSeed / 4294967296.0) * 7.9);
+    }
+    if (estimateRhythmicLoopConfidence(irregularLoopAttacks, 8.0) >= 0.82) return 315;
+    if (estimateRhythmicLoopConfidence({0.0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.56,
+             0.64, 0.72, 0.8, 0.88}, 8.0) != 0.0) return 316;
+    const auto addContentFilterFixture=[&](const juce::String& name,const juce::String& category,double duration,int transientCount,const juce::String& tag,double loopConfidence)
     {
         const auto file=contentFilterRoot.getChildFile(name);
         if(!file.getParentDirectory().isDirectory()&&!file.getParentDirectory().createDirectory().wasOk())return false;
         if(!waveFile.copyFileTo(file))return false;
-        auto sample=classifiedSamples.getFirst();sample.file=file;sample.category=category;sample.durationSeconds=duration;sample.transientCount=transientCount;sample.classificationTags.clear();
+        auto sample=classifiedSamples.getFirst();sample.file=file;sample.category=category;sample.durationSeconds=duration;sample.transientCount=transientCount;sample.rhythmicLoopConfidence=loopConfidence;sample.classificationTags.clear();
         if(tag.isNotEmpty())sample.classificationTags.add(tag);
         return contentFilterDb.insertSample(sample);
     };
-    if(!addContentFilterFixture("single-kick.wav","Kick",0.2,1,{})
-        ||!addContentFilterFixture("bass-drum-one-shot.wav","Kick",0.2,1,{})
-        ||!addContentFilterFixture("categorized-rimshot.wav","Rimshot",0.25,1,{})
-        ||!addContentFilterFixture("side-stick-one-shot.wav","Unknown",0.25,1,{})
-        ||!addContentFilterFixture("drum-break-loop.wav","Unknown",8.0,16,"Loop")
-        ||!addContentFilterFixture("bass-drum-loop.wav","Unknown",8.0,16,"Loop")
-        ||!addContentFilterFixture("bass-note-one-shot.wav","Unknown",0.5,1,{})
-        ||!addContentFilterFixture("bass-beat-loop.wav","Unknown",4.0,8,"Loop")
-        ||!addContentFilterFixture("synth-pad-one-shot.wav","Unknown",2.4,1,{})
-        ||!addContentFilterFixture("synth-pad-loop.wav","Unknown",4.0,8,"Loop")
-        ||!addContentFilterFixture("synth-bass-loop.wav","Unknown",4.0,8,"Loop")
-        ||!addContentFilterFixture("breakbeat.wav","Unknown",0.6,2,{})
-        ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop")
-        ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop")
-        ||!addContentFilterFixture("unlabeled-long-sample.wav","Unknown",8.0,16,{})
-        ||!addContentFilterFixture("analog-fx-one-shot.wav","Unknown",1.2,1,{})
-        ||!addContentFilterFixture("Beat Agent\\kick-agent-fixture.wav","Kick",0.2,1,{}))return 243;
+    if(!addContentFilterFixture("single-kick.wav","Kick",0.2,1,{},0.0)
+        ||!addContentFilterFixture("bass-drum-one-shot.wav","Kick",0.2,1,{},0.0)
+        ||!addContentFilterFixture("categorized-rimshot.wav","Rimshot",0.25,1,{},0.0)
+        ||!addContentFilterFixture("side-stick-one-shot.wav","Unknown",0.25,1,{},0.0)
+        ||!addContentFilterFixture("drum-break-loop.wav","Unknown",8.0,16,"Loop",0.0)
+        ||!addContentFilterFixture("bass-drum-loop.wav","Unknown",8.0,16,"Loop",0.0)
+        ||!addContentFilterFixture("bass-note-one-shot.wav","Unknown",0.5,1,{},0.0)
+        ||!addContentFilterFixture("bass-beat-loop.wav","Unknown",4.0,8,"Loop",0.0)
+        ||!addContentFilterFixture("synth-pad-one-shot.wav","Unknown",2.4,1,{},0.0)
+        ||!addContentFilterFixture("synth-pad-loop.wav","Unknown",4.0,8,"Loop",0.0)
+        ||!addContentFilterFixture("synth-bass-loop.wav","Unknown",4.0,8,"Loop",0.0)
+        ||!addContentFilterFixture("breakbeat.wav","Unknown",0.6,2,{},0.0)
+        ||!addContentFilterFixture("orchestral-phrase-loop.wav","Unknown",4.0,8,"Loop",0.0)
+        ||!addContentFilterFixture("multi-sampled-loop.wav","Unknown",4.0,8,"Loop",0.0)
+        ||!addContentFilterFixture("unlabeled-rhythmic-loop.wav","Unknown",8.0,64,{},0.92)
+        ||!addContentFilterFixture("unlabeled-long-sample.wav","Unknown",8.0,16,{},0.0)
+        ||!addContentFilterFixture("analog-fx-one-shot.wav","Unknown",1.2,1,{},0.0)
+        ||!addContentFilterFixture("Beat Agent\\kick-agent-fixture.wav","Kick",0.2,1,{},0.0))return 243;
     const auto addUserTaggedContentFixture=[&](const juce::String& name,const juce::String& tag)
     {
         const auto file=contentFilterRoot.getChildFile(name);
@@ -965,6 +980,7 @@ int runSmokeTests(int argc,char** argv)
         ||!expectContentFixture(2,"neutral-a.wav",true)
         ||!expectContentFixture(2,"categorized-rimshot.wav",false)||!expectContentFixture(2,"side-stick-one-shot.wav",false)
         ||!expectContentFixture(2,"drum-break-loop.wav",true)||!expectContentFixture(2,"bass-drum-loop.wav",true)||!expectContentFixture(2,"single-kick.wav",false)
+        ||!expectContentFixture(2,"unlabeled-rhythmic-loop.wav",false)
         ||!expectContentFixture(2,"breakbeat.wav",true)||!expectContentFixture(7,"breakbeat.wav",false)
         ||!expectContentFixture(3,"bass-note-one-shot.wav",true)||!expectContentFixture(3,"bass-beat-loop.wav",false)
         ||!expectContentFixture(3,"bass-drum-one-shot.wav",false)||!expectContentFixture(3,"bass-drum-loop.wav",false)
@@ -975,11 +991,11 @@ int runSmokeTests(int argc,char** argv)
         ||!expectContentFixture(5,"synth-pad-one-shot.wav",true)||!expectContentFixture(5,"synth-pad-loop.wav",false)
         ||!expectContentFixture(6,"synth-pad-loop.wav",true)||!expectContentFixture(7,"orchestral-phrase-loop.wav",true)
         ||!expectContentFixture(7,"multi-sampled-loop.wav",true)
-        ||!expectContentFixture(7,"unlabeled-long-sample.wav",true)
+        ||!expectContentFixture(7,"unlabeled-rhythmic-loop.wav",true)||!expectContentFixture(7,"unlabeled-long-sample.wav",false)
         ||!expectContentFixture(8,"analog-fx-one-shot.wav",true)||!expectContentFixture(8,"single-kick.wav",false)
         ||!expectContentFixture(8,"bass-note-one-shot.wav",false)||!expectContentFixture(8,"synth-pad-one-shot.wav",false)
         ||!expectContentFixture(8,"drum-break-loop.wav",false)||!expectContentFixture(8,"orchestral-phrase-loop.wav",false)
-        ||!expectContentFixture(8,"unlabeled-long-sample.wav",false))
+        ||!expectContentFixture(8,"unlabeled-rhythmic-loop.wav",false)||!expectContentFixture(8,"unlabeled-long-sample.wav",true))
     {
         for (int kind = 1; kind <= 8; ++kind)
         {
