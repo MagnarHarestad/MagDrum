@@ -1,6 +1,6 @@
 # Local builds
 
-**Active target: Windows x64/Cubase Pro 15.** Latest package: [v0.1.2-test.300](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.300), public and installed per-user. The installed module version and SHA-256 match the package: `0.1.2.300`, `70C04B25DA22D684E163D22137F299EA31EBC5F1535CE8BD8F5245D770CDD68E`. Release CTest passed 8 applicable tests (Debug assertion worker skipped); exact-package state restore, MIDI 0–127, 12 offscreen images and Steinberg VST 3.8.1 validation passed. Cubase-host save/reopen, transport, visuals and physical audio remain unverified. Linux/macOS are paused.
+**Active target: Windows x64/Cubase Pro 15.** Latest package: [v0.1.2-test.301](https://github.com/MagnarHarestad/MagDrum/releases/tag/v0.1.2-test.301), public and installed per-user. The installed module version and SHA-256 match the package: `0.1.2.301`, `E4125A53D7FC07CE905D15000878840521A9BEE102BB82A9422BB92ACC0CC753`. Release CTest passed 9 applicable tests (Debug assertion worker skipped); exact-package state restore, MIDI 0–127, 12 offscreen images and Steinberg VST 3.8.1 validation passed. Cubase-host save/reopen, transport, visuals and physical audio remain unverified. Linux/macOS are paused.
 
 **Platform pause:** Do not start Linux/macOS builds, tests, packaging, publication or installation until the user explicitly requests resumption. Their commands and reports below are retained for historical reference only. Windows ARM64 is also outside the current x64 target.
 
