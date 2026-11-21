@@ -465,6 +465,39 @@ juce::String magdrum::plugins::vst3DiscoveryModuleForRecovery(
     return readVst3DiscoveryProgress(progressFile, progress) ? progress.currentPath : juce::String();
 }
 
+magdrum::plugins::Vst3DiscoveryRecoveryResult magdrum::plugins::runVst3DiscoveryWithRecovery(
+    const std::function<Vst3DiscoveryExecution()>& runDiscovery,
+    const juce::File& progressFile, std::function<bool()> shouldCancel,
+    int maximumRecoveries)
+{
+    Vst3DiscoveryRecoveryResult result;
+    if (! runDiscovery || maximumRecoveries < 0)
+        return result;
+
+    for (;;)
+    {
+        if (shouldCancel && shouldCancel())
+        {
+            result.execution.cancelled = true;
+            return result;
+        }
+
+        result.execution = runDiscovery();
+        if (! result.execution.started || result.execution.cancelled
+            || (! result.execution.timedOut && result.execution.exitCode == 0)
+            || result.recoveredModules >= maximumRecoveries)
+            return result;
+
+        const auto failedModule = vst3DiscoveryModuleForRecovery(result.execution, progressFile);
+        if (failedModule.isEmpty()
+            || ! recordVst3DiscoveryModuleFailure(progressFile, failedModule))
+            return result;
+
+        result.skippedModuleNames.add(juce::File(failedModule).getFileName());
+        ++result.recoveredModules;
+    }
+}
+
 bool magdrum::plugins::vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module)
 {

@@ -1631,43 +1631,21 @@ public:
     {
         const auto helper = bundledScannerApplication();
         if (! helper.existsAsFile()) { finish(-1, false); return jobHasFinished; }
-        constexpr int maximumPluginScanRecoveries = 64;
         constexpr int perModuleTimeoutMilliseconds = 90000;
-        int recoveredModules = 0;
-        while (! shouldExit() && ! cancellation->load())
+        const auto recovery = magdrum::plugins::runVst3DiscoveryWithRecovery([this, &helper]
         {
             juce::StringArray command{helper.getFullPathName(), "--magdrum-vst3-discovery-worker",
                                       progressFile.getFullPathName()};
             if (additionalFolder.isDirectory()) command.add(additionalFolder.getFullPathName());
-            const auto execution = magdrum::plugins::monitorVst3Discovery(command, progressFile,
+            return magdrum::plugins::monitorVst3Discovery(command, progressFile,
                 perModuleTimeoutMilliseconds, [this] { return shouldExit() || cancellation->load(); });
-            if (! execution.started)
-            { finish(-1, false); return jobHasFinished; }
-            if (execution.cancelled || shouldExit() || cancellation->load())
-            { finish(-1, true); return jobHasFinished; }
+        }, progressFile, [this] { return shouldExit() || cancellation->load(); });
 
-            if (!execution.timedOut && execution.exitCode == 0)
-            { finish(0, false); return jobHasFinished; }
-
-            // A third-party module can crash or stop responding during discovery.
-            // Keep completed results, skip that module and resume in a fresh helper.
-            if (recoveredModules < maximumPluginScanRecoveries)
-            {
-                const auto failedModule = magdrum::plugins::vst3DiscoveryModuleForRecovery(
-                    execution, progressFile);
-                if (failedModule.isNotEmpty()
-                    && magdrum::plugins::recordVst3DiscoveryModuleFailure(progressFile,
-                        failedModule))
-                {
-                    ++recoveredModules;
-                    continue;
-                }
-            }
-
-            finish(execution.exitCode, false);
-            return jobHasFinished;
-        }
-        finish(-1, true);
+        const auto& execution = recovery.execution;
+        if (execution.cancelled || shouldExit() || cancellation->load())
+            finish(-1, true);
+        else
+            finish(execution.started ? execution.exitCode : -1, false);
         return jobHasFinished;
     }
 private:

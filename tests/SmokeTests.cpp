@@ -243,6 +243,27 @@ bool runBuiltVst3WorkerFixture(const juce::File& vst3Module, const juce::File& p
 
 int runSmokeTests(int argc,char** argv)
 {
+    if (argc == 4 && std::strcmp(argv[1], "--magdrum-test-vst3-discovery-recovery-fixture") == 0)
+    {
+        const juce::File progressFile(argv[2]);
+        magdrum::plugins::Vst3DiscoveryProgress progress;
+        magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress);
+        const juce::String modulePath(argv[3]);
+        progress.total = 1;
+        if (progress.failedModules.contains(modulePath))
+        {
+            progress.completed = 1;
+            progress.current = "complete";
+            progress.currentPath.clear();
+            return magdrum::plugins::writeVst3DiscoveryProgress(progressFile, progress) ? 0 : 3;
+        }
+        progress.completed = 0;
+        progress.current = juce::File(modulePath).getFileNameWithoutExtension();
+        progress.currentPath = modulePath;
+        if (! magdrum::plugins::writeVst3DiscoveryProgress(progressFile, progress)) return 2;
+        std::_Exit(1);
+    }
+
     const auto variableMeter=magdrum::sequencer::buildBarMap(4,4,3,{{3.0,5,4}});
     const auto boundaryMeter=magdrum::sequencer::buildBarMap(4,4,3,{{4.0,3,4}});
     const auto offGridMeter=magdrum::sequencer::buildBarMap(4,4,3,{{3.1,5,4}});
@@ -315,7 +336,6 @@ int runSmokeTests(int argc,char** argv)
     if(invalidPlayback.isValid())return 247;
     if(argc==2&&std::strcmp(argv[1],"--magdrum-test-crash-fixture")==0)std::_Exit(1);
     if(argc==3&&std::strcmp(argv[1],"--magdrum-test-partial-crash-fixture")==0){const auto log=juce::File(argv[2]);log.replaceWithText(R"({"midiNote":36,"velocity":100,"takeIndex":1,"channels":2,"sampleCount":2048,"sampleRate":44100,"peak":0.5,"rms":0.2,"silent":false,"fileName":"note_036_velocity_100_take_001.wav"})"+juce::String("\n"));std::_Exit(1);}
-    if(argc==4&&std::strcmp(argv[1],"--magdrum-test-vst3-discovery-error-fixture")==0){magdrum::plugins::Vst3DiscoveryProgress progress;progress.total=1;progress.current=juce::File(argv[3]).getFileNameWithoutExtension();progress.currentPath=argv[3];magdrum::plugins::writeVst3DiscoveryProgress(juce::File(argv[2]),progress);std::_Exit(1);}
     if(!needsClassificationReview(false,"Unknown",0.99)||!needsClassificationReview(false,"Kick",0.74)||needsClassificationReview(false,"Kick",0.75)||needsClassificationReview(true,"Unknown",0.0)||!needsClassificationReview(false,"Snare",std::numeric_limits<double>::quiet_NaN()))return 128;
     if(classificationEvidenceFor(true,"Unknown",0.0)!=SampleClassificationEvidence::Manual
         ||classificationEvidenceFor(false,"Kick",0.75)!=SampleClassificationEvidence::NameOrFolder
@@ -390,27 +410,29 @@ int runSmokeTests(int argc,char** argv)
 
     const auto positiveExitProgressFile = root.getChildFile("vst3-discovery-positive-exit-progress.json");
     const auto positiveExitModule = root.getChildFile("positive-error-instrument.vst3");
-    const juce::StringArray positiveExitDiscoveryCommand{
-        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
-        "--magdrum-test-vst3-discovery-error-fixture", positiveExitProgressFile.getFullPathName(),
-        positiveExitModule.getFullPathName()};
-    const auto positiveExitDiscovery = magdrum::plugins::monitorVst3Discovery(
-        positiveExitDiscoveryCommand, positiveExitProgressFile, 5000);
-    const auto positiveExitFailedModule = magdrum::plugins::vst3DiscoveryModuleForRecovery(
-        positiveExitDiscovery, positiveExitProgressFile);
+    int positiveExitRecoveryRuns = 0;
+    const auto positiveExitRecovery = magdrum::plugins::runVst3DiscoveryWithRecovery([&]
+    {
+        ++positiveExitRecoveryRuns;
+        const juce::StringArray command{
+            juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFullPathName(),
+            "--magdrum-test-vst3-discovery-recovery-fixture", positiveExitProgressFile.getFullPathName(),
+            positiveExitModule.getFullPathName()};
+        return magdrum::plugins::monitorVst3Discovery(command, positiveExitProgressFile, 5000);
+    }, positiveExitProgressFile, {}, 2);
     magdrum::plugins::Vst3DiscoveryProgress positiveExitRecoveredProgress;
-    if (!positiveExitDiscovery.started || positiveExitDiscovery.timedOut
-        || positiveExitDiscovery.exitCode != 1
-        || positiveExitFailedModule != positiveExitModule.getFullPathName()
-        || !magdrum::plugins::recordVst3DiscoveryModuleFailure(positiveExitProgressFile,
-            positiveExitFailedModule)
+    if (!positiveExitRecovery.execution.started || positiveExitRecovery.execution.timedOut
+        || positiveExitRecovery.execution.exitCode != 0 || positiveExitRecoveryRuns != 2
+        || positiveExitRecovery.recoveredModules != 1
+        || positiveExitRecovery.skippedModuleNames.size() != 1
+        || positiveExitRecovery.skippedModuleNames[0] != positiveExitModule.getFileName()
         || !magdrum::plugins::readVst3DiscoveryProgress(positiveExitProgressFile,
             positiveExitRecoveredProgress)
-        || positiveExitRecoveredProgress.completed != 1
+        || positiveExitRecoveredProgress.completed != 1 || positiveExitRecoveredProgress.current != "complete"
         || positiveExitRecoveredProgress.failedModules.size() != 1
         || positiveExitRecoveredProgress.failedModules[0] != positiveExitModule.getFullPathName())
     {
-        std::cerr << "VST3 discovery did not isolate a module that exited with a positive error code.\n";
+        std::cerr << "VST3 discovery did not skip a failed module and resume in a fresh helper.\n";
         return 307;
     }
 

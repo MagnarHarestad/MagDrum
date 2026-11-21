@@ -68,6 +68,13 @@ struct Vst3DiscoveryExecution
     juce::String timedOutModulePath;
 };
 
+struct Vst3DiscoveryRecoveryResult
+{
+    Vst3DiscoveryExecution execution;
+    juce::StringArray skippedModuleNames;
+    int recoveredModules = 0;
+};
+
 juce::FileSearchPath createVst3DiscoverySearchPath(const juce::FileSearchPath& defaultLocations,
                                                     const juce::File& additionalFolder = {});
 Vst3SearchDirectoryCache loadVst3SearchDirectoryCache(const juce::File& cacheFile);
@@ -96,6 +103,10 @@ Vst3DiscoveryExecution monitorVst3Discovery(const juce::StringArray& command,
     std::function<bool()> shouldCancel = {}, int cancellationGraceMilliseconds = 3000);
 juce::String vst3DiscoveryModuleForRecovery(const Vst3DiscoveryExecution& execution,
     const juce::File& progressFile);
+Vst3DiscoveryRecoveryResult runVst3DiscoveryWithRecovery(
+    const std::function<Vst3DiscoveryExecution()>& runDiscovery,
+    const juce::File& progressFile, std::function<bool()> shouldCancel = {},
+    int maximumRecoveries = 64);
 bool vst3ModuleHasInstrumentDescription(
     const juce::KnownPluginList& knownPlugins, const juce::File& module);
 bool vst3ModuleHasInstrumentDescription(
