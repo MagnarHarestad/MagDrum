@@ -2758,8 +2758,7 @@ SampleBrowsePage SampleDatabase::searchSampleBrowseRecordsImpl(const SampleBrows
         + " OR " + containsContentTerm("patterns") + " OR " + containsContentTerm("sequence")
         + " OR " + containsContentTerm("sequences") + " OR " + containsContentTerm("riff")
         + " OR " + containsContentTerm("riffs") + " OR " + containsContentTerm("rhythm")
-        + " OR " + containsContentTerm("rhythms") + " OR " + containsContentTerm("multisample")
-        + " OR " + containsContentTerm("multisampled") + " OR " + containsContentTerm("multi-sample") + ")";
+        + " OR " + containsContentTerm("rhythms") + ")";
     const auto bassTerms = juce::String("(") + containsContentTerm("bass") + " OR " + containsContentTerm("bassline")
         + " OR " + containsContentTerm("sub-bass") + " OR " + containsContentTerm("sub bass") + ")";
     const auto bassFamily = bassTerms + " AND NOT " + containsContentTerm("bass drum") + " AND NOT " + drumCategory;
