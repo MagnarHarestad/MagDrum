@@ -1327,6 +1327,7 @@ public:
                 "Skipping an instrument that crashed or timed out…");
             const auto discoveryCompleteMessage = magdrum::ui::localisedText(
                 "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.");
+            const auto skippedModuleTooltip = magdrum::ui::localisedText("Skipped plug-in modules:");
             if (timeoutMessage.isEmpty()
                 || (language != magdrum::ui::Language::english
                     && timeoutMessage == "Instrument operation timed out.")
@@ -1339,9 +1340,11 @@ public:
                         || presetCount == "VST3 presets found: %1"))
                 || discoverySkipMessage.isEmpty()
                 || discoveryCompleteMessage.isEmpty()
+                || skippedModuleTooltip.isEmpty()
                 || (language != magdrum::ui::Language::english
                     && (discoverySkipMessage == "Skipping an instrument that crashed or timed out…"
-                        || discoveryCompleteMessage == "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")))
+                        || discoveryCompleteMessage == "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout."
+                        || skippedModuleTooltip == "Skipped plug-in modules:")))
             {
                 std::cerr << "The isolated instrument timeout and discovery recovery are not translated in every supported language.\n";
                 magdrum::ui::setLanguage(magdrum::ui::Language::english, false);
@@ -1729,7 +1732,7 @@ public:
 
         editor.pluginInventoryScanRunning = false;
         editor.pluginInventoryProgressFile = {};
-        editor.finishPluginInventoryScan(-1, true, 0);
+        editor.finishPluginInventoryScan(-1, true, juce::StringArray());
         const bool partialResultWasShown = editor.discoveredPluginInstruments.size() == 1
             && editor.discoveredPluginInstruments.getReference(0).name == instrument.name;
 
@@ -1752,7 +1755,7 @@ public:
             std::cerr << "Could not prepare the empty instrument inventory fixture.\n";
             return 33;
         }
-        editor.finishPluginInventoryScan(0, false, 0);
+        editor.finishPluginInventoryScan(0, false, juce::StringArray());
         const bool emptyResultWasExplained = editor.discoveredPluginInstruments.isEmpty()
             && editor.status.getText() == magdrum::ui::localisedText(
                 "No discovered VST3 instruments. Scan plugin folders above to find instruments.");
@@ -1763,6 +1766,26 @@ public:
         {
             std::cerr << "A successful scan with no instruments did not explain the empty result.\n";
             return 34;
+        }
+
+        juce::StringArray skippedModules;
+        skippedModules.add("WaveShell1-VST3 12.7_x64.vst3");
+        editor.finishPluginInventoryScan(0, false, skippedModules);
+        const auto skippedModuleStatus = magdrum::ui::localisedText(
+            "VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")
+                .replace("%1", "1");
+        const auto expectedTooltip = magdrum::ui::localisedText("Skipped plug-in modules:")
+            + "\n" + skippedModules[0];
+        const bool skippedModuleWasIdentified = editor.status.getText() == skippedModuleStatus
+            && editor.status.getTooltip() == expectedTooltip;
+        if (hadInventory) inventoryFile.replaceWithText(previousInventory);
+        else inventoryFile.deleteFile();
+        editor.refreshPluginInventory();
+        editor.status.setTooltip(juce::String());
+        if (!skippedModuleWasIdentified)
+        {
+            std::cerr << "The completed plugin scan did not expose the skipped module in its tooltip.\n";
+            return 35;
         }
         return 0;
     }

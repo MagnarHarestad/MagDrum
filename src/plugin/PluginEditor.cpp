@@ -1674,11 +1674,17 @@ private:
     void finish(int exitCode, bool cancelled)
     {
         magdrum::plugins::Vst3DiscoveryProgress progress;
-        const int skippedProblemModules = magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress)
-            ? progress.failedModules.size() : 0;
+        juce::StringArray skippedModuleNames;
+        if (magdrum::plugins::readVst3DiscoveryProgress(progressFile, progress))
+            for (const auto& failedPath : progress.failedModules)
+            {
+                const auto fileName = juce::File(failedPath).getFileName();
+                if (fileName.isNotEmpty())
+                    skippedModuleNames.add(fileName);
+            }
         const juce::Component::SafePointer<MagDrumAudioProcessorEditor> safe(editor);
-        juce::MessageManager::callAsync([safe, exitCode, cancelled, skippedProblemModules]
-        { if (safe != nullptr) safe->finishPluginInventoryScan(exitCode, cancelled, skippedProblemModules); });
+        juce::MessageManager::callAsync([safe, exitCode, cancelled, skippedModuleNames]
+        { if (safe != nullptr) safe->finishPluginInventoryScan(exitCode, cancelled, skippedModuleNames); });
     }
     juce::Component::SafePointer<MagDrumAudioProcessorEditor> editor;
     std::shared_ptr<std::atomic<bool>> cancellation;
@@ -3700,6 +3706,7 @@ void MagDrumAudioProcessorEditor::startPluginInventoryScan(const juce::File& add
     pluginInventoryProgress.repaint();
     pluginInventoryProgressFile = getMagDrumDataDirectory().getChildFile(
         "vst3-scan-progress-" + juce::Uuid().toString() + ".json");
+    status.setTooltip(juce::String());
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Cancel instrument scan"));
     status.setText(magdrum::ui::localisedText("Scanning for VST3 instruments…"), juce::dontSendNotification);
     pollPluginInventoryProgress();
@@ -3744,7 +3751,7 @@ void MagDrumAudioProcessorEditor::pollPluginInventoryProgress()
 }
 
 void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool cancelled,
-    int skippedProblemModules)
+    const juce::StringArray& skippedModuleNames)
 {
     pluginInventoryScanRunning = false;
     pluginInventoryScanCancellation.reset();
@@ -3754,22 +3761,25 @@ void MagDrumAudioProcessorEditor::finishPluginInventoryScan(int exitCode, bool c
     pluginInventoryProgressFile = {};
     scanPluginInventoryButton.setEnabled(true);
     scanPluginInventoryButton.setButtonText(magdrum::ui::localisedText("Scan plugin folders") + "...");
+    status.setTooltip(skippedModuleNames.isEmpty() ? juce::String()
+        : magdrum::ui::localisedText("Skipped plug-in modules:") + "\n"
+            + skippedModuleNames.joinIntoString("\n"));
     // Discovery checkpoints completed instruments to the shared inventory as it goes.
     // Reload that checkpoint even when the user cancels or a helper fails, so the
     // visible list never lags behind durable scan results.
     refreshPluginInventory();
     if (cancelled) { status.setText(magdrum::ui::localisedText("VST3 instrument scan cancelled."), juce::dontSendNotification); return; }
     if (exitCode != 0) { status.setText(magdrum::ui::localisedText("VST3 instrument scan failed. Check the MagDrum helper."), juce::dontSendNotification); return; }
-    if (discoveredPluginInstruments.isEmpty() && skippedProblemModules == 0)
+    if (discoveredPluginInstruments.isEmpty() && skippedModuleNames.isEmpty())
     {
         status.setText(magdrum::ui::localisedText(
             "No discovered VST3 instruments. Scan plugin folders above to find instruments."),
             juce::dontSendNotification);
         return;
     }
-    status.setText(skippedProblemModules > 0
+    status.setText(!skippedModuleNames.isEmpty()
         ? magdrum::ui::localisedText("VST3 instrument scan complete; %1 plug-in(s) skipped after a crash or timeout.")
-            .replace("%1", juce::String(skippedProblemModules))
+            .replace("%1", juce::String(skippedModuleNames.size()))
         : magdrum::ui::localisedText("VST3 instrument scan complete."), juce::dontSendNotification);
 }
 
