@@ -1805,6 +1805,62 @@ int runSmokeTests(int argc,char** argv)
 int main(int argc, char** argv)
 {
     magdrum::tests::suppressWindowsErrorDialogs();
+    if (argc == 3 && std::strcmp(argv[1], "--magdrum-test-vst3-host-context") == 0)
+    {
+        if (!magdrum::tests::windowsErrorDialogsAreSuppressed()) return 4;
+        const juce::File sourceBundle(argv[2]);
+        if (!sourceBundle.isDirectory()) return 320;
+        const auto testRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
+            .getChildFile("MagDrum-VST3-host-context-" + juce::Uuid().toString());
+        const auto testBundle = testRoot.getChildFile(sourceBundle.getFileName());
+        if (!testRoot.createDirectory().wasOk() || !sourceBundle.copyDirectoryTo(testBundle))
+        {
+            testRoot.deleteRecursively();
+            return 321;
+        }
+
+        // Force JUCE down the factory-enumeration path used for legacy shells;
+        // moduleinfo.json would bypass IPluginFactory3::setHostContext entirely.
+        testBundle.getChildFile("Contents/Resources/moduleinfo.json").deleteFile();
+        testBundle.getChildFile("Contents/moduleinfo.json").deleteFile();
+        int discoveredInstrumentCount = 0;
+        bool expectedInstrumentFound = false;
+        {
+            juce::AudioPluginFormatManager formatManager;
+            juce::addDefaultFormatsToManager(formatManager);
+            juce::AudioPluginFormat* vst3 = nullptr;
+            for (int index = 0; index < formatManager.getNumFormats(); ++index)
+                if (auto* format = formatManager.getFormat(index);
+                    format != nullptr && format->getName() == "VST3")
+                {
+                    vst3 = format;
+                    break;
+                }
+            if (vst3 == nullptr)
+            {
+                testRoot.deleteRecursively();
+                return 322;
+            }
+            juce::OwnedArray<juce::PluginDescription> descriptions;
+            vst3->findAllTypesForFile(descriptions, testBundle.getFullPathName());
+            for (const auto* description : descriptions)
+                if (description->isInstrument)
+                {
+                    ++discoveredInstrumentCount;
+                    expectedInstrumentFound = expectedInstrumentFound
+                        || description->name == "MagDrum Synthetic Shell Instrument";
+                }
+        }
+        testRoot.deleteRecursively();
+        if (discoveredInstrumentCount != 1 || !expectedInstrumentFound)
+        {
+            std::cerr << "JUCE did not discover the synthetic shell instrument after setting host context. Found "
+                      << discoveredInstrumentCount << " instrument description(s).\n";
+            return 323;
+        }
+        std::cout << "PASS: JUCE set VST3 host context before enumerating the synthetic shell's instrument classes.\n";
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--magdrum-test-battery-reader") == 0)
     {
         if (!magdrum::tests::windowsErrorDialogsAreSuppressed()) return 4;

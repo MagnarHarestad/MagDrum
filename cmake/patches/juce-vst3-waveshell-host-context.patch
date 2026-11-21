@@ -1,3 +1,89 @@
+diff --git a/extras/Build/CMake/JUCEUtils.cmake b/extras/Build/CMake/JUCEUtils.cmake
+index ba6f9b0e0..1a6fba947 100644
+--- a/extras/Build/CMake/JUCEUtils.cmake
++++ b/extras/Build/CMake/JUCEUtils.cmake
+@@ -830,10 +830,10 @@ function(_juce_add_resources_rc source_target dest_target)
+         get_target_property(input_info_file ${source_target} JUCE_INFO_FILE)
+ 
+         get_target_property(generated_icon ${source_target} JUCE_ICON_FILE)
+-        set(dependency)
++        set(dependency DEPENDS "${input_info_file}")
+ 
+         if(generated_icon)
+-            set(dependency DEPENDS "${generated_icon}")
++            list(APPEND dependency "${generated_icon}")
+         endif()
+ 
+         set(resource_rc_file "${juce_library_code}/${source_target}_resources.rc")
+diff --git a/modules/juce_audio_plugin_client/VST3/juce_VST3ModuleInfo.h b/modules/juce_audio_plugin_client/VST3/juce_VST3ModuleInfo.h
+index 231a9f441..3e23e6cde 100644
+--- a/modules/juce_audio_plugin_client/VST3/juce_VST3ModuleInfo.h
++++ b/modules/juce_audio_plugin_client/VST3/juce_VST3ModuleInfo.h
+@@ -176,6 +176,10 @@ public:
+     //==============================================================================
+     Steinberg::int32 PLUGIN_API countClasses() final
+     {
++        #if defined (JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE)
++        if (! shellFixtureHostContextAvailable.load())
++            return 0;
++#endif
+         return (Steinberg::int32) getClassEntries().size;
+     }
+ 
+@@ -342,6 +346,11 @@ protected:
+         return {};
+     }
+ 
++protected:
++#if defined (JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE)
++    void markShellFixtureHostContextAvailable() { shellFixtureHostContextAvailable.store (true); }
++#endif
++
+ private:
+     const ClassEntry& getClassEntry (Steinberg::int32 index) const
+     {
+@@ -367,6 +376,9 @@ private:
+     }
+ 
+     //==============================================================================
++#if defined (JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE)
++    std::atomic<bool> shellFixtureHostContextAvailable { false };
++#endif
+     std::atomic<int> refCount { 1 };
+     const Steinberg::PFactoryInfo factoryInfo
+     {
+diff --git a/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp b/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp
+index c7b02c377..5ec85e4be 100644
+--- a/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp
++++ b/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp
+@@ -4116,6 +4116,10 @@ public:
+     {
+         runLoop.loadFrom (context);
+         host.loadFrom (context);
++#if defined (JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE)
++        if (host != nullptr)
++            markShellFixtureHostContextAvailable();
++#endif
+ 
+         if (host != nullptr)
+         {
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
+index b03f8cb12..b9847a522 100644
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
+@@ -84,6 +84,12 @@ void VST3PluginFormatHeadless::findAllTypesForFile (OwnedArray<PluginDescription
+ 
+         VSTComSmartPtr host { new VST3HostContextHeadless(), IncrementRef::yes };
+ 
++        // Shell modules may rebuild their class list when the host context is set.
++        // Apply the context before the first factory enumeration to avoid stale indices.
++        VSTComSmartPtr<IPluginFactory3> factory3;
++        if (factory3.loadFrom (pluginFactory.get()))
++            factory3->setHostContext (host->getFUnknown());
++
+         for (const auto& d : DescriptionLister::findDescriptionsSlow (*host, *pluginFactory, File (file)))
+             results.add (new PluginDescription (d));
+     }
 diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
 index 7e2231007..0eac84b2c 100644
 --- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
@@ -187,36 +273,3 @@ index 7e2231007..0eac84b2c 100644
  }
  
  JUCE_END_NO_SANITIZE
-diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
---- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
-+++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatHeadless.cpp
-@@ -82,8 +82,15 @@ void VST3PluginFormatHeadless::findAllTypesForFile (OwnedArray<PluginDescription>& results,
-         if (pluginFactory == nullptr)
-             continue;
- 
-         VSTComSmartPtr host { new VST3HostContextHeadless(), IncrementRef::yes };
-+
-+        // Shell modules may rebuild their class list when the host context is set.
-+        // Apply the context before the first factory enumeration to avoid stale indices.
-+        VSTComSmartPtr<IPluginFactory3> factory3;
-+        if (factory3.loadFrom (pluginFactory.get()))
-+            factory3->setHostContext (host->getFUnknown());
-+
-         for (const auto& d : DescriptionLister::findDescriptionsSlow (*host, *pluginFactory, File (file)))
-             results.add (new PluginDescription (d));
-     }
- }
-diff --git a/extras/Build/CMake/JUCEUtils.cmake b/extras/Build/CMake/JUCEUtils.cmake
---- a/extras/Build/CMake/JUCEUtils.cmake
-+++ b/extras/Build/CMake/JUCEUtils.cmake
-@@ -832,8 +832,8 @@ function(_juce_set_target_properties)
-         get_target_property(generated_icon ${source_target} JUCE_ICON_FILE)
--        set(dependency)
-+        set(dependency DEPENDS "${input_info_file}")
- 
-         if(generated_icon)
--            set(dependency DEPENDS "${generated_icon}")
-+            list(APPEND dependency "${generated_icon}")
-         endif()
- 
-         set(resource_rc_file "${juce_library_code}/${source_target}_resources.rc")

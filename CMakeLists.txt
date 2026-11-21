@@ -111,6 +111,24 @@ if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
   set_tests_properties(MagDrumPluginScannerWorkflowUi PROPERTIES
    TIMEOUT 180
    ENVIRONMENT "MAGDRUM_DATA_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/plugin-scanner-ui-test-data")
+  juce_add_plugin(MagDrumVst3ShellFixture
+   COMPANY_NAME "MagDrum Test"
+   BUNDLE_ID "com.censordesign.magdrum.test.vst3shell"
+   PLUGIN_MANUFACTURER_CODE MgTs
+   PLUGIN_CODE ShlT
+   FORMATS VST3
+   IS_SYNTH TRUE
+   NEEDS_MIDI_INPUT TRUE
+   PRODUCT_NAME "MagDrum Synthetic Shell Instrument")
+  juce_generate_juce_header(MagDrumVst3ShellFixture)
+  target_sources(MagDrumVst3ShellFixture PRIVATE tests/Vst3ShellFixtureProcessor.cpp)
+  target_compile_definitions(MagDrumVst3ShellFixture PRIVATE JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE=1)
+  target_compile_definitions(MagDrumVst3ShellFixture_VST3 PRIVATE JUCE_VST3_HOST_CONTEXT_SHELL_FIXTURE=1 JUCE_VST3_CAN_REPLACE_VST2=0)
+  target_link_libraries(MagDrumVst3ShellFixture PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+  add_dependencies(MagDrumTests MagDrumVst3ShellFixture_VST3)
+  get_target_property(MAGDRUM_VST3_SHELL_FIXTURE_BUNDLE MagDrumVst3ShellFixture_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
+  add_test(NAME MagDrumVst3HostContextDiscovery COMMAND MagDrumTests --magdrum-test-vst3-host-context "${MAGDRUM_VST3_SHELL_FIXTURE_BUNDLE}")
+  set_tests_properties(MagDrumVst3HostContextDiscovery PROPERTIES TIMEOUT 15)
   add_test(NAME MagDrumDebugAssertionWorker COMMAND MagDrumTests --magdrum-debug-assertion-worker-check "$<TARGET_FILE:MagDrum>")
   set_tests_properties(MagDrumDebugAssertionWorker PROPERTIES CONFIGURATIONS Debug SKIP_RETURN_CODE 77)
   add_test(NAME MagDrumHeadlessWorkerWindowSuppression COMMAND MagDrum --magdrum-test-worker-window-suppression)
